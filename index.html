@@ -367,6 +367,8 @@ h1, h2, h3 { font-family: var(--f-display); font-weight: 700; letter-spacing: 0.
 
 /* ---------- ticker ---------- */
 .ticker {
+  position: relative;
+  z-index: 6; /* full-bleed band: the side rails pass behind it */
   overflow: hidden;
   border-block: var(--bw-thin) solid color-mix(in srgb, var(--data) 45%, transparent);
   background: var(--bg-panel);
