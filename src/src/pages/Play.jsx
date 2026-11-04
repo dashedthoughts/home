@@ -315,7 +315,7 @@ export default function Play() {
           {hud.copGap != null && (
             <>
               <div className={`siren ${hud.copGap < 45 ? 'near' : ''}`} />
-              <div className="hud2__cop"><b>{'★'.repeat(hud.wanted)}<i>{'★'.repeat(Math.max(0, 3 - hud.wanted))}</i></b><span>POLICE {hud.copGap > 0 ? `${hud.copGap} M BEHIND` : 'ALONGSIDE'}</span>{hud.bust > 0.05 && <em className="bustbar"><i style={{ width: `${Math.round(hud.bust * 100)}%` }} />BUSTING</em>}</div>
+              <div className="hud2__cop"><b>{'★'.repeat(hud.wanted)}<i>{'★'.repeat(Math.max(0, 3 - hud.wanted))}</i></b><span>{hud.cops > 1 ? `${hud.cops} CRUISERS` : 'POLICE'} {hud.copGap > 0 ? `${hud.copGap} M BEHIND` : 'ON YOU'}</span>{hud.bust > 0.05 && <em className="bustbar"><i style={{ width: `${Math.round(hud.bust * 100)}%` }} />BUSTING</em>}</div>
             </>
           )}
           {hud.beside && <div className="strike-ready">WHIP <kbd>X</kbd></div>}

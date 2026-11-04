@@ -67,7 +67,7 @@ assert.equal(cd.S.z, 0, 'car holds during countdown');
 assert.equal(cd.ev.count, 3);
 
 // 2) skilled driver survives a long time, scores, decrypts, near-misses, slipstreams
-const runs = [1, 2, 3, 4, 5].map((seed) => run({ seconds: 240, bot: driver(), seed }));
+const runs = [1, 2, 3, 4, 5].map((seed) => run({ seconds: 240, bot: driver(), seed, config: { police: false } }));
 runs.forEach((r, i) => console.log(`skilled#${i + 1}:`, fmt(r)));
 const good = runs.reduce((a, r) => (r.t > a.t ? r : a));
 const avgT = runs.reduce((a, r) => a + r.t, 0) / runs.length;
@@ -165,4 +165,16 @@ for (const [mode, seed] of [['attract', 4], ['play', 6]]) {
   }
 }
 
+
+// police: sustained top speed builds heat; a cruiser that boxes you in busts you; outrunning them all works
+{
+  const ev = {};
+  const sim = createSim({ mode: 'play', seed: 2, config: { race: false }, onEvent: (e) => { ev[e.type] = (ev[e.type] || 0) + 1; } });
+  for (let t = 0; t < 4; t += 1 / 60) sim.step(1 / 60);
+  for (let t = 0; t < 120 && !ev.police; t += 1 / 60) { sim.S.cars.length = 0; sim.S.heat = 0; sim.input.boost = true; sim.input.axis = -sim.S.x * 0.3; sim.step(1 / 60); }
+  assert.ok(ev.police, 'flat-out driving draws the police');
+  for (let t = 0; t < 30 && !ev.busted; t += 1 / 60) { sim.S.cars.length = 0; sim.input.boost = false; sim.input.brake = true; sim.step(1 / 60); }
+  assert.ok(ev.busted, 'slowing down with police on you gets you busted');
+  console.log('police: drawn, then busted');
+}
 console.log('ALL SIM CHECKS PASSED');

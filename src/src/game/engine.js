@@ -215,8 +215,9 @@ export function createRedline(canvas, opts = {}) {
       wanted: Math.ceil(S.wanted || 0),
       ghost: S.ghost > 0 ? Math.ceil(S.ghost) : 0,
       beside: !!(cfg.rash && S.car.bike && S.rival && Math.abs(S.rival.z - S.z) < 3.4 && Math.abs(S.rival.x - S.x) < 3.0 && S.strikeCd <= 0),
-      copGap: S.cop ? Math.round(S.z - S.cop.z) : null,
-      bust: S.cop ? Math.min(1, S.cop.along / 1.2) : 0,
+      copGap: S.cops && S.cops.length ? Math.round(Math.min(...S.cops.map((k) => S.z - k.z))) : null,
+      cops: S.cops ? S.cops.length : 0,
+      bust: Math.min(1, S.bust || 0),
       pos: S.pos,
       rivalGap: Math.round(S.rival ? S.rival.z - S.z : 0),
     });

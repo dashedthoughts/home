@@ -151,7 +151,7 @@ export function createSim(opts = {}) {
       car, ai: { target: 0, think: 0 },
       route: 'expressway', routes: [{ z0: -1e9, route: 'expressway' }], nextJunction: SECTOR, sector: 1,
       finale: false, finaleT: 0, done: false,
-      rival: { z: 0, x: LANES[2], lane: 2, target: 2, speed: mode === 'attract' ? MAX * 0.8 : 0, swapT: -9, think: 0, stun: 0, cd: 2, hits: 0, fight: false, fightT: 0, fightCd: 4 }, pos: 1, raceWon: null, strikeCd: 0, swing: 0, wanted: 0, cop: null, busts: 0, powers: [], nextPowerZ: 520, ghost: 0,
+      rival: { z: 0, x: LANES[2], lane: 2, target: 2, speed: mode === 'attract' ? MAX * 0.8 : 0, swapT: -9, think: 0, stun: 0, cd: 2, hits: 0, fight: false, fightT: 0, fightCd: 4 }, pos: 1, raceWon: null, strikeCd: 0, swing: 0, wanted: 0, cop: null, cops: [], bust: 0, lost: 0, busts: 0, powers: [], nextPowerZ: 520, ghost: 0,
     });
     sections = [];
     extendTrack(1200);
@@ -489,48 +489,52 @@ export function createSim(opts = {}) {
       }
     }
 
-    // ---- police: crashes and brawls raise the wanted level; outrun them, or they pull alongside and bust you ----
+    // ---- police: speed and crashes build heat (up to 3 stars); each star brings a cruiser. They take your flanks
+    // and your tail; boxed in for long enough and you're busted. Lose them all and you get away.
     if (mode === 'play' && cfg.police !== false && !cfg.zen && racing && !S.finale) {
-      const stars = Math.ceil(S.wanted);
-      if (stars >= 1 && !S.cop) { S.cop = { z: S.z - 170, x: S.x, lane: 1, target: 1, speed: S.speed, along: 0, lost: 0 }; emit({ type: 'police', stars }); }
-      const K = S.cop;
-      if (K) {
-        const gap = S.z - K.z; // + = cop behind
-        const cap = MAX * (1.12 + 0.07 * stars);
-        let want = Math.min(cap, Math.max(S.speed * 1.08, MAX * 0.9));
-        if (gap < 4) want = Math.min(want, S.speed); // pace alongside
-        // close in: in the last stretch, take the lane beside the player
-        if (gap < 22) {
-          const pl = S.x < -LANE_W / 2 ? 0 : S.x > LANE_W / 2 ? 2 : 1;
-          K.target = pl === 0 ? 1 : pl === 2 ? 1 : (K.x > S.x ? 2 : 0);
-        } else K.target = S.x < -LANE_W / 2 ? 0 : S.x > LANE_W / 2 ? 2 : 1;
-        K.speed += clamp(want - K.speed, -16 * dt, 12 * dt);
-        K.x += clamp(LANES[K.target] - K.x, -6 * dt, 6 * dt);
-        K.z += K.speed * dt;
-        for (const o of S.cars) if (Math.abs(o.z - K.z) < CAR_LEN && Math.abs(o.x - K.x) < CAR_W) { K.z = o.z - CAR_LEN - 0.1; K.speed = Math.min(K.speed, o.speed); }
-        if (Math.abs(K.z - S.z) < CAR_LEN && Math.abs(K.x - S.x) < CAR_W) K.z = S.z - CAR_LEN - 0.1;
-        // busted: held alongside (1.2 s) or tailed close (under 12 m, same or next lane, 2.5 s)
-        const alongside = Math.abs(K.z - S.z) < 3.6 && Math.abs(K.x - S.x) < 3.4;
-        const tailing = gap > 0 && gap < 12 && Math.abs(K.x - S.x) < 4.2;
-        if ((alongside || tailing) && S.invuln <= 0) {
-          K.along += dt * (alongside ? 1 : 0.48);
-          if (K.along > 1.2) {
-            S.lives -= 1; S.busts += 1; S.invuln = 2.5; S.speed *= 0.5; S.cop = null; S.wanted = 0; S.chain = 0;
-            emit({ type: 'busted', lives: S.lives });
-            if (S.lives <= 0) {
-              S.over = true;
-              emit({ type: 'over', busted: true, score: Math.round(S.score), files: S.files, dist: S.dist, top: S.topSpeed, nearMisses: S.nearMisses, shards: S.shards });
-            }
-          }
-        } else K.along = Math.max(0, K.along - dt * 2);
-        // escaped: far enough behind for long enough
-        if (S.cop && gap > 240) {
-          K.lost += dt;
-          if (K.lost > 5) { const pts = 1000 * stars; S.score += pts; S.cop = null; S.wanted = 0; emit({ type: 'escaped', pts }); }
-        } else if (S.cop) K.lost = Math.max(0, K.lost - dt);
-        if (S.cop) K.z = Math.max(K.z, S.z - 420);
+      if (S.speed > MAX * 0.95) S.wanted = Math.min(3, S.wanted + dt * 0.035 * (S.speed / MAX));
+      const stars = Math.ceil(S.wanted - 0.001);
+      S.cops = S.cops || [];
+      while (S.cops.length < stars) {
+        S.cops.push({ z: S.z - 150 - S.cops.length * 40, x: LANES[S.cops.length % 3], target: 1, speed: S.speed, slot: S.cops.length });
+        emit({ type: 'police', stars });
       }
-    }
+      const pl = S.x < -LANE_W / 2 ? 0 : S.x > LANE_W / 2 ? 2 : 1;
+      let pressure = 0, nearest = 1e9;
+      for (const K of S.cops) {
+        const gap = S.z - K.z; // + = behind you
+        nearest = Math.min(nearest, gap);
+        // slot 0 tails you, slots 1 and 2 take the lanes either side
+        const side = K.slot === 0 ? 0 : (K.slot === 1 ? -1 : 1);
+        const lane = Math.max(0, Math.min(2, pl + side));
+        K.target = gap < 30 ? lane : pl;
+        const want = Math.min(MAX * (1.18 + 0.08 * stars), Math.max(S.speed * 1.1, MAX * 0.95));
+        const hold = K.slot === 0 ? 7 : 0; // tail sits 7 m back; flankers come alongside
+        const desired = gap > hold + 2 ? want : S.speed + (gap - hold) * 1.5;
+        K.speed += clamp(desired - K.speed, -18 * dt, 14 * dt);
+        K.x += clamp(LANES[K.target] - K.x, -6.5 * dt, 6.5 * dt);
+        K.z += K.speed * dt;
+        for (const o of S.cars) if (Math.abs(o.z - K.z) < CAR_LEN && Math.abs(o.x - K.x) < CAR_W) { o.x += Math.sign(o.x - K.x || 1) * 0.15; K.speed = Math.min(K.speed, o.speed + 4); }
+        for (const J of S.cops) if (J !== K && Math.abs(J.z - K.z) < CAR_LEN && Math.abs(J.x - K.x) < CAR_W) K.z = J.z - CAR_LEN - 0.1;
+        if (Math.abs(K.z - S.z) < CAR_LEN && Math.abs(K.x - S.x) < CAR_W) K.z = S.z - CAR_LEN - 0.1;
+        K.z = Math.max(K.z, S.z - 420);
+        const alongside = Math.abs(K.z - S.z) < 4 && Math.abs(K.x - S.x) < 4.2;
+        const tailing = gap > 0 && gap < 12 && Math.abs(K.x - S.x) < 2.6;
+        if (alongside) pressure += 1; else if (tailing) pressure += 0.6;
+      }
+      S.bust = S.invuln > 0 ? 0 : Math.max(0, (S.bust || 0) + (pressure > 0 ? dt * pressure * 0.75 : -dt * 0.8));
+      if (S.bust >= 1) {
+        S.lives -= 1; S.busts += 1; S.invuln = 2.5; S.speed *= 0.4; S.cops = []; S.wanted = 0; S.bust = 0; S.chain = 0;
+        emit({ type: 'busted', lives: S.lives });
+        if (S.lives <= 0) { S.over = true; emit({ type: 'over', busted: true, score: Math.round(S.score), files: S.files, dist: S.dist, top: S.topSpeed, nearMisses: S.nearMisses, shards: S.shards }); }
+      }
+      // escape: every cruiser 240 m+ back for 4 s
+      if (S.cops.length && nearest > 240) {
+        S.lost = (S.lost || 0) + dt;
+        if (S.lost > 4) { const pts = 1000 * stars; S.score += pts; S.cops = []; S.wanted = 0; S.lost = 0; emit({ type: 'escaped', pts }); }
+      } else S.lost = 0;
+      S.cop = S.cops[0] || null;
+    } else if (S.cops && S.cops.length && (S.finale || cfg.zen || cfg.police === false)) { S.cops = []; S.cop = null; }
 
     // ---- power-ups: GHOST (5 s invulnerable, ride through traffic) and NITRO (instant slipstream, engine cooled) ----
     if (mode === 'play' && !S.finale) {

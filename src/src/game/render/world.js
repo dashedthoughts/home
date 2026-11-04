@@ -365,7 +365,7 @@ export function createWorld(renderer, initialCfg) {
     scene.add(player.group);
   }
   // the rival: always the other vehicle, in a contrasting livery (built with the same parts as the player's)
-  let rival = null, cop = null, ghostShell = null, punch = null;
+  let rival = null; const cops = []; let ghostShell = null, punch = null;
   // power-ups: a spinning octahedron in a ring, cyan GHOST or amber NITRO
   const powerGeo = new THREE.OctahedronGeometry(0.42, 0), ringGeo = new THREE.TorusGeometry(0.75, 0.035, 8, 40);
   const powerMats = { ghost: new THREE.MeshBasicMaterial({ color: new THREE.Color('#5ff6ff').multiplyScalar(4) }), nitro: new THREE.MeshBasicMaterial({ color: new THREE.Color('#ffb020').multiplyScalar(4) }) };
@@ -779,27 +779,29 @@ export function createWorld(renderer, initialCfg) {
     }
 
     // police: a dark cruiser with a red/blue bar, shown once it draws level (or wide of the camera)
-    const K = S.cop;
-    if (K && sim.mode === 'play') {
-      if (!cop) {
-        cop = kit.make('sedan', 0);
-        cop.group.children[0].material = new THREE.MeshStandardMaterial({ color: '#0c0d14', metalness: 0.5, roughness: 0.35 }); // unmarked black cruiser
+    const ph = Math.floor(U.uTime.value * 8) % 2;
+    for (let i = 0; i < 3; i++) {
+      const K = sim.mode === 'play' && S.cops ? S.cops[i] : null;
+      if (K && !cops[i]) {
+        const c = kit.make('sedan', 0);
+        c.group.children[0].material = new THREE.MeshStandardMaterial({ color: '#0c0d14', metalness: 0.5, roughness: 0.35 }); // black cruiser
         const bar = new THREE.Group();
         const red = new THREE.MeshBasicMaterial({ color: new THREE.Color('#ff1030').multiplyScalar(6) });
         const blue = new THREE.MeshBasicMaterial({ color: new THREE.Color('#2a6bff').multiplyScalar(6) });
         const bL = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.12, 0.22), red), bR = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.12, 0.22), blue);
         bL.position.set(-0.3, 0, 0); bR.position.set(0.3, 0, 0);
         bar.add(bL, bR); bar.position.set(0, 1.5, 0.2);
-        cop.group.add(bar);
-        cop.bar = [bL, bR];
-        scene.add(cop.group);
+        c.group.add(bar); c.bar = [bL, bR];
+        scene.add(c.group);
+        cops[i] = c;
       }
+      if (!cops[i]) continue;
+      if (!K) { cops[i].group.visible = false; continue; }
       const zw = -(K.z - S.z);
-      cop.group.visible = zw < 1.2 || Math.abs(K.x - S.x) > 2.6;
-      cop.group.position.set(K.x, 0, zw);
-      const ph = Math.floor(U.uTime.value * 8) % 2;
-      cop.bar[0].visible = ph === 0; cop.bar[1].visible = ph === 1;
-    } else if (cop) cop.group.visible = false;
+      cops[i].group.visible = zw > -quality.cull && (zw < 1.2 || Math.abs(K.x - S.x) > 2.6);
+      cops[i].group.position.set(K.x, 0, zw);
+      cops[i].bar[0].visible = (ph + i) % 2 === 0; cops[i].bar[1].visible = (ph + i) % 2 === 1;
+    }
 
     // particles: sparks while scraping, embers on overclock, spray in rain
     if (S.scrape > 0) emit(5, { x: S.x + Math.sign(S.x) * 1.0, y: 0.4, z: 0.6 }, { color: '#ffd27a', gain: 6, speed: 5, life: 0.45, size: 0.09, gravity: 14, vz: 6, vx: -Math.sign(S.x) * 2 });
