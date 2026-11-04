@@ -884,6 +884,8 @@ export function createWorld(renderer, initialCfg) {
         const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.3, 18, 8), new THREE.MeshStandardMaterial({ color: '#1a1822', metalness: 0.6, roughness: 0.4 }));
         mast.position.set(-16, 169, 50); roof.add(mast);
         const tip = new THREE.Mesh(new THREE.SphereGeometry(0.35, 8, 6), red); tip.position.set(-16, 178.2, 50); roof.add(tip); roof.reds.push(tip);
+        roof.position.z = 15; // parapet just ahead of the camera: the view is the city, not the floor
+        slab.material.color.set('#2a2236'); slab.material.emissive = new THREE.Color('#ff2f7a'); slab.material.emissiveIntensity = 0.08;
         scene.add(roof);
       }
       roof.visible = e > 0.9;
