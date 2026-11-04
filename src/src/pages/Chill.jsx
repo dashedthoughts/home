@@ -207,22 +207,16 @@ function Drive({ engine, dim, setDim, vibe, setVibe }) {
   const [ride, setRide] = useState(load('chillRide', 'wedge'));
   useEffect(() => { engine()?.configure({ car: ride }); save('chillRide', ride); }, [ride, engine]);
   return (
-    <div className="ch-drive" role="group" aria-label="Drive">
-      <div className="ch-drive__scenes">
-        {[['wedge', 'Car'], ['bike', 'Bike · skills']].map(([k, n]) => <button key={k} type="button" aria-pressed={ride === k} className={`ride ${ride === k ? 'on' : ''}`} onClick={() => setRide(k)}>{n}</button>)}
-        <i className="ch-drive__sep" aria-hidden="true" />
-        {SCENES.map(([k, n]) => <button key={k} type="button" aria-pressed={scene === k} className={scene === k ? 'on' : ''} onClick={() => setScene(k)}>{n}</button>)}
-      </div>
-      <label className="ch-drive__speed">
-        <span>Cruise</span>
-        <input type="range" min="0.25" max="1.3" step="0.05" value={speed} onChange={(e) => setSpeed(+e.target.value)} aria-label="Cruising speed" />
-        <b>{Math.round(speed * 252)} km/h</b>
+    <div className="ch-drive ch-drive--line" role="group" aria-label="Drive">
+      <span className="ch-seg2">
+        {[['wedge', 'Car'], ['bike', 'Bike']].map(([k, n]) => <button key={k} type="button" aria-pressed={ride === k} className={ride === k ? 'on' : ''} onClick={() => setRide(k)}>{n}</button>)}
+      </span>
+      <label className="ch-sel"><span>Scene</span>
+        <select value={scene} onChange={(e) => setScene(e.target.value)} aria-label="Scene">{SCENES.map(([k, n]) => <option key={k} value={k}>{n}</option>)}</select>
       </label>
-      <label className="ch-drive__speed">
-        <span>Dim</span>
-        <input type="range" min="0" max="0.75" step="0.05" value={dim} onChange={(e) => { setDim(+e.target.value); save('chillDim', +e.target.value); }} aria-label="Dim the screen" />
-        <button type="button" className="ch-vibe" aria-pressed={vibe} onClick={() => setVibe((v) => !v)}>{vibe ? 'SHOW UI' : 'VIBE'} <kbd>H</kbd></button>
-      </label>
+      <label className="ch-rng"><span>Cruise</span><input type="range" min="0.25" max="1.3" step="0.05" value={speed} onChange={(e) => setSpeed(+e.target.value)} aria-label="Cruising speed" /><b>{Math.round(speed * 252)}</b></label>
+      <label className="ch-rng"><span>Dim</span><input type="range" min="0" max="0.75" step="0.05" value={dim} onChange={(e) => { setDim(+e.target.value); save('chillDim', +e.target.value); }} aria-label="Dim the screen" /></label>
+      <button type="button" className="ch-vibe" aria-pressed={vibe} onClick={() => setVibe((v) => !v)}>{vibe ? 'Show' : 'Vibe'} <kbd>H</kbd></button>
     </div>
   );
 }
@@ -301,7 +295,8 @@ export default function Chill() {
   const [rain, setRain] = useState(false);
   const [dim, setDim] = useState(load('chillDim', 0.2));
   const [vibe, setVibe] = useState(false);
-  const [open, setOpen] = useState(null);
+  const [shown, setShown] = useState(() => load('chillShown', { timer: true, search: true, music: true, notes: true }));
+  const toggle = (k) => setShown((x) => { const n = { ...x, [k]: !x[k] }; save('chillShown', n); return n; });
   useEffect(() => {
     const k = (e) => { if (e.key.toLowerCase() === 'h' && !(e.target instanceof HTMLInputElement) && !(e.target instanceof HTMLTextAreaElement)) setVibe((v) => !v); };
     addEventListener('keydown', k);
@@ -339,25 +334,27 @@ export default function Chill() {
         </div>
       </div>
 
-      {/* one panel at a time, opened from the dock; music stays mounted so it keeps playing */}
-      <div className={`ch-pop ${open ? 'is-open' : ''}`}>
-        <div hidden={open !== 'timer'}><Clockwork /></div>
-        <div className={open === 'music' ? '' : 'ch-keep'}><Music /></div>
-        <div hidden={open !== 'notes'}><Notes /></div>
-        <div hidden={open !== 'search'}>
+      {/* tools live on the sides; each one toggles from the dock. Music stays mounted so it keeps playing */}
+      <aside className="ch-side ch-side--l">
+        <div hidden={!shown.timer}><Clockwork /></div>
+        <div hidden={!shown.search}>
           <form className="ch-card ch-search" action="https://www.google.com/search" method="get" target="_blank">
             <span className="ch-k">SEARCH THE NET</span>
             <div className="ch-pick"><input name="q" placeholder="Search Google" aria-label="Search Google" autoComplete="off" /><button type="submit" className="ch-btn">GO ↗</button></div>
           </form>
         </div>
-        <div hidden={open !== 'drive'}><Drive engine={engine} dim={dim} setDim={setDim} vibe={vibe} setVibe={setVibe} /></div>
-      </div>
+      </aside>
+      <aside className="ch-side ch-side--r">
+        <div className={shown.music ? '' : 'ch-keep'}><Music /></div>
+        <div hidden={!shown.notes}><Notes /></div>
+      </aside>
 
       <div className="ch-bottom">
         <StreetLine />
-        <nav className="ch-dock" aria-label="Night Shift tools">
-          {[['timer', '◷', 'Timer'], ['music', '♪', 'Music'], ['notes', '✎', 'Notes'], ['search', '⌕', 'Search'], ['drive', '⚙', 'Drive']].map(([k, g, n]) => (
-            <button key={k} type="button" aria-pressed={open === k} className={open === k ? 'on' : ''} onClick={() => setOpen((o) => (o === k ? null : k))} title={n}>
+        <Drive engine={engine} dim={dim} setDim={setDim} vibe={vibe} setVibe={setVibe} />
+        <nav className="ch-dock" aria-label="Show or hide tools">
+          {[['timer', '◷', 'Timer'], ['search', '⌕', 'Search'], ['music', '♪', 'Music'], ['notes', '✎', 'Notes']].map(([k, g, n]) => (
+            <button key={k} type="button" aria-pressed={!!shown[k]} className={shown[k] ? 'on' : ''} onClick={() => toggle(k)} title={`${shown[k] ? 'Hide' : 'Show'} ${n}`}>
               <span aria-hidden="true">{g}</span><i>{n}</i>
             </button>
           ))}
