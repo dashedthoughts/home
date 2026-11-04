@@ -543,7 +543,7 @@ export default function Play() {
               RUN IT BACK <span className="btn__k">ENTER</span>
             </button>
             <button type="button" className="btn btn--ghost" onClick={toGarage}>GARAGE</button>
-            <Link to="/chill" className="btn btn--ghost">NIGHT SHIFT ☾</Link>
+            <Link to="/chill" className="btn btn--ghost" onClick={() => { const r = radioOf(cfg); if (r && (r.v || r.list)) { try { localStorage.setItem('nc2:song2', JSON.stringify({ v: r.v, list: r.list, title: r.name, by: 'Carried over from the race' })); } catch { /* ignore */ } } }}>NIGHT SHIFT ☾</Link>
           </div>
         </section>
       )}

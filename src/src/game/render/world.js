@@ -863,7 +863,7 @@ export function createWorld(renderer, initialCfg) {
       fov += (50 - fov) * Math.min(1, dt * 1.5);
       camera.fov = fov;
       camera.updateProjectionMatrix();
-      camera.position.set(S.x * (1 - e), 2.1 + e * 165, 6.2 + e * 60);
+      camera.position.set(S.x * (1 - e), 2.1 + e * 235, 6.2 + e * 60); // above every roof: nothing between you and the skyline
       // you end on a megatower roof: helipad, glass parapet, aviation lights
       if (!roof) {
         roof = new THREE.Group();
@@ -884,7 +884,7 @@ export function createWorld(renderer, initialCfg) {
         const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.3, 18, 8), new THREE.MeshStandardMaterial({ color: '#1a1822', metalness: 0.6, roughness: 0.4 }));
         mast.position.set(-16, 169, 50); roof.add(mast);
         const tip = new THREE.Mesh(new THREE.SphereGeometry(0.35, 8, 6), red); tip.position.set(-16, 178.2, 50); roof.add(tip); roof.reds.push(tip);
-        roof.position.z = 15; // parapet just ahead of the camera: the view is the city, not the floor
+        roof.position.z = 15; roof.position.y = 70; // parapet just ahead of the camera: the view is the city, not the floor
         slab.material.color.set('#2a2236'); slab.material.emissive = new THREE.Color('#ff2f7a'); slab.material.emissiveIntensity = 0.08;
         scene.add(roof);
       }
