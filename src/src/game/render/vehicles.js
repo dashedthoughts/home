@@ -167,7 +167,7 @@ function lights(g, glowHex, rearZ, under = 26) {
   }
   const tailLight = new THREE.PointLight(new THREE.Color('#ff1a3c'), 1.2, 6, 2);
   tailLight.position.set(0, 0.25, rearZ + 1.8);
-  g.add(tailLight);
+  tailLight.intensity = 0; // not added: a point light this low mirrors as a red dot on the wet road
   return { glowLight, tailLight };
 }
 

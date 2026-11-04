@@ -79,7 +79,7 @@ assert.ok(avgT > 40, 'a careful driver averages a proper arcade run (40s+) on ST
 assert.ok(runs.every((r) => r.maxAbsX <= RAIL + 1e-9), 'guardrail holds');
 
 // 3) no-steer, full-overclock: curves throw you into the rail; overheating glitches you
-const lazy = run({ seconds: 120, bot: (i) => { i.boost = true; }, seed: 5 });
+const lazy = run({ seconds: 120, bot: (i) => { i.boost = true; }, seed: 5, config: { race: false, police: false } });
 console.log('lazy     :', fmt(lazy));
 assert.ok(lazy.ev.glitch >= 1, 'overheating triggers a glitch');
 assert.ok(lazy.maxAbsX > 2.5, 'curves push an unsteered car off its line');

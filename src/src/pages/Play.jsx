@@ -144,7 +144,7 @@ export default function Play() {
           break;
         case 'finale': pop(e.won === null ? 'ALL TEN FILES' : e.won ? 'YOU WIN' : 'KUROGANE WINS', e.won === false ? 'alert' : 'ok', 'LAST EXIT: THE LOOKOUT'); break;
         case 'strike': pop('HIT', 'ok', 'KUROGANE GOES WIDE'); break;
-        case 'struck': pop('STRUCK', 'alert', 'KUROGANE SWINGS'); break;
+        case 'struck': pop('HIT', 'alert', cfgRef.current.rash ? 'KUROGANE SWINGS' : 'KUROGANE LEANS ON YOU'); break;
         case 'power': pop(e.kind === 'ghost' ? 'GHOST' : 'NITRO', e.kind === 'ghost' ? 'data' : 'signal', e.kind === 'ghost' ? '5 SECONDS · RIDE THROUGH ANYTHING' : 'INSTANT SLIPSTREAM · ENGINE COOLED'); break;
         case 'police': pop('POLICE', 'alert', `WANTED ${'★'.repeat(e.stars)} · OUTRUN THEM`); break;
         case 'busted': pop('BUSTED', 'alert', e.lives > 0 ? `INTEGRITY −1 · ${e.lives} LEFT` : 'END OF THE LINE'); break;

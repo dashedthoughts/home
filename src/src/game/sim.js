@@ -151,7 +151,7 @@ export function createSim(opts = {}) {
       car, ai: { target: 0, think: 0 },
       route: 'expressway', routes: [{ z0: -1e9, route: 'expressway' }], nextJunction: SECTOR, sector: 1,
       finale: false, finaleT: 0, done: false,
-      rival: { z: -9, x: LANES[2], lane: 2, target: 2, speed: mode === 'attract' ? MAX * 0.8 : 0, swapT: -9, think: 0, stun: 0, cd: 2, hits: 0, fight: false, fightT: 0, fightCd: 4 }, pos: 1, raceWon: null, strikeCd: 0, swing: 0, wanted: 0, cop: null, cops: [], bust: 0, lost: 0, busts: 0, powers: [], nextPowerZ: 520, ghost: 0,
+      rival: { z: -9, x: LANES[2], lane: 2, target: 2, speed: mode === 'attract' ? MAX * 0.8 : 0, swapT: -9, think: 0, stun: 0, cd: 0.8, hits: 0, fight: false, fightT: 0, fightCd: 1.5 }, pos: 1, raceWon: null, strikeCd: 0, swing: 0, wanted: 0, cop: null, cops: [], bust: 0, lost: 0, busts: 0, powers: [], nextPowerZ: 520, ghost: 0,
     });
     sections = [];
     extendTrack(1200);
@@ -411,7 +411,7 @@ export function createSim(opts = {}) {
     } else S.draft = Math.max(0, S.draft - dt * 0.9);
 
     // ---- the rival: one AI racer on the same road, through the same traffic, rubber-banded so it stays a race ----
-    if (mode === 'play' && cfg.race !== false && (racing || S.finale)) {
+    if (mode === 'play' && cfg.race !== false && (racing || S.finale || S.over)) { // keeps driving after the end so nothing coasts into it
       const R = S.rival;
       const gap = R.z - S.z; // + = rival ahead
       // pace follows the player (rubber band), with slow surges and fades so the lead changes hands
@@ -437,25 +437,38 @@ export function createSim(opts = {}) {
       }
       if (lead && R.target === R.lane) want = Math.min(want, lead.speed - 1);
       // rash: the rival comes looking for a fight, rides your flank for a few seconds, then breaks off
-      if (rash && racing) {
+      if (racing && !S.finale) {
         R.fightCd -= dt;
-        if (!R.fight && R.fightCd <= 0 && Math.abs(gap) < 40 && R.stun <= 0) { R.fight = true; R.fightT = 0; }
+        if (!R.fight && R.fightCd <= 0 && Math.abs(gap) < 180 && R.stun <= 0) { R.fight = true; R.fightT = 0; }
         if (R.fight) {
           R.fightT += dt;
           const pl = S.x < -LANE_W / 2 ? 0 : S.x > LANE_W / 2 ? 2 : 1;
           const flank = pl === 0 ? 1 : pl === 2 ? 1 : (R.x >= S.x ? 2 : 0);
           if (!S.cars.some((o) => Math.abs(o.x - LANES[flank]) < 2.4 && o.z - R.z > -6 && o.z - R.z < 20)) R.target = flank;
-          want = clamp(S.speed - gap * 0.9, 0, MAX * 1.45);
-          if (R.fightT > 8 || R.stun > 0.8) { R.fight = false; R.fightCd = 5 + rnd() * 3; }
+          want = clamp(S.speed - gap * 0.9, S.speed * 0.5, MAX * 1.45);
+          if (R.fightT > 8 || R.stun > 0.8) { R.fight = false; R.fightCd = (rash ? 3 : 5) + rnd() * 3; }
         }
       }
       R.speed += clamp(want - R.speed, -16 * dt, (launching ? 30 : 11) * dt);
       if (R.stun > 0) { R.stun -= dt; want *= 0.8; }
       R.x += clamp(LANES[R.target] - R.x, -5.5 * dt, 5.5 * dt);
+      // ---- shoulder checks: in any race he leans on you when he's alongside ----
+      if (!rash && racing && !cfg.zen) {
+        R.cd -= dt;
+        const beside = Math.abs(R.z - S.z) < 3.6 && Math.abs(R.x - S.x) < 3.95;
+        if (beside && R.cd <= 0 && R.stun <= 0 && S.invuln <= 0) {
+          R.cd = 1.3 + rnd() * 1.0;
+          const side = Math.sign(S.x - R.x) || 1;
+          const clear = !S.cars.some((c) => Math.abs(c.z - S.z) < 7 && Math.abs(c.x - (S.x + side * 2)) < 2.4);
+          if (clear) S.vx += side * 6.5; // never shoved into traffic
+          S.speed *= 0.86; S.shake = 0.3;
+          emit({ type: 'struck', x: (R.x + S.x) / 2 });
+        }
+      }
       // ---- rash: strikes when side by side (bike vs bike) ----
       if (rash && racing) {
         S.strikeCd -= dt; S.swing = Math.max(0, S.swing - dt); R.cd -= dt;
-        const beside = Math.abs(R.z - S.z) < 3.4 && Math.abs(R.x - S.x) < 3.0;
+        const beside = Math.abs(R.z - S.z) < 3.4 && Math.abs(R.x - S.x) < 3.95;
         if (input.strike && S.strikeCd <= 0) {
           S.strikeCd = 0.7; S.swing = 0.25; input.strike = false;
           if (beside) {
@@ -469,10 +482,11 @@ export function createSim(opts = {}) {
           } else emit({ type: 'whiff' });
         }
         if (beside && R.cd <= 0 && R.stun <= 0 && S.invuln <= 0) {
-          R.cd = 0.9 + rnd() * 0.9;
-          if (rnd() < 0.75) {
+          R.cd = 0.7 + rnd() * 0.7;
+          if (rnd() < 0.85) {
             const side = Math.sign(S.x - R.x) || 1;
-            S.speed *= 0.78; S.vx += side * 7.5; S.shake = 0.35; S.heat = Math.min(100, S.heat + 8);
+            const clear = !S.cars.some((c) => Math.abs(c.z - S.z) < 7 && Math.abs(c.x - (S.x + side * 2)) < 2.4);
+            S.speed *= 0.78; if (clear) S.vx += side * 7.5; S.shake = 0.35; S.heat = Math.min(100, S.heat + 8);
             emit({ type: 'struck', x: (R.x + S.x) / 2 });
           }
         }
@@ -488,6 +502,7 @@ export function createSim(opts = {}) {
         if (Math.abs(dz) < CAR_LEN && Math.abs(R.x - S.x) < CAR_W) { R.z = S.z - CAR_LEN - 0.1; R.speed = Math.min(R.speed, S.speed); moved = true; }
         if (!moved) break;
       }
+      if (Math.abs(R.z - S.z) < CAR_LEN && Math.abs(R.x - S.x) < CAR_W) R.z = S.z - CAR_LEN - 0.1; // the player always wins the last word
       const pos = R.z > S.z ? 2 : 1;
       if (pos !== S.pos && !S.finale) {
         if (S.time - R.swapT > 1.2 && S.dist > 300) emit({ type: pos === 1 ? 'overtake' : 'overtaken' }); // no call-outs off the line
@@ -521,7 +536,7 @@ export function createSim(opts = {}) {
         K.speed += clamp(desired - K.speed, -18 * dt, 14 * dt);
         K.x += clamp(LANES[K.target] - K.x, -6.5 * dt, 6.5 * dt);
         K.z += K.speed * dt;
-        for (const o of S.cars) if (Math.abs(o.z - K.z) < CAR_LEN && Math.abs(o.x - K.x) < CAR_W) { o.x += Math.sign(o.x - K.x || 1) * 0.15; K.speed = Math.min(K.speed, o.speed + 4); }
+        for (const o of S.cars) if (Math.abs(o.z - K.z) < CAR_LEN && Math.abs(o.x - K.x) < CAR_W) { K.z = o.z - CAR_LEN - 0.1; K.speed = Math.min(K.speed, o.speed); }
         for (const J of S.cops) if (J !== K && Math.abs(J.z - K.z) < CAR_LEN && Math.abs(J.x - K.x) < CAR_W) K.z = J.z - CAR_LEN - 0.1;
         if (Math.abs(K.z - S.z) < CAR_LEN && Math.abs(K.x - S.x) < CAR_W) K.z = S.z - CAR_LEN - 0.1;
         K.z = Math.max(K.z, S.z - 420);
