@@ -450,19 +450,31 @@ export function buildTsubame(livery, glowHex, style = 'monster') {
   }
   // full-face race helmet: shell, chin bar, wrap-around glowing visor, centre stripe, side vents, rear spoiler
   const HZ = -0.14, HY = 1.56;
-  bin.add('carbon', new THREE.SphereGeometry(0.15, 32, 24), [0, HY, HZ], null, [1, 0.97, 1.14]); // matte black shell
+  // shell is built after the bin: faceted, gloss black (see below)
   // light-line accents: a chevron over the crown, a stripe down each cheek
   bin.add('glow', new THREE.BoxGeometry(0.012, 0.012, 0.2), [0.045, HY + 0.14, HZ - 0.02], [0.35, 0.3, 0]);
   bin.add('glow', new THREE.BoxGeometry(0.012, 0.012, 0.16), [0.075, HY + 0.11, HZ + 0.09], [-0.4, -0.25, 0]);
   for (const sx of [-1, 1]) bin.add('glow', new THREE.BoxGeometry(0.012, 0.15, 0.012), [sx * 0.148, HY - 0.06, HZ - 0.08], [0.5, 0, 0]);
-  bin.add('carbon', new THREE.TorusGeometry(0.11, 0.045, 10, 24, Math.PI), [0, HY - 0.07, HZ - 0.04], [Math.PI / 2 + 0.35, 0, 0], [1.05, 1.1, 0.9]); // chin bar
-  bin.add('glow', new THREE.CylinderGeometry(0.152, 0.152, 0.055, 32, 1, true, Math.PI * 0.62, Math.PI * 0.76), [0, HY + 0.01, HZ], null, [1, 1, 1.14]); // visor band
-  bin.add('carbon', new THREE.CylinderGeometry(0.155, 0.155, 0.012, 32, 1, true, Math.PI * 0.6, Math.PI * 0.8), [0, HY + 0.045, HZ], null, [1, 1, 1.15]); // visor brow
+  bin.add('glow', new THREE.CylinderGeometry(0.158, 0.158, 0.03, 32, 1, true, Math.PI * 0.6, Math.PI * 0.8), [0, HY + 0.005, HZ], null, [1, 1, 1.16]); // thin visor light line
   bin.add('stripe', new THREE.BoxGeometry(0.035, 0.012, 0.32), [0, HY + 0.148, HZ + 0.01], [0.08, 0, 0]);
   for (const sx of [-1, 1]) bin.add('carbon', new RoundedBoxGeometry(0.02, 0.05, 0.08, 2, 0.008), [sx * 0.145, HY + 0.01, HZ + 0.03]); // side vents
-  bin.add('carbon', new RoundedBoxGeometry(0.16, 0.025, 0.07, 2, 0.01), [0, HY + 0.1, HZ + 0.15], [-0.35, 0, 0]); // rear spoiler
 
   bin.build(g, M);
+
+  // sharp full-face helmet: faceted gloss shell, pointed chin, dark wrap visor, tall rear fin
+  {
+    const gloss = new THREE.MeshPhysicalMaterial({ color: '#07070c', metalness: 0.4, roughness: 0.18, clearcoat: 1, clearcoatRoughness: 0.04, flatShading: true });
+    const shell = new THREE.Mesh(new THREE.IcosahedronGeometry(0.152, 1), gloss);
+    shell.position.set(0, HY, HZ); shell.scale.set(1, 0.96, 1.2); g.add(shell);
+    const chin = new THREE.Mesh(new THREE.ConeGeometry(0.1, 0.18, 4), gloss);
+    chin.position.set(0, HY - 0.085, HZ - 0.12); chin.rotation.set(-Math.PI / 2 - 0.45, Math.PI / 4, 0); chin.scale.set(1.25, 1, 0.65); g.add(chin);
+    const visor = new THREE.Mesh(new THREE.CylinderGeometry(0.157, 0.157, 0.075, 24, 1, true, Math.PI * 0.64, Math.PI * 0.72), new THREE.MeshPhysicalMaterial({ color: '#020205', metalness: 0.95, roughness: 0.04, side: THREE.DoubleSide }));
+    visor.position.set(0, HY + 0.04, HZ); visor.scale.set(1, 1, 1.18); g.add(visor);
+    const fin = new THREE.Mesh(new THREE.BoxGeometry(0.012, 0.07, 0.16), gloss);
+    fin.position.set(0, HY + 0.13, HZ + 0.12); fin.rotation.x = -0.5; g.add(fin);
+    for (const sx of [-1, 1]) { const w = new THREE.Mesh(new THREE.BoxGeometry(0.01, 0.03, 0.11), gloss); w.position.set(sx * 0.07, HY + 0.1, HZ + 0.15); w.rotation.set(-0.45, sx * 0.25, 0); g.add(w); }
+  }
+
 
   // plate
   const plate = new THREE.Mesh(new THREE.PlaneGeometry(0.24, 0.06), new THREE.MeshBasicMaterial({ map: plateTexture(), color: HDR('#ffffff', 0.9) }));

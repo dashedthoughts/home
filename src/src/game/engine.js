@@ -34,7 +34,8 @@ export function createRedline(canvas, opts = {}) {
   let lost = false;
   canvas.addEventListener('webglcontextlost', (e) => { e.preventDefault(); lost = true; onEvent({ type: 'context-lost' }); });
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 0.88;
+  const exposure = () => 0.88 * (cfg.weather === 'rain' ? 0.8 : 1); // rain is bright: take it down to 80%
+  renderer.toneMappingExposure = exposure();
   renderer.outputColorSpace = THREE.SRGBColorSpace;
 
   const audio = lite ? null : getAudio();
@@ -284,6 +285,7 @@ export function createRedline(canvas, opts = {}) {
       const prevQ = cfg.quality;
       cfg = { ...cfg, ...next };
       if (reduced) cfg.effects = 'reduced';
+      renderer.toneMappingExposure = exposure();
       sim.configure(cfg);
       world.applyConfig(cfg);
       if (audio) {
