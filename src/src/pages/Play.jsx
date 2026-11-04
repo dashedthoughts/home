@@ -529,6 +529,7 @@ export default function Play() {
               RUN IT BACK <span className="btn__k">ENTER</span>
             </button>
             <button type="button" className="btn btn--ghost" onClick={toGarage}>GARAGE</button>
+            <Link to="/chill" className="btn btn--ghost">NIGHT SHIFT ☾</Link>
           </div>
         </section>
       )}

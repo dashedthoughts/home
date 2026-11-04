@@ -295,13 +295,29 @@ export function createCityCarpet(parent) {
       uniform vec3 uA, uB, uC; uniform float uTime; varying vec2 vP; varying float vD;
       float h(vec2 p){ p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }
       void main() {
-        vec2 cell = vP / 64.0; vec2 id = floor(cell); vec2 f = fract(cell);
-        float street = max(smoothstep(0.035, 0.0, abs(f.x - 0.5)), smoothstep(0.035, 0.0, abs(f.y - 0.5)));
-        float major = step(0.8, h(id * 0.37));
-        vec3 col = uA * street * (0.35 + 0.65 * major);
-        vec2 w = vP / 6.0; vec2 wid = floor(w);
-        float lit = step(0.93, h(wid + 3.1)) * smoothstep(0.45, 0.2, length(fract(w) - 0.5));
-        col += mix(uB, uC, step(0.85, h(wid))) * lit * (0.6 + 0.4 * sin(uTime * 2.0 + h(wid) * 30.0));
+        // blocks of uneven size: streets every ~40 m, avenues every ~200 m
+        vec2 cell = vP / 40.0; vec2 id = floor(cell); vec2 f = fract(cell);
+        vec2 av = vP / 200.0; vec2 af = abs(fract(av) - 0.5);
+        float street = max(smoothstep(0.06, 0.02, abs(f.x - 0.5) * (0.9 + 0.3 * h(id.yy))), smoothstep(0.06, 0.02, abs(f.y - 0.5) * (0.9 + 0.3 * h(id.xx))));
+        float avenue = max(smoothstep(0.022, 0.006, af.x), smoothstep(0.022, 0.006, af.y));
+        // rooftops: dark slabs with a faint tone per building, lit windows scattered across them
+        vec2 bid = floor(vP / vec2(13.0, 17.0));
+        vec3 roof = vec3(0.025, 0.028, 0.045) * (0.6 + 0.8 * h(bid));
+        vec2 w = vP / 2.6; vec2 wid = floor(w);
+        float win = step(0.86, h(wid + bid)) * step(0.25, fract(w.x)) * step(0.3, fract(w.y));
+        vec3 col = roof + mix(vec3(1.0, 0.82, 0.55), vec3(0.75, 0.9, 1.0), h(wid * 1.7)) * win * 0.55;
+        // neon on some roofs (billboards): a coloured glow patch
+        float sign = step(0.93, h(bid * 0.71)) * smoothstep(0.5, 0.15, length(fract(vP / vec2(13.0, 17.0)) - 0.5));
+        col += mix(vec3(1.0, 0.2, 0.6), vec3(0.2, 0.9, 1.0), h(bid * 3.3)) * sign * 1.6;
+        // streets: warm sodium glow; avenues brighter, with moving car lights (white one way, red the other)
+        col = mix(col, uA * 0.45, street * 0.85);
+        float lane = fract(av.x) < 0.5 ? 1.0 : -1.0;
+        float flowX = step(0.94, h(vec2(floor(vP.x / 9.0 - uTime * 3.0), floor(vP.y / 3.0))));
+        float flowZ = step(0.94, h(vec2(floor(vP.y / 9.0 + uTime * 3.0), floor(vP.x / 3.0))));
+        vec3 cars = mix(uB, uC, step(0.5, fract(vP.x / 6.0))) * max(flowX * smoothstep(0.012, 0.0, af.y), flowZ * smoothstep(0.012, 0.0, af.x));
+        col = mix(col, uA * 0.9, avenue * 0.8) + cars * 2.2;
+        // the big crossings glow
+        col += uB * 0.5 * smoothstep(0.05, 0.0, max(af.x, af.y));
         float fade = smoothstep(2600.0, 600.0, vD) * smoothstep(60.0, 220.0, vD);
         gl_FragColor = vec4(col * fade, 1.0);
       }`,
