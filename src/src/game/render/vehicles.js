@@ -204,11 +204,22 @@ export function buildVantaGT(livery, glowHex) {
     s.quadraticCurveTo(0.05, 0.22, 0.05, 0.3);
   };
   const bin = Bin();
-  bin.add('paint', profile(body, L, W, 0.085, 20));
+  // plan-view taper: the nose narrows to a point past the front arches, so the front reads as a wedge, not a slab
+  const taper = (geo) => {
+    const pa = geo.attributes.position;
+    for (let i = 0; i < pa.count; i++) {
+      const z = pa.getZ(i), t = Math.min(1, Math.max(0, (-z - 1.55) / 0.7));
+      pa.setX(i, pa.getX(i) * (1 - 0.2 * t * t));
+    }
+    pa.needsUpdate = true;
+    geo.computeVertexNormals();
+    return geo;
+  };
+  bin.add('paint', taper(profile(body, L, W, 0.085, 20)));
   const bodyBox = new THREE.Box3().setFromBufferAttribute(new THREE.Mesh(profile(body, L, W, 0.085)).geometry.attributes.position);
   const RZ = bodyBox.max.z;
   // livery stripe over the spine
-  const stripe = profile(body, L, 0.34, 0);
+  const stripe = taper(profile(body, L, 0.34, 0));
   bin.add('stripe', stripe, [0, 0, 0], null, [1, 1.008, 1.006]);
   // greenhouse
   bin.add('glass', profile((s) => { s.moveTo(1.45, 0.88); s.quadraticCurveTo(1.85, 1.15, 2.4, 1.17); s.lineTo(2.75, 1.16); s.quadraticCurveTo(3.05, 1.1, 3.32, 0.79); s.lineTo(1.45, 0.88); }, L, 1.36, 0.06));
@@ -253,12 +264,26 @@ export function buildVantaGT(livery, glowHex) {
   bin.add('tail', new THREE.BoxGeometry(0.36, 0.025, 0.03), [0, 0.93, RZ - 0.35]);
   bin.add('glass', new THREE.PlaneGeometry(W * 0.74, 0.25), [0, 0.47, RZ + 0.005]);
   // headlights
+  // widebody: bolted arch flares, a scoop behind the door, red accent lips; slim swept lamps at the nose corners
+  for (const sx of [-1, 1]) {
+    // 80s side strakes: five horizontal fins running from the door back to the rear arch
+    for (let k = 0; k < 5; k++) bin.add('paint', new THREE.BoxGeometry(0.045, 0.022, 1.05 - k * 0.05), [sx * (W / 2 + 0.02), 0.44 + k * 0.065, 0.2 + k * 0.025]);
+    bin.add('carbon', new THREE.BoxGeometry(0.02, 0.33, 1.05), [sx * (W / 2 - 0.005), 0.57, 0.22]); // dark intake behind the fins
+    bin.add('stripe', new THREE.BoxGeometry(0.03, 0.035, 2.3), [sx * (W / 2 + 0.035), 0.2, -0.05]); // accent skirt
+    bin.add('head', new THREE.BoxGeometry(0.34, 0.03, 0.04), [sx * W * 0.32, 0.53, -L / 2 + 0.14], [Math.atan2(0.3, 1.11), sx * 0.35, sx * 0.12]);
+  }
+  bin.add('stripe', new THREE.BoxGeometry(W * 0.96, 0.02, 0.05), [0, 0.19, -L / 2 - 0.21]); // splitter lip
   // a slim full-width light blade in a dark visor along the nose, plus a lower intake slot
   const HOOD = Math.atan2(0.3, 1.11);
   bin.add('carbon', new THREE.BoxGeometry(W * 0.86, 0.075, 0.05), [0, 0.505, -L / 2 + 0.01], [HOOD, 0, 0]);
   bin.add('head', new THREE.BoxGeometry(W * 0.8, 0.022, 0.03), [0, 0.512, -L / 2 - 0.005], [HOOD, 0, 0]);
   for (const sx of [-1, 1]) bin.add('head', new THREE.BoxGeometry(0.05, 0.05, 0.03), [sx * W * 0.41, 0.5, -L / 2 + 0.0], [HOOD, 0, 0]);
-  bin.add('carbon', new THREE.BoxGeometry(W * 0.6, 0.06, 0.06), [0, 0.33, -L / 2 - 0.03]);
+  bin.add('carbon', new THREE.BoxGeometry(W * 0.56, 0.06, 0.06), [0, 0.33, -L / 2 - 0.03]);
+  // nose face: a black band carrying one bright full-width light bar, flanked by angled corner intakes
+  // full-width black visor band across the nose with a single white light bar
+  bin.add('carbon', new THREE.BoxGeometry(W * 0.84, 0.16, 0.04), [0, 0.42, -L / 2 - 0.04]);
+  bin.add('head', new THREE.BoxGeometry(W * 0.8, 0.035, 0.02), [0, 0.46, -L / 2 - 0.065]);
+  for (const sx of [-1, 1]) bin.add('carbon', new THREE.BoxGeometry(0.22, 0.09, 0.04), [sx * W * 0.33, 0.3, -L / 2 + 0.02], [0, sx * 0.5, 0]);
   // brake calipers (static, behind the spokes)
   for (const [z, sx] of [[ZF, -1], [ZF, 1], [ZR, -1], [ZR, 1]]) bin.add('caliper', new RoundedBoxGeometry(0.06, 0.16, 0.1, 2, 0.02), [sx * (W / 2 - 0.17), 0.48, z - 0.06]);
   bin.build(g, M);
@@ -425,8 +450,12 @@ export function buildTsubame(livery, glowHex, style = 'monster') {
   }
   // full-face race helmet: shell, chin bar, wrap-around glowing visor, centre stripe, side vents, rear spoiler
   const HZ = -0.14, HY = 1.56;
-  bin.add('helmet', new THREE.SphereGeometry(0.15, 32, 24), [0, HY, HZ], null, [1, 0.97, 1.14]);
-  bin.add('helmet', new THREE.TorusGeometry(0.11, 0.045, 10, 24, Math.PI), [0, HY - 0.07, HZ - 0.04], [Math.PI / 2 + 0.35, 0, 0], [1.05, 1.1, 0.9]); // chin bar
+  bin.add('carbon', new THREE.SphereGeometry(0.15, 32, 24), [0, HY, HZ], null, [1, 0.97, 1.14]); // matte black shell
+  // light-line accents: a chevron over the crown, a stripe down each cheek
+  bin.add('glow', new THREE.BoxGeometry(0.012, 0.012, 0.2), [0.045, HY + 0.14, HZ - 0.02], [0.35, 0.3, 0]);
+  bin.add('glow', new THREE.BoxGeometry(0.012, 0.012, 0.16), [0.075, HY + 0.11, HZ + 0.09], [-0.4, -0.25, 0]);
+  for (const sx of [-1, 1]) bin.add('glow', new THREE.BoxGeometry(0.012, 0.15, 0.012), [sx * 0.148, HY - 0.06, HZ - 0.08], [0.5, 0, 0]);
+  bin.add('carbon', new THREE.TorusGeometry(0.11, 0.045, 10, 24, Math.PI), [0, HY - 0.07, HZ - 0.04], [Math.PI / 2 + 0.35, 0, 0], [1.05, 1.1, 0.9]); // chin bar
   bin.add('glow', new THREE.CylinderGeometry(0.152, 0.152, 0.055, 32, 1, true, Math.PI * 0.62, Math.PI * 0.76), [0, HY + 0.01, HZ], null, [1, 1, 1.14]); // visor band
   bin.add('carbon', new THREE.CylinderGeometry(0.155, 0.155, 0.012, 32, 1, true, Math.PI * 0.6, Math.PI * 0.8), [0, HY + 0.045, HZ], null, [1, 1, 1.15]); // visor brow
   bin.add('stripe', new THREE.BoxGeometry(0.035, 0.012, 0.32), [0, HY + 0.148, HZ + 0.01], [0.08, 0, 0]);

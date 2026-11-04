@@ -415,11 +415,11 @@ export function createSim(opts = {}) {
       const R = S.rival;
       const gap = R.z - S.z; // + = rival ahead
       // pace follows the player (rubber band), with slow surges and fades so the lead changes hands
-      const wave = 1.03 + 0.08 * Math.sin(S.time * 0.21) + 0.04 * Math.sin(S.time * 0.67 + 1.3); // a touch quicker than you on average
+      const wave = 1.06 + 0.08 * Math.sin(S.time * 0.21) + 0.04 * Math.sin(S.time * 0.67 + 1.3); // quicker than you on average: you have to drive
       const ref = Math.max(MAX * 0.85, S.speed);
       const rash = cfg.rash && S.car.bike;
       let want = ref * wave * (diff.rival || 1) * (rash ? 1.04 : 1);
-      if (gap < -30) want = Math.max(want, ref * 1.16); else if (gap > 170) want = Math.min(want, ref * 0.92);
+      if (gap < -30) want = Math.max(want, ref * 1.2); else if (gap > 220) want = Math.min(want, ref * 0.97);
       want = Math.min(want, MAX * 1.4);
       if (S.finale) want = Math.max(0, R.speed - 14 * dt);
       const lead = S.cars.find((o) => o.z - R.z > 0 && o.z - R.z < 42 && Math.abs(o.x - R.x) < 2.2);
@@ -509,10 +509,12 @@ export function createSim(opts = {}) {
         K.z += K.speed * dt;
         for (const o of S.cars) if (Math.abs(o.z - K.z) < CAR_LEN && Math.abs(o.x - K.x) < CAR_W) { K.z = o.z - CAR_LEN - 0.1; K.speed = Math.min(K.speed, o.speed); }
         if (Math.abs(K.z - S.z) < CAR_LEN && Math.abs(K.x - S.x) < CAR_W) K.z = S.z - CAR_LEN - 0.1;
-        // busted: held alongside
-        if (Math.abs(K.z - S.z) < 3.6 && Math.abs(K.x - S.x) < 3.4 && S.invuln <= 0) {
-          K.along += dt;
-          if (K.along > 1.6) {
+        // busted: held alongside (1.2 s) or tailed close (under 12 m, same or next lane, 2.5 s)
+        const alongside = Math.abs(K.z - S.z) < 3.6 && Math.abs(K.x - S.x) < 3.4;
+        const tailing = gap > 0 && gap < 12 && Math.abs(K.x - S.x) < 4.2;
+        if ((alongside || tailing) && S.invuln <= 0) {
+          K.along += dt * (alongside ? 1 : 0.48);
+          if (K.along > 1.2) {
             S.lives -= 1; S.busts += 1; S.invuln = 2.5; S.speed *= 0.5; S.cop = null; S.wanted = 0; S.chain = 0;
             emit({ type: 'busted', lives: S.lives });
             if (S.lives <= 0) {

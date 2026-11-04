@@ -384,12 +384,13 @@ export function createWorld(renderer, initialCfg) {
     if (!ghostShell) {
       ghostShell = new THREE.Mesh(new THREE.SphereGeometry(1, 24, 16), new THREE.MeshBasicMaterial({ color: new THREE.Color('#5ff6ff').multiplyScalar(2), transparent: true, opacity: 0.3, depthWrite: false, blending: THREE.AdditiveBlending }));
       ghostShell.visible = false;
+      // the whip: a gloved grip and a tapering lash that cracks toward the rival
       punch = new THREE.Group();
-      const arm = new THREE.Mesh(new THREE.CapsuleGeometry(0.055, 0.5, 4, 10), new THREE.MeshStandardMaterial({ color: '#15121d', roughness: 0.6 }));
-      arm.position.y = -0.3;
-      const fist = new THREE.Mesh(new THREE.SphereGeometry(0.075, 12, 10), new THREE.MeshStandardMaterial({ color: '#0d0d0d', roughness: 0.4 }));
-      fist.position.y = -0.6;
-      punch.add(arm, fist);
+      const pts = []; for (let k = 0; k <= 16; k++) { const t = k / 16; pts.push(new THREE.Vector3(Math.sin(t * 2.4) * 0.25 * t, -t * 1.9, -Math.sin(t * 3.1) * 0.2 * t)); }
+      const lash = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 32, 0.016, 5), new THREE.MeshBasicMaterial({ color: new THREE.Color('#ff2bd6').multiplyScalar(2.5) }));
+      const grip = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.22, 8), new THREE.MeshStandardMaterial({ color: '#0d0d0d', roughness: 0.4 }));
+      grip.position.y = 0.05;
+      punch.add(lash, grip);
       punch.visible = false;
     }
     const liv = LIVERIES[cfg.livery] || LIVERIES[0];
@@ -774,7 +775,7 @@ export function createWorld(renderer, initialCfg) {
     if (punch) {
       const sw = S.swing > 0 && S.rival ? Math.sin((S.swing / 0.25) * Math.PI) : 0;
       punch.visible = sw > 0.05 && P.bike;
-      if (punch.visible) { const side = Math.sign(S.rival.x - S.x) || 1; punch.position.set(side * 0.2, 1.34, -0.05); punch.rotation.set(0, 0, -side * (Math.PI / 2) * sw); }
+      if (punch.visible) { const side = Math.sign(S.rival.x - S.x) || 1; punch.position.set(side * 0.25, 1.4, -0.1); punch.rotation.set(0.2 * sw, 0, -side * (Math.PI * 0.62) * sw); }
     }
 
     // police: a dark cruiser with a red/blue bar, shown once it draws level (or wide of the camera)

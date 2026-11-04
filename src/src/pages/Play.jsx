@@ -315,10 +315,10 @@ export default function Play() {
           {hud.copGap != null && (
             <>
               <div className={`siren ${hud.copGap < 45 ? 'near' : ''}`} />
-              <div className="hud2__cop"><b>{'★'.repeat(hud.wanted)}<i>{'★'.repeat(Math.max(0, 3 - hud.wanted))}</i></b><span>POLICE {hud.copGap > 0 ? `${hud.copGap} M BEHIND` : 'ALONGSIDE'}</span></div>
+              <div className="hud2__cop"><b>{'★'.repeat(hud.wanted)}<i>{'★'.repeat(Math.max(0, 3 - hud.wanted))}</i></b><span>POLICE {hud.copGap > 0 ? `${hud.copGap} M BEHIND` : 'ALONGSIDE'}</span>{hud.bust > 0.05 && <em className="bustbar"><i style={{ width: `${Math.round(hud.bust * 100)}%` }} />BUSTING</em>}</div>
             </>
           )}
-          {hud.beside && <div className="strike-ready">STRIKE <kbd>X</kbd></div>}
+          {hud.beside && <div className="strike-ready">WHIP <kbd>X</kbd></div>}
           {hud.ghost > 0 && <div className="ghost-chip">GHOST {hud.ghost}</div>}
           {hud.race && (
             <div className={`hud2__race ${hud.pos === 1 ? 'lead' : 'trail'}`}>
@@ -415,7 +415,7 @@ export default function Play() {
               options={[['race', 'RACE'], ...(cfg.car === 'bike' ? [['rash', 'ROAD BRAWL']] : []), ['zen', 'ZEN RACE'], ['free', 'FREE RUN']]}
               onChange={(v) => update({ race: v !== 'free', rash: v === 'rash', zen: v === 'zen' })}
             />
-            <p className="garage__note">{cfg.zen ? 'Race KUROGANE with no damage and no police. Crashes only cost speed.' : cfg.race === false ? 'Just you, the traffic and the road.' : cfg.rash && cfg.car === 'bike' ? 'Ride up beside KUROGANE and hit X to knock him wide. He hits back.' : 'First to the lookout wins. Crashes cost integrity and draw the police.'}</p>
+            <p className="garage__note">{cfg.zen ? 'Race KUROGANE with no damage and no police. Crashes only cost speed.' : cfg.race === false ? 'Just you, the traffic and the road.' : cfg.rash && cfg.car === 'bike' ? 'Ride up beside KUROGANE and crack the whip (X) to knock him wide. He hits back.' : 'First to the lookout wins. Crashes cost integrity and draw the police.'}</p>
             <Seg label="RADIO" value={cfg.radio || 'dracula'} options={[['dracula', 'DRACULA MIX'], ['nightcall', 'NIGHTCALL MIX'], ['synth', 'SYNTH LOOP'], ['link', 'YOUR MIX']]} onChange={(v) => update({ radio: v })} />
             {cfg.radio === 'link' && (
               <input className="radio-link" defaultValue={cfg.radioLink || ''} placeholder="Paste a YouTube video, playlist or Mix link" aria-label="YouTube link"

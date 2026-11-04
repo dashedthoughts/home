@@ -763,3 +763,5 @@ h1, h2, h3 { font-family: var(--f-display); font-weight: 700; letter-spacing: 0.
   .ch-side { position: static; width: auto; padding: 0 var(--gutter); overflow: visible; }
   .chill { overflow: auto; } .ch-bottom { position: sticky; } .ch-drive--line { flex-wrap: wrap; justify-content: center; }
 }
+.ch-side .ch-line { margin: 4px 2px 0; padding-left: 12px; border-left: 3px solid var(--signal); text-align: left; font: 600 italic 1rem / 1.45 var(--f-display); letter-spacing: .02em; color: #fff; opacity: .9; }
+.ch-line cite { display: block; margin-top: 6px; font: 400 var(--fs-hud) / 1 var(--f-mono); font-style: normal; letter-spacing: var(--track-hud); color: var(--ink-muted); text-transform: uppercase; }

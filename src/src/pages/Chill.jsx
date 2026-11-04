@@ -271,21 +271,21 @@ function Music() {
 
 // ---------------------------------------------------------------- street lines: original, rotating
 const LINES = [
-  'The city never sleeps. It just dims the lights and waits for you.',
-  'Every neon sign is somebody else\'s dream, rented by the hour.',
-  'Drive like the rent is due and the road is free.',
-  'Chrome fades. Good work ships.',
-  'At 3 a.m. the highway is the only honest thing in town.',
-  'Keep your engine warm and your plans warmer.',
-  'Somewhere up there a sign is spelling your name wrong. Make it right.',
-  'Rain on the windshield, a deadline in the rear-view. Keep going.',
-  'Find a way, or make one. Then make it look good.',
-  'The skyline is just the city showing off. Show off back.',
+  ['Find a way, or make one.', 'attributed to Hannibal'],
+  ['The night is darkest just before the dawn.', 'Thomas Fuller, 1650'],
+  ['Fortune favours the bold.', 'Virgil'],
+  ['The city never sleeps. It just dims the lights and waits for you.', 'Night Shift'],
+  ['Chrome fades. Good work ships.', 'Night Shift'],
+  ['At 3 a.m. the highway is the only honest thing in town.', 'Night Shift'],
+  ['Every neon sign is somebody\'s dream, rented by the hour.', 'Night Shift'],
+  ['Rain on the glass, a deadline in the mirror. Keep driving.', 'Night Shift'],
+  ['Make the thing you wish someone else had made.', 'Night Shift'],
+  ['The skyline is the city showing off. Show off back.', 'Night Shift'],
 ];
 function StreetLine() {
   const [i, setI] = useState(() => Math.floor(Math.random() * LINES.length));
   useEffect(() => { const t = setInterval(() => setI((x) => (x + 1) % LINES.length), 18000); return () => clearInterval(t); }, []);
-  return <p className="ch-line" key={i} aria-live="off">“{LINES[i]}”</p>;
+  return <blockquote className="ch-line" key={i}>“{LINES[i][0]}”<cite>{LINES[i][1]}</cite></blockquote>;
 }
 
 // ---------------------------------------------------------------- page
@@ -343,6 +343,7 @@ export default function Chill() {
             <div className="ch-pick"><input name="q" placeholder="Search Google" aria-label="Search Google" autoComplete="off" /><button type="submit" className="ch-btn">GO ↗</button></div>
           </form>
         </div>
+        <StreetLine />
       </aside>
       <aside className="ch-side ch-side--r">
         <div className={shown.music ? '' : 'ch-keep'}><Music /></div>
@@ -350,7 +351,6 @@ export default function Chill() {
       </aside>
 
       <div className="ch-bottom">
-        <StreetLine />
         <Drive engine={engine} dim={dim} setDim={setDim} vibe={vibe} setVibe={setVibe} />
         <nav className="ch-dock" aria-label="Show or hide tools">
           {[['timer', '◷', 'Timer'], ['search', '⌕', 'Search'], ['music', '♪', 'Music'], ['notes', '✎', 'Notes']].map(([k, g, n]) => (
