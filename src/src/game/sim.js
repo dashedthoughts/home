@@ -149,6 +149,7 @@ export function createSim(opts = {}) {
       car, ai: { target: 0, think: 0 },
       route: 'expressway', routes: [{ z0: -1e9, route: 'expressway' }], nextJunction: SECTOR, sector: 1,
       finale: false, finaleT: 0, done: false,
+      rival: { z: 0, x: LANES[2], lane: 2, target: 2, speed: mode === 'attract' ? MAX * 0.8 : 0, swapT: -9, think: 0 }, pos: 1, raceWon: null,
     });
     sections = [];
     extendTrack(1200);
@@ -292,7 +293,7 @@ export function createSim(opts = {}) {
       if (S.finaleT > 1.2) S.speed = Math.max(0, S.speed - 14 * dt);
       if (S.speed <= 0.5 && !S.done && S.finaleT > 2) {
         S.done = true;
-        emit({ type: 'complete', score: Math.round(S.score), files: S.files, dist: S.dist, top: S.topSpeed, nearMisses: S.nearMisses, shards: S.shards, sectors: S.sector });
+        emit({ type: 'complete', won: S.raceWon, score: Math.round(S.score), files: S.files, dist: S.dist, top: S.topSpeed, nearMisses: S.nearMisses, shards: S.shards, sectors: S.sector });
       }
     }
 
@@ -402,6 +403,45 @@ export function createSim(opts = {}) {
       }
     } else S.draft = Math.max(0, S.draft - dt * 0.9);
 
+    // ---- the rival: one AI racer on the same road, through the same traffic, rubber-banded so it stays a race ----
+    if (mode === 'play' && cfg.race !== false && (racing || S.finale)) {
+      const R = S.rival;
+      const gap = R.z - S.z; // + = rival ahead
+      // pace follows the player (rubber band), with slow surges and fades so the lead changes hands
+      const wave = 1 + 0.08 * Math.sin(S.time * 0.21) + 0.04 * Math.sin(S.time * 0.67 + 1.3);
+      const ref = Math.max(MAX * 0.85, S.speed);
+      let want = ref * wave * (diff.rival || 1);
+      if (gap < -40) want = Math.max(want, ref * 1.12); else if (gap > 140) want = Math.min(want, ref * 0.88);
+      want = Math.min(want, MAX * 1.4);
+      if (S.finale) want = Math.max(0, R.speed - 14 * dt);
+      const lead = S.cars.find((o) => o.z - R.z > 0 && o.z - R.z < 42 && Math.abs(o.x - R.x) < 2.2);
+      R.think -= dt;
+      if (lead && R.target === R.lane && R.think <= 0) {
+        R.think = 0.4;
+        for (const l of [R.lane - 1, R.lane + 1].filter((l) => l >= 0 && l < 3).sort(() => (S.time % 2 < 1 ? 1 : -1))) {
+          const busy = S.cars.some((o) => Math.abs(o.x - LANES[l]) < 2.4 && o.z - R.z > -9 && o.z - R.z < 46);
+          const player = Math.abs(S.x - LANES[l]) < 2.4 && Math.abs(S.z - R.z) < 9;
+          if (!busy && !player) { R.target = l; break; }
+        }
+      }
+      if (lead && R.target === R.lane) want = Math.min(want, lead.speed - 1);
+      R.speed += clamp(want - R.speed, -16 * dt, 11 * dt);
+      R.x += clamp(LANES[R.target] - R.x, -5.5 * dt, 5.5 * dt);
+      if (Math.abs(LANES[R.target] - R.x) < 0.05) R.lane = R.target;
+      R.z += R.speed * dt;
+      R.z = clamp(R.z, S.z - 400, S.z + 400); // never out of the race, whatever happens to the player
+      // never inside the player or a car: hold behind / ahead instead
+      for (const o of S.cars) if (Math.abs(o.z - R.z) < CAR_LEN && Math.abs(o.x - R.x) < CAR_W) { R.z = o.z - CAR_LEN - 0.1; R.speed = Math.min(R.speed, o.speed); }
+      const dz = R.z - S.z;
+      if (Math.abs(dz) < CAR_LEN && Math.abs(R.x - S.x) < CAR_W) R.z = dz >= 0 ? S.z + CAR_LEN + 0.1 : S.z - CAR_LEN - 0.1;
+      const pos = R.z > S.z ? 2 : 1;
+      if (pos !== S.pos && !S.finale) {
+        if (S.time - R.swapT > 1.2 && S.dist > 300) emit({ type: pos === 1 ? 'overtake' : 'overtaken' }); // no call-outs off the line
+        R.swapT = S.time;
+        S.pos = pos;
+      }
+    }
+
     // ---- shards ----
     for (const s of S.shardList) {
       if (s.taken || s.missed) continue;
@@ -416,7 +456,7 @@ export function createSim(opts = {}) {
           if (S.shards % SHARDS_PER_FILE === 0 && S.files < TOTAL_FILES) {
             S.files += 1;
             emit({ type: 'casefile', n: S.files });
-            if (S.files === TOTAL_FILES && !S.finale) { S.finale = true; S.finaleT = 0; emit({ type: 'finale' }); }
+            if (S.files === TOTAL_FILES && !S.finale) { S.finale = true; S.finaleT = 0; S.raceWon = S.pos === 1; emit({ type: 'finale', won: S.raceWon }); }
           }
         }
       } else if (s.z < S.z - 3) {

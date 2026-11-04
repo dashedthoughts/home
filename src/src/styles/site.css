@@ -206,7 +206,7 @@ h1, h2, h3 { font-family: var(--f-display); font-weight: 700; letter-spacing: 0.
 .hero__sub b { color: var(--signal); font-weight: 700; }
 .inline-brand { display: inline-block; width: 1em; height: 1em; vertical-align: -0.12em; }
 .hero__quote {
-  margin-top: var(--sp-5);
+  margin: 0 0 var(--sp-7);
   padding-left: var(--sp-4);
   border-left: var(--bw) solid var(--hype);
   font: 600 1.15rem / 1.3 var(--f-display);
@@ -246,7 +246,6 @@ h1, h2, h3 { font-family: var(--f-display); font-weight: 700; letter-spacing: 0.
 /* ---------- ticker ---------- */
 .ticker {
   position: relative;
-  z-index: 6; /* full-bleed band: the side rails pass behind it */
   overflow: hidden;
   border-block: var(--bw-thin) solid color-mix(in srgb, var(--data) 45%, transparent);
   background: var(--bg-panel);
@@ -318,7 +317,7 @@ h1, h2, h3 { font-family: var(--f-display); font-weight: 700; letter-spacing: 0.
 .cat { margin-bottom: var(--sp-8); }
 .cat__label { display: flex; justify-content: space-between; gap: var(--sp-4); font: 400 var(--fs-hud) / 1 var(--f-mono); letter-spacing: var(--track-hud); color: var(--hype); margin-bottom: var(--sp-4); padding-bottom: var(--sp-2); border-bottom: 1px dashed color-mix(in srgb, var(--hype) 40%, transparent); }
 .cat__count { color: var(--ink-muted); }
-.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr)); gap: var(--sp-6) var(--sp-5); }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: var(--sp-6) var(--sp-5); }
 .grid--2 { grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr)); margin-bottom: var(--sp-6); }
 
 .case { position: relative; isolation: isolate; display: block; padding: var(--bw); text-decoration: none; color: var(--ink); }
@@ -523,31 +522,7 @@ h1, h2, h3 { font-family: var(--f-display); font-weight: 700; letter-spacing: 0.
 /* case cards: a visible keyboard focus ring */
 .case:focus-visible { outline: 3px solid var(--signal); outline-offset: 5px; }
 
-/* ---------- side rails (wide screens fill the empty margins) ---------- */
-.rails { display: none; }
-@media (min-width: 1480px) {
-  .rails { display: block; }
-  .rail { position: fixed; top: 0; bottom: 0; z-index: 5; width: calc((100vw - var(--container)) / 2 - 24px); display: flex; flex-direction: column; align-items: center; justify-content: center; pointer-events: none; opacity: 0; transition: opacity var(--t-move); }
-  .rails.is-on .rail { opacity: 1; }
-  .rails:not(.is-on) .rail--l ol { pointer-events: none; }
-  .rail--l { left: 0; }
-  .rail--r { right: 0; }
-  .rail__track { position: absolute; left: 50%; top: 18vh; bottom: 18vh; width: 1px; background: rgba(255,255,255,.08); }
-  .rail__track i { position: absolute; inset: 0 0 auto 0; height: calc(var(--p, 0) * 100%); background: var(--data); box-shadow: 0 0 8px var(--data); }
-  .rail--l ol { position: relative; list-style: none; margin: 0; padding: 0; display: grid; gap: 7vh; pointer-events: auto; }
-  .rail--l a { display: grid; justify-items: center; gap: 6px; text-decoration: none; color: var(--ink-dim); font: 400 var(--fs-hud) / 1 var(--f-mono); letter-spacing: var(--track-hud); background: var(--bg); padding: 6px 4px; transition: color var(--t-snap); }
-  .rail--l a b { font: 700 1rem / 1 var(--f-display); color: inherit; }
-  .rail--l a span { writing-mode: vertical-rl; }
-  .rail--l a:hover, .rail--l a.on { color: var(--signal); }
-  .rail--l a.on b { text-shadow: 0 0 10px var(--signal); }
-  .rail__sign { height: 62vh; width: 46px; overflow: hidden; border: 1px solid color-mix(in srgb, var(--alert-text) 70%, transparent); box-shadow: 0 0 18px color-mix(in srgb, var(--alert) 35%, transparent), inset 0 0 12px color-mix(in srgb, var(--alert) 25%, transparent); background: rgba(20,4,10,.6); }
-  .rail__sign span { display: block; white-space: nowrap; writing-mode: vertical-rl; text-orientation: upright; font: 700 1.05rem / 46px 'Noto Sans JP', var(--f-display); letter-spacing: 0.25em; color: var(--alert-text); text-shadow: 0 0 8px var(--alert); animation: rail-drift 40s linear infinite; }
-  .rail__coord { margin: var(--sp-5) 0 0; text-align: center; font: 400 var(--fs-hud) / 1.6 var(--f-mono); letter-spacing: var(--track-hud); color: var(--ink-dim); }
-  .rail__coord em { font-style: normal; color: var(--alert-text); animation: rail-blink 1.6s steps(2) infinite; }
-}
-@keyframes rail-drift { to { transform: translateY(-50%); } }
-@keyframes rail-blink { 50% { opacity: 0.2; } }
-@media (prefers-reduced-motion: reduce) { .rail__sign span, .rail__coord em { animation: none !important; } }
+
 
 /* ---------- case tiles: colour field + deck cover + editorial type ---------- */
 .tile { position: relative; display: flex; flex-direction: column; text-decoration: none; color: var(--ink); background: var(--bg-panel); border-radius: 6px; overflow: hidden; contain: layout paint; transition: transform var(--t-move) var(--ease-snap), box-shadow var(--t-move); }
@@ -575,3 +550,11 @@ h1, h2, h3 { font-family: var(--f-display); font-weight: 700; letter-spacing: 0.
 @media (min-width: 900px) { .memes .meme-wall { max-width: 68%; } }
 @media (max-width: 899px) { .reddit-neon { opacity: .22; } }
 @media (prefers-reduced-motion: reduce) { .reddit-neon { animation: none !important; } }
+
+/* ---------- wide screens: use the width, and light the edges like a street at night ---------- */
+@media (min-width: 1600px) { :root { --container: 1440px; } }
+@media (min-width: 1900px) { :root { --container: 1600px; } }
+.home { isolation: isolate; }
+.home::before { content: ''; position: fixed; inset: 0; z-index: -1; pointer-events: none;
+  background: radial-gradient(38vw 70vh at -6% 70%, color-mix(in srgb, var(--hype) 9%, transparent), transparent 70%),
+              radial-gradient(38vw 70vh at 106% 25%, color-mix(in srgb, var(--data) 8%, transparent), transparent 70%); }

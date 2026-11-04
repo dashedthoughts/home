@@ -21,10 +21,11 @@ export default function Nav() {
     document.querySelector(id)?.scrollIntoView({ behavior: 'smooth' });
   };
   const toggleMood = () => {
-    const next = mood === 'street' ? 'anime' : 'street';
+    const next = mood === 'street' ? 'outrun' : 'street';
     document.documentElement.dataset.mood = next;
     setMood(next);
     setM(next);
+    window.dispatchEvent(new CustomEvent('nc2:mood', { detail: next }));
   };
 
   return (
@@ -60,8 +61,8 @@ export default function Nav() {
           type="button"
           className="nav__mood"
           onClick={toggleMood}
-          aria-pressed={mood === 'anime'}
-          title="Swap the colour roles (street ↔ anime)"
+          aria-pressed={mood === 'outrun'}
+          title="Switch mood: Street (Midnight Tokyo) or Outrun (sunset synthwave)"
         >
           MOOD: {mood.toUpperCase()}
         </button>

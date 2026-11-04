@@ -5,6 +5,8 @@ import { projects, rankFor } from '../data/content.js';
 import { CARS, LIVERIES, GLOWS, TIMES, WEATHER, DIFFICULTY, QUALITY, resolveQuality } from '../game/config.js';
 import { addDecrypted, getRaceConfig, setRaceConfig, getBestBy, setBestBy } from '../lib/store.js';
 
+const CAMS = { chase: 'CHASE', far: 'WIDE', bumper: 'BUMPER' };
+
 const KEYS = {
   ArrowLeft: 'left', KeyA: 'left',
   ArrowRight: 'right', KeyD: 'right',
@@ -80,6 +82,11 @@ export default function Play() {
     });
     eng()?.uiSound('ui');
   }, []);
+  // Outrun mood drives at sunset unless a time was picked by hand
+  useEffect(() => {
+    if (document.documentElement.dataset.mood === 'outrun' && cfgRef.current.time === 'tokyo') update({ time: 'outrun' });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   useEffect(() => setBestState(getBestBy(cfg.difficulty)), [cfg.difficulty]);
 
   // ---------- callouts ----------
@@ -115,7 +122,9 @@ export default function Play() {
         case 'junction':
           pop(e.route === 'backstreets' ? 'BACKSTREETS' : 'EXPRESSWAY', e.route === 'backstreets' ? 'route' : 'routex', e.route === 'backstreets' ? 'SHARDS ×1.5 · TIGHTER STREETS · SLOWER TRAFFIC' : 'OPEN ROAD · FAST TRAFFIC');
           break;
-        case 'finale': pop('ALL TEN FILES', 'ok', 'LAST EXIT: THE LOOKOUT'); break;
+        case 'finale': pop(e.won === null ? 'ALL TEN FILES' : e.won ? 'YOU WIN' : 'KUROGANE WINS', e.won === false ? 'alert' : 'ok', 'LAST EXIT: THE LOOKOUT'); break;
+        case 'overtake': pop('OVERTAKE', 'ok', 'P1 · HOLD IT TO THE LOOKOUT'); break;
+        case 'overtaken': pop('KUROGANE PASSES', 'alert', 'P2 · TAKE IT BACK'); break;
         case 'complete': {
           const d = cfgRef.current.difficulty;
           const prev = getBestBy(d);
@@ -130,7 +139,7 @@ export default function Play() {
           const p = projects[(e.n - 1) % projects.length];
           addDecrypted(p.slug);
           setRunFiles((f) => (f.some((x) => x.slug === p.slug) ? f : [...f, p]));
-          pop(`FILE ${pad2(e.n)} DECRYPTED`, 'ok', p.title.toUpperCase());
+          pop(`FILE ${pad2(e.n)} OPEN`, 'ok', p.title.toUpperCase());
           break;
         }
         case 'over': {
@@ -194,6 +203,7 @@ export default function Play() {
         return;
       }
       if ((e.code === 'Escape' || e.code === 'KeyP') && (ph === 'run' || ph === 'paused')) { e.preventDefault(); togglePause(); return; }
+      if (e.code === 'KeyC' && ph === 'run') { e.preventDefault(); g.cycleCam(); return; }
       const k = KEYS[e.code];
       if (k && ph === 'run') { e.preventDefault(); g.input[k] = true; }
     };
@@ -260,6 +270,9 @@ export default function Play() {
                 {pad2(hud.files)}
                 <small>/{projects.length}</small>
               </b>
+              <span className="shardmeter" title="Five shards open the next file">
+                {Array.from({ length: 5 }, (_, i) => <i key={i} className={i < hud.shards % 5 ? 'on' : ''} />)}
+              </span>
             </div>
             <div>
               <span className="hud-k">INTEGRITY</span>
@@ -269,8 +282,15 @@ export default function Play() {
                 ))}
               </span>
             </div>
+            <button type="button" className="hud2__cam" onClick={() => eng()?.cycleCam()} aria-label="Change camera">{CAMS[hud.cam] || 'CHASE'}</button>
             <button type="button" className="hud2__pause" onClick={togglePause} aria-label="Pause">❚❚</button>
           </div>
+          {hud.race && (
+            <div className={`hud2__race ${hud.pos === 1 ? 'lead' : 'trail'}`}>
+              <b>P{hud.pos || 1}<small>/2</small></b>
+              <span>KUROGANE {hud.rivalGap > 0 ? '+' : ''}{hud.rivalGap} M</span>
+            </div>
+          )}
           <div className="hud2__route">
             <span className="hud-k">SECTOR {pad2(hud.sector || 1)}</span>
             <b className={hud.route === 'backstreets' ? 'tone-signal' : 'tone-data'}>{hud.route === 'backstreets' ? 'BACKSTREETS' : 'EXPRESSWAY'}</b>
@@ -278,6 +298,12 @@ export default function Play() {
               <span className="junction-hint">JUNCTION IN {hud.toJunction} M · LEFT LANES EXPRESSWAY · RIGHT LANE BACKSTREETS</span>
             )}
           </div>
+          {hud.bend !== 0 && hud.bend !== undefined && (
+            <div className={`bendsign ${hud.bend > 0 ? 'r' : 'l'}`}>
+              <b>{(hud.bend > 0 ? '›' : '‹').repeat(Math.abs(hud.bend))}</b>
+              <span>{Math.abs(hud.bend) > 2 ? 'HARD ' : ''}{hud.bend > 0 ? 'RIGHT' : 'LEFT'}</span>
+            </div>
+          )}
           <div className="hud2__dash">
             <span className={`dash-status tone-${status[1]}`}>{status[0]}</span>
             <b className="dash-speed">{hud.kmh}</b>
@@ -299,6 +325,7 @@ export default function Play() {
       {counting && (
         <div className="countdown" aria-live="assertive">
           <b key={Math.ceil(hud.count)}>{Math.ceil(hud.count)}</b>
+          <p className="countdown__brief">GRAB <em>5 SHARDS</em> TO OPEN A CASE FILE · OPEN <em>10</em> TO REACH THE LOOKOUT<br /><small>C · CHANGE CAMERA</small></p>
         </div>
       )}
 
@@ -343,10 +370,16 @@ export default function Play() {
             {tab === 'run' && (
               <div className="tabpane">
                 <p className="garage__lede">
-                  Ten of my case files are loose on the ring road as data shards. Every five you grab decrypts one.
-                  Hold a lane under the junction signs to pick your route, tuck in behind traffic to cool the engine,
-                  and find out where the road ends.
+                  Ten of my case files are loose on the ring road as data shards. Every five you grab opens one; open all
+                  ten and the road ends at the lookout. Race KUROGANE there, or cruise it alone. Hold a lane under the
+                  junction signs to pick your route and tuck in behind traffic to cool the engine.
                 </p>
+                <Seg
+                  label="MODE"
+                  value={cfg.race === false ? 'free' : 'race'}
+                  options={[['race', 'RACE KUROGANE'], ['free', 'FREE RUN']]}
+                  onChange={(v) => update({ race: v === 'race' })}
+                />
                 <Seg
                   label="TRAFFIC"
                   value={cfg.difficulty}
@@ -482,6 +515,7 @@ export default function Play() {
             <div><span>NEAR MISSES</span><b>{final.nearMisses}</b></div>
             <div><span>SHARDS</span><b>{final.shards}</b></div>
             <div><span>FILES</span><b>{final.files}/{projects.length}</b></div>
+            {final.won !== undefined && final.won !== null && <div><span>RACE</span><b style={{ color: final.won ? 'var(--success)' : 'var(--alert-text)' }}>{final.won ? 'WON' : 'LOST'}</b></div>}
             {final.sectors && <div><span>SECTORS</span><b>{final.sectors}</b></div>}
           </div>
           {runFiles.length > 0 ? (

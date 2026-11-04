@@ -212,3 +212,27 @@
 .pop--route b, .pop--routex b { font: 400 clamp(1.8rem, 5.5vw, 3.4rem) / 1 var(--f-name); letter-spacing: 0.02em; text-shadow: 3px 3px 0 var(--alert); }
 .pop--route b { color: var(--signal); }
 .pop--routex b { color: var(--data); }
+
+/* ---------- race, bends, camera, objective ---------- */
+.hud2__race { position: absolute; left: 50%; top: var(--sp-5); transform: translateX(-50%); display: flex; align-items: baseline; gap: 12px; padding: 6px 14px; background: rgba(13,13,13,.55); clip-path: var(--shape-sm); }
+.hud2__race b { font: 700 2rem / 1 var(--f-display); color: var(--success); }
+.hud2__race.trail b { color: var(--alert-text); }
+.hud2__race small { font-size: .5em; color: var(--ink-muted); }
+.hud2__race span { font: 400 var(--fs-hud) / 1 var(--f-mono); letter-spacing: var(--track-hud); color: var(--ink); }
+.bendsign { position: absolute; left: 50%; top: 22%; transform: translateX(-50%); display: grid; justify-items: center; gap: 2px; padding: 6px 18px 8px; background: var(--signal); color: #0d0d0d; clip-path: var(--shape-sm); animation: blink .5s steps(2) infinite; }
+.bendsign b { font: 800 2.4rem / .8 var(--f-display); letter-spacing: -.05em; }
+.bendsign span { font: 700 .7rem / 1 var(--f-mono); letter-spacing: .2em; }
+.shardmeter { display: flex; gap: 3px; }
+.shardmeter i { width: 9px; height: 14px; background: rgba(255,255,255,.14); transform: skewX(-14deg); }
+.shardmeter i.on { background: var(--data); box-shadow: 0 0 8px var(--data); }
+.hud2__cam { pointer-events: auto; font: 700 .7rem / 1 var(--f-mono); letter-spacing: .14em; color: var(--ink); background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.2); padding: 8px 10px; cursor: pointer; }
+.hud2__cam:hover { border-color: var(--data); color: var(--data); }
+.countdown { align-content: center; gap: var(--sp-4); }
+.countdown__brief { position: absolute; top: 16%; left: 0; right: 0; margin: 0; text-align: center; font: 700 clamp(.8rem, 1.6vw, 1.05rem) / 1.6 var(--f-display); letter-spacing: .12em; color: var(--ink); text-shadow: 0 2px 8px #000; padding: 0 var(--gutter); }
+.countdown__brief em { font-style: normal; color: var(--signal); }
+.countdown__brief small { font: 400 .7rem / 1 var(--f-mono); color: var(--ink-muted); letter-spacing: .2em; }
+@media (max-width: 760px) {
+  .hud2__race { top: auto; bottom: 46%; padding: 4px 10px; } .hud2__race b { font-size: 1.4rem; }
+  .bendsign { top: 30%; } .bendsign b { font-size: 1.8rem; }
+}
+@media (prefers-reduced-motion: reduce) { .bendsign { animation: none; } }

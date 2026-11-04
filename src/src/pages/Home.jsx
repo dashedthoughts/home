@@ -7,7 +7,6 @@ import Ticker from '../components/Ticker.jsx';
 import HudHeader from '../components/HudHeader.jsx';
 import CaseCard from '../components/CaseCard.jsx';
 import PhotoStrip from '../components/PhotoStrip.jsx';
-import SideRails from '../components/SideRails.jsx';
 import useReveal from '../lib/useReveal.js';
 import { getDecrypted } from '../lib/store.js';
 import {
@@ -34,7 +33,6 @@ export default function Home() {
   return (
     <main className="home">
       <Nav />
-      <SideRails />
 
       <header className="hero">
         <GameCanvas
@@ -47,6 +45,10 @@ export default function Home() {
         <div className="hero__shade" aria-hidden="true" />
 
         <div className="hero__panel">
+          <blockquote className="hero__quote">
+            &ldquo;Aut viam inveniam aut faciam.&rdquo;
+            <cite>~ Hannibal // find a way, or make one</cite>
+          </blockquote>
           <p className="hud-label hero__hi">
             <span className="caret-mark">&gt;</span> HELLO THERE, I&apos;M<span className="caret">_</span>
           </p>
@@ -93,10 +95,6 @@ export default function Home() {
               PLAY REDLINE ▸
             </Link>
           </div>
-          <blockquote className="hero__quote">
-            &ldquo;Aut viam inveniam aut faciam.&rdquo;
-            <cite>~ Hannibal // find a way, or make one</cite>
-          </blockquote>
         </div>
 
         <aside className="hero__tele" aria-label="Backdrop telemetry">

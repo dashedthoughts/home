@@ -65,6 +65,13 @@ export const TIMES = {
     hemi: ['#ffb07a', '#1a1022', 0.7], key: ['#ffcf8a', 0.5],
     windows: ['#fcee0a', '#ff8a3d', '#ff2bd6', '#ffe2b0'], stars: 0, fogDensity: 0.0038,
   },
+  outrun: {
+    name: 'OUTRUN',
+    zenith: '#14042e', horizon: '#ff2f7a', glow: '#ff6a3d', fog: '#3d0b52',
+    body: { kind: 'sun', color: '#ffe14a', size: 230, y: 92 },
+    hemi: ['#ff4fb0', '#12051f', 0.6], key: ['#ff9a6a', 0.4],
+    windows: ['#ff2bd6', '#00e5ff', '#ffb347', '#ff6a3d'], stars: 0.6, fogDensity: 0.0034,
+  },
 };
 
 export const WEATHER = {
@@ -90,6 +97,7 @@ export const isPhone = () => typeof window !== 'undefined' && (navigator.maxTouc
 export const resolveQuality = (q) => (q === 'auto' || !QUALITY[q] ? (isPhone() ? 'low' : 'balanced') : q);
 
 export const DEFAULT_CONFIG = {
+  race: true,
   car: 'wedge',
   livery: 0,
   glow: 0,

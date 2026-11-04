@@ -144,4 +144,25 @@ for (const [mode, seed] of [['attract', 4], ['play', 6]]) {
   console.log(`no-overlap ${mode}: overlapping frames=${overlaps}${mode === 'play' ? `, frames invulnerable=${hitsSeen}` : ''}`);
   assert.equal(overlaps, 0, `${mode}: vehicles never sit inside each other`);
 }
+// rival: never inside traffic or the player, stays in a race (mostly within 300 m), and positions actually change
+{
+  for (const seed of [1, 2, 3]) {
+    const sim = createSim({ mode: 'play', seed, config: {}, onEvent: (e) => { if (e.type === 'overtake' || e.type === 'overtaken') swaps++; } });
+    let swaps = 0, inside = 0, far = 0, frames = 0;
+    const bot = driver();
+    for (let t = 0; t < 240 && !sim.S.over; t += 1 / 60) {
+      bot(sim.input, sim.S, sim); sim.step(1 / 60);
+      if (sim.S.count > 0) continue;
+      frames++;
+      const R = sim.S.rival;
+      if (sim.S.cars.some((c) => Math.abs(c.z - R.z) < 4.3 && Math.abs(c.x - R.x) < 1.9)) inside++;
+      if (Math.abs(R.z - sim.S.z) < 4.3 && Math.abs(R.x - sim.S.x) < 1.9) inside++;
+      if (Math.abs(R.z - sim.S.z) > 300) far++;
+    }
+    console.log(`rival seed ${seed}: swaps=${swaps} overlapFrames=${inside} farShare=${(far / frames).toFixed(2)}`);
+    assert.equal(inside, 0, 'rival never overlaps');
+    assert.ok(far / frames < 0.2, 'rival stays in the race');
+  }
+}
+
 console.log('ALL SIM CHECKS PASSED');

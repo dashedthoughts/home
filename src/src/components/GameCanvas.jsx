@@ -23,14 +23,15 @@ const GameCanvas = forwardRef(function GameCanvas(
   useEffect(() => {
     if (!webgl2()) { setState('failed'); return undefined; }
     if (lite && (frugal() || reduced())) { setState('still'); return undefined; }
-    let g = null, dead = false, io = null;
+    let g = null, dead = false, io = null, onMood = null;
     const sync = () => g && (document.hidden || !sync.visible ? g.pause() : g.resume());
     sync.visible = true;
     import('../game/engine.js')
       .then(({ createRedline }) => {
         if (dead) return;
+        const moodTime = () => (lite ? { time: document.documentElement.dataset.mood === 'outrun' ? 'outrun' : 'tokyo' } : {});
         g = createRedline(canvasRef.current, {
-          mode, view, lite, config,
+          mode, view, lite, config: { ...(config || {}), ...moodTime() },
           reducedMotion: reduced(),
           onTick: (s) => cbs.current.onTick?.(s),
           onEvent: (e) => {
@@ -43,6 +44,7 @@ const GameCanvas = forwardRef(function GameCanvas(
           },
         });
         engine.current = g;
+        if (lite) { onMood = () => g.configure(moodTime()); window.addEventListener('nc2:mood', onMood); }
         window.__redline = g; // debug/test handle
         g.start();
         requestAnimationFrame(() => requestAnimationFrame(() => { if (!dead) { setState('live'); cbs.current.onReady?.(g); } }));
@@ -59,6 +61,7 @@ const GameCanvas = forwardRef(function GameCanvas(
       dead = true;
       document.removeEventListener('visibilitychange', sync);
       io?.disconnect();
+      if (onMood) window.removeEventListener('nc2:mood', onMood);
       g?.destroy();
       engine.current = null;
     };

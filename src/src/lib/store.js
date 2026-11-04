@@ -29,7 +29,7 @@ export const addDecrypted = (slug) => {
   window.dispatchEvent(new Event('nc2:decrypted'));
   return s;
 };
-export const getMood = () => read('mood', 'street');
+export const getMood = () => (read('mood', 'street') === 'street' ? 'street' : 'outrun'); // the old 'anime' mood became Outrun
 export const setMood = (m) => write('mood', m);
 
 // REDLINE garage + settings

@@ -115,7 +115,7 @@ export function createRedline(canvas, opts = {}) {
   // ---- loop ----
   let raf = 0, running = false, paused = false, last = 0, acc = 0, tick = 0;
   let frameAvg = 16, slowFor = 0, fastFor = 0, lastScaleChange = 0;
-  const fx = { full: cfg.effects !== 'reduced', view: opts.view || 'chase' };
+  const fx = { full: cfg.effects !== 'reduced', view: opts.view || 'chase', cam: 'chase' };
   const keyInput = { left: false, right: false, boost: false, brake: false };
 
   function frame(now) {
@@ -200,6 +200,12 @@ export function createRedline(canvas, opts = {}) {
       sector: S.sector,
       toJunction: Math.max(0, Math.round(S.nextJunction - S.z)),
       finale: S.finale,
+      // a turn is coming when the road ahead bends hard and differently from where we are now
+      bend: (() => { if (S.finale) return 0; const ahead = sim.curveAt(S.z + 170), now = sim.curveAt(S.z); return Math.abs(ahead) > 0.3 && Math.abs(ahead - now) > 0.3 ? Math.sign(ahead) * Math.min(3, Math.ceil(Math.abs(ahead) * 3)) : 0; })(),
+      cam: fx.cam,
+      race: cfg.race !== false,
+      pos: S.pos,
+      rivalGap: Math.round(S.rival ? S.rival.z - S.z : 0),
     });
   }
 
@@ -232,6 +238,12 @@ export function createRedline(canvas, opts = {}) {
       paused = false;
       if (!running) start();
       emitTick();
+    },
+    cycleCam() {
+      const order = ['chase', 'far', 'bumper'];
+      fx.cam = order[(order.indexOf(fx.cam) + 1) % order.length];
+      emitTick();
+      return fx.cam;
     },
     setView(v) {
       fx.view = v;
@@ -282,6 +294,7 @@ export function createRedline(canvas, opts = {}) {
       }
       world.update(sim, 0.016, fx);
       post.render(0.016);
+      emitTick();
     },
     uiSound(name) { audio?.unlock(); audio?.sfx(name); },
     state: () => sim.S,

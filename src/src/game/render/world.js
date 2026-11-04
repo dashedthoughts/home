@@ -11,7 +11,7 @@ const ROAD_LEN = 760;     // visible road strip (m)
 const NEAR = 14;          // strip starts this far behind the player
 const SPAN = 760;         // recycling span for props
 const HDR = (c, k) => new THREE.Color(c).multiplyScalar(k);
-const CURVE_K = 0.00045;  // visual bend per unit of sim curvature
+const CURVE_K = 0.0011;   // visual bend per unit of sim curvature (strong enough to read as a real turn)
 const HILL_K = 0.00016;
 
 function stripGeo(w, h, d, segs) {
@@ -360,7 +360,19 @@ export function createWorld(renderer, initialCfg) {
     player.group.add(glowPlane);
     scene.add(player.group);
   }
+  // the rival: always the other vehicle, in a contrasting livery (built with the same parts as the player's)
+  let rival = null;
+  function buildRival() {
+    if (rival) { scene.remove(rival.group); rival.group.traverse((o) => { if (o.isMesh) o.geometry.dispose(); }); }
+    const bike = cfg.car !== 'bike';
+    rival = buildPlayerCar(bike ? 'bike' : 'wedge', bike ? LIVERIES[4] : LIVERIES[6], bike ? '#ff2bd6' : '#b8ff2e');
+    if (rival.glowLight) { rival.group.remove(rival.glowLight); rival.glowLight = null; }
+    if (rival.tailLight) rival.tailLight.intensity = 0.6;
+    rival.group.visible = false;
+    scene.add(rival.group);
+  }
   function buildPlayer() {
+    buildRival();
     const liv = LIVERIES[cfg.livery] || LIVERIES[0];
     const glow = (GLOWS[cfg.glow] || GLOWS[0]).color;
     const token = ++playerToken;
@@ -701,6 +713,23 @@ export function createWorld(renderer, initialCfg) {
     head.position.set(S.x, 0.75, -2.3);
     headTarget.position.set(S.x - S.vx * 0.3, 0, -26);
 
+    // rival
+    if (rival) {
+      const R = S.rival;
+      const on = sim.mode === 'play' && R && cfg.race !== false && fx.view !== 'showroom';
+      const zw = on ? -(R.z - S.z) : 0;
+      rival.group.visible = on && zw > -quality.cull && zw < 40;
+      if (rival.group.visible) {
+        const rg = rival.group;
+        const lean = (LANES[R.target] - R.x) * 0.06;
+        rg.position.set(R.x, 0, zw);
+        rg.rotation.set(0, -lean * 0.4, rival.bike ? -lean * 2.2 : 0);
+        const rs = (R.speed * dt) / rival.wheelR;
+        rival.wheels.forEach((w) => { const sp = w.userData.spin; if (sp) sp.rotation.x -= rs * w.userData.sign; else w.rotation.x -= rs; });
+        for (const f of rival.flames) f.visible = R.speed > S.speed + 4;
+      }
+    }
+
     // particles: sparks while scraping, embers on overclock, spray in rain
     if (S.scrape > 0) emit(5, { x: S.x + Math.sign(S.x) * 1.0, y: 0.4, z: 0.6 }, { color: '#ffd27a', gain: 6, speed: 5, life: 0.45, size: 0.09, gravity: 14, vz: 6, vx: -Math.sign(S.x) * 2 });
     if (S.overclock && fx.full) emit(1, { x: S.x + (Math.random() < 0.5 ? -0.34 : 0.34), y: 0.3, z: P.length / 2 + 0.6 }, { color: '#4fd8ff', gain: 4, speed: 1.5, life: 0.35, size: 0.06, vz: 4 });
@@ -754,16 +783,20 @@ export function createWorld(renderer, initialCfg) {
     fov += (targetFov - fov) * Math.min(1, dt * 3);
     camera.fov = fov;
     camera.updateProjectionMatrix();
-    camPos.x += (S.x * 0.84 - camPos.x) * Math.min(1, dt * 5);
-    camPos.y = (P.bike ? 1.55 : 2.05) + sp * 0.12;
-    camPos.z = (P.bike ? 4.4 : 6.2) - sp * 0.5;
+    // three rigs: chase (default), far chase, and a low bumper cam ahead of the nose
+    const cam = fx.cam || 'chase';
+    const wideCam = cam === 'far', bumper = cam === 'bumper';
+    pg.visible = pg.visible && !bumper;
+    camPos.x += (S.x * (bumper ? 1 : 0.84) - camPos.x) * Math.min(1, dt * (bumper ? 12 : 5));
+    camPos.y = bumper ? (P.bike ? 1.25 : 0.72) : (wideCam ? (P.bike ? 3.0 : 3.6) : (P.bike ? 1.55 : 2.05)) + sp * 0.12;
+    camPos.z = bumper ? -P.length / 2 - 0.25 : (wideCam ? (P.bike ? 8.4 : 10.8) : (P.bike ? 4.4 : 6.2)) - sp * 0.5;
     camera.position.copy(camPos);
     if (fx.full && S.shake > 0) {
       const k = S.shake * 0.5;
       camera.position.x += (Math.random() - 0.5) * k;
       camera.position.y += (Math.random() - 0.5) * k;
     }
-    look.set(S.x * 0.92, P.bike ? 0.85 : 0.95, -16);
+    look.set(S.x * (bumper ? 1 : 0.92), bumper ? 0.6 : (P.bike ? 0.85 : 0.95), bumper ? -30 : -16);
     look.x += U.uCurve.value * 16 * 16 * 0.6;
     look.y += U.uHill.value * 16 * 16;
     camera.lookAt(look);
