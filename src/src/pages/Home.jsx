@@ -10,7 +10,7 @@ import PhotoStrip from '../components/PhotoStrip.jsx';
 import useReveal from '../lib/useReveal.js';
 import { getDecrypted } from '../lib/store.js';
 import {
-  projects, categories, stats, tickerA, tickerB, memes, EMAIL, REDDIT, LINKEDIN, CLASSIC,
+  projects, categories, stats, tickerA, tickerB, memes, SITE,
 } from '../data/content.js';
 
 export default function Home() {
@@ -78,7 +78,7 @@ export default function Home() {
             <b>ISB</b> MBA grad and recovering engineer.
           </p>
           <div className="btn-row">
-            <a className="btn btn--signal" href={`mailto:${EMAIL}`}>
+            <a className="btn btn--signal" href={`mailto:${SITE.email}`}>
               PING ME <span className="btn__k">↗</span>
             </a>
             <a
@@ -156,14 +156,14 @@ export default function Home() {
           </p>
           <div className="meme-wall">
             {memes.map((m, i) => (
-              <a className="meme" key={m.title} href={REDDIT} target="_blank" rel="noreferrer" style={{ '--i': i }}>
+              <a className="meme" key={m.title} href={SITE.reddit} target="_blank" rel="noreferrer" style={{ '--i': i }}>
                 <img src={m.src} alt={m.title} loading="lazy" />
                 <span className="meme__cap">{m.title}</span>
               </a>
             ))}
           </div>
           <div className="btn-row">
-            <a className="btn btn--signal" href={REDDIT} target="_blank" rel="noreferrer">
+            <a className="btn btn--signal" href={SITE.reddit} target="_blank" rel="noreferrer">
               u/dashedthoughts ↗
             </a>
             <a className="btn btn--ghost" href="https://www.reddit.com/r/memes/" target="_blank" rel="noreferrer">
@@ -191,12 +191,12 @@ export default function Home() {
           <p>
             <span className="caret-mark">&gt;</span> say hello<span className="caret">_</span>
           </p>
-          <a className="terminal__mail" href={`mailto:${EMAIL}`}>
-            {EMAIL}
+          <a className="terminal__mail" href={`mailto:${SITE.email}`}>
+            {SITE.email}
           </a>
           <div className="terminal__links">
-            <a href={LINKEDIN} target="_blank" rel="noreferrer">LinkedIn ↗</a>
-            <a href={REDDIT} target="_blank" rel="noreferrer">Reddit ↗</a>
+            <a href={SITE.linkedin} target="_blank" rel="noreferrer">LinkedIn ↗</a>
+            <a href={SITE.reddit} target="_blank" rel="noreferrer">Reddit ↗</a>
             <Link to="/system">Design system ›</Link>
           </div>
         </div>
@@ -205,7 +205,7 @@ export default function Home() {
           <br />
           the mending of them, and the learning they leave behind?&rdquo; <span>~ GS</span>
         </p>
-        <p className="footer__build">HOME · THE NIGHT BUILD · <a href={CLASSIC}>the classic site</a></p>
+        <p className="footer__build">HOME · THE NIGHT BUILD · <a href={SITE.classic}>the classic site</a></p>
       </footer>
     </main>
   );

@@ -8,7 +8,7 @@ const webgl2 = () => { try { return !!document.createElement('canvas').getContex
 // React shell around the REDLINE engine, which is loaded on demand (its own chunk).
 // mode="attract" → autopilot backdrop. mode="play" → driven by the Play page.
 const GameCanvas = forwardRef(function GameCanvas(
-  { mode = 'attract', view = 'chase', config, lite = false, onTick, onEvent, onReady, className = '', label, autoPause = true },
+  { mode = 'attract', view = 'chase', config, lite = false, lockTime = false, onTick, onEvent, onReady, className = '', label, autoPause = true },
   ref,
 ) {
   const canvasRef = useRef(null);
@@ -29,7 +29,7 @@ const GameCanvas = forwardRef(function GameCanvas(
     import('../game/engine.js')
       .then(({ createRedline }) => {
         if (dead) return;
-        const moodTime = () => (lite ? { time: document.documentElement.dataset.mood === 'outrun' ? 'outrun' : 'tokyo' } : {});
+        const moodTime = () => (lite && !lockTime ? { time: document.documentElement.dataset.mood === 'outrun' ? 'outrun' : 'tokyo' } : {});
         g = createRedline(canvasRef.current, {
           mode, view, lite, config: { ...(config || {}), ...moodTime() },
           reducedMotion: reduced(),

@@ -358,14 +358,20 @@ export function createWorld(renderer, initialCfg) {
     glowPlane.material.uniforms.uGain.value = player.bike ? 0.75 : 1.6;
     glowPlane.visible = !!glow;
     player.group.add(glowPlane);
+    if (ghostShell) { ghostShell.scale.set(1, 1, 1); ghostShell.position.set(0, player.bike ? 0.9 : 0.7, 0); player.group.add(ghostShell); ghostShell.geometry.dispose(); ghostShell.geometry = new THREE.SphereGeometry(1, 24, 16).scale(player.bike ? 0.9 : 1.3, player.bike ? 1.1 : 0.9, player.length * 0.62); }
+    if (punch) player.group.add(punch);
     scene.add(player.group);
   }
   // the rival: always the other vehicle, in a contrasting livery (built with the same parts as the player's)
-  let rival = null;
+  let rival = null, cop = null, ghostShell = null, punch = null;
+  // power-ups: a spinning octahedron in a ring, cyan GHOST or amber NITRO
+  const powerGeo = new THREE.OctahedronGeometry(0.42, 0), ringGeo = new THREE.TorusGeometry(0.75, 0.035, 8, 40);
+  const powerMats = { ghost: new THREE.MeshBasicMaterial({ color: new THREE.Color('#5ff6ff').multiplyScalar(4) }), nitro: new THREE.MeshBasicMaterial({ color: new THREE.Color('#ffb020').multiplyScalar(4) }) };
+  const powerPool = Array.from({ length: 3 }, () => { const gp = new THREE.Group(); gp.add(new THREE.Mesh(powerGeo, powerMats.ghost), new THREE.Mesh(ringGeo, powerMats.ghost)); gp.visible = false; scene.add(gp); return gp; });
   function buildRival() {
     if (rival) { scene.remove(rival.group); rival.group.traverse((o) => { if (o.isMesh) o.geometry.dispose(); }); }
-    const bike = cfg.car !== 'bike';
-    rival = buildPlayerCar(bike ? 'bike' : 'wedge', bike ? LIVERIES[4] : LIVERIES[6], bike ? '#ff2bd6' : '#b8ff2e');
+    const bike = cfg.car !== 'bike' || !!cfg.rash; // Rash mode: rider against rider
+    rival = buildPlayerCar(bike ? 'bike' : 'wedge', bike ? LIVERIES[5] : LIVERIES[6], bike ? '#ff2bd6' : '#b8ff2e', 'roadster');
     if (rival.glowLight) { rival.group.remove(rival.glowLight); rival.glowLight = null; }
     if (rival.tailLight) rival.tailLight.intensity = 0.6;
     rival.group.visible = false;
@@ -373,6 +379,17 @@ export function createWorld(renderer, initialCfg) {
   }
   function buildPlayer() {
     buildRival();
+    if (!ghostShell) {
+      ghostShell = new THREE.Mesh(new THREE.SphereGeometry(1, 24, 16), new THREE.MeshBasicMaterial({ color: new THREE.Color('#5ff6ff').multiplyScalar(2), transparent: true, opacity: 0.3, depthWrite: false, blending: THREE.AdditiveBlending }));
+      ghostShell.visible = false;
+      punch = new THREE.Group();
+      const arm = new THREE.Mesh(new THREE.CapsuleGeometry(0.055, 0.5, 4, 10), new THREE.MeshStandardMaterial({ color: '#15121d', roughness: 0.6 }));
+      arm.position.y = -0.3;
+      const fist = new THREE.Mesh(new THREE.SphereGeometry(0.075, 12, 10), new THREE.MeshStandardMaterial({ color: '#0d0d0d', roughness: 0.4 }));
+      fist.position.y = -0.6;
+      punch.add(arm, fist);
+      punch.visible = false;
+    }
     const liv = LIVERIES[cfg.livery] || LIVERIES[0];
     const glow = (GLOWS[cfg.glow] || GLOWS[0]).color;
     const token = ++playerToken;
@@ -512,7 +529,7 @@ export function createWorld(renderer, initialCfg) {
     pools.material.uniforms.uGain.value = 0.25 + Wt.wet * 0.2;
     rain.visible = !!Wt.rain;
     searchlights.visible = !!T.searchlights && quality.extras;
-    if (!prev._applied || prev.car !== cfg.car || prev.livery !== cfg.livery || prev.glow !== cfg.glow) buildPlayer();
+    if (!prev._applied || prev.car !== cfg.car || prev.rash !== cfg.rash || prev.livery !== cfg.livery || prev.glow !== cfg.glow) buildPlayer();
     cfg._applied = true;
   }
 
@@ -691,7 +708,8 @@ export function createWorld(renderer, initialCfg) {
         emit(4, { x: S.x + side * 0.9, y: 0.05, z: 1.0 }, { color: '#b8ff8a', gain: 7, speed: 4, life: 0.4, size: 0.07, gravity: 10, vz: 9, vx: side * 3 });
         emit(1, { x: S.x + side * 0.6, y: 0.1, z: 1.2 }, { color: '#fff4d0', gain: 4, speed: 2, life: 0.25, size: 0.05, vz: 7 });
       }
-      pg.rotation.set(pitch, -S.vx * 0.02 + P.slide, -S.steer * 0.42 - S.vx * 0.035 - P.slide * 0.55);
+      const swing = S.swing > 0 && S.rival ? Math.sign(S.rival.x - S.x) * Math.sin((S.swing / 0.25) * Math.PI) * 0.35 : 0;
+      pg.rotation.set(pitch, -S.vx * 0.02 + P.slide, -S.steer * 0.42 - S.vx * 0.035 - P.slide * 0.55 - swing);
       glowPlane.rotation.z = -pg.rotation.z; // keep the pool flat on the road while the bike leans
     }
     else pg.rotation.set(pitch, -S.vx * 0.032 - S.steer * 0.04, S.vx * 0.012);
@@ -707,9 +725,10 @@ export function createWorld(renderer, initialCfg) {
       f.visible = S.overclock || S.slip > 0;
       f.scale.set(1, 0.7 + Math.random() * 0.8 + (S.slip > 0 ? 0.6 : 0), 1);
     }
-    pg.visible = !(S.invuln > 0 && Math.floor(S.time * 16) % 2 === 0 && sim.mode === 'play');
+    pg.visible = !(S.invuln > 0 && S.ghost <= 0 && Math.floor(S.time * 16) % 2 === 0 && sim.mode === 'play');
+    if (ghostShell) { ghostShell.visible = S.ghost > 0; ghostShell.scale.setScalar(1 + Math.sin(U.uTime.value * 12) * 0.04); ghostShell.material.opacity = Math.min(1, S.ghost) * 0.35; }
     if (P.glowLight) P.glowLight.intensity = (P.glowBase || 26) * (0.85 + 0.15 * Math.sin(U.uTime.value * 9));
-    trails.update(S, P.rearZ, P.tailHalfW, P.tailY, fx.view === 'showroom' ? 0 : 0.38);
+    trails.update(S, P.rearZ, P.tailHalfW, P.tailY, fx.view === 'showroom' ? 0 : 0.38, pg.rotation.z);
     head.position.set(S.x, 0.75, -2.3);
     headTarget.position.set(S.x - S.vx * 0.3, 0, -26);
 
@@ -718,17 +737,58 @@ export function createWorld(renderer, initialCfg) {
       const R = S.rival;
       const on = sim.mode === 'play' && R && cfg.race !== false && fx.view !== 'showroom';
       const zw = on ? -(R.z - S.z) : 0;
-      rival.group.visible = on && zw > -quality.cull && zw < 40;
+      rival.group.visible = on && zw > -quality.cull && (zw < 1.2 || Math.abs(R.x - S.x) > 2.6); // never between the chase camera and the player
       if (rival.group.visible) {
         const rg = rival.group;
         const lean = (LANES[R.target] - R.x) * 0.06;
         rg.position.set(R.x, 0, zw);
-        rg.rotation.set(0, -lean * 0.4, rival.bike ? -lean * 2.2 : 0);
+        const wob = R.stun > 0 ? Math.sin(R.stun * 22) * 0.18 * R.stun : 0;
+        rg.rotation.set(0, -lean * 0.4, rival.bike ? -lean * 2.2 + wob : wob * 0.3);
         const rs = (R.speed * dt) / rival.wheelR;
         rival.wheels.forEach((w) => { const sp = w.userData.spin; if (sp) sp.rotation.x -= rs * w.userData.sign; else w.rotation.x -= rs; });
         for (const f of rival.flames) f.visible = R.speed > S.speed + 4;
       }
     }
+
+    // power-ups
+    powerPool.forEach((gp, i) => {
+      const pw = sim.mode === 'play' ? S.powers[i] : null;
+      gp.visible = !!pw && -(pw.z - S.z) > -quality.cull;
+      if (!gp.visible) return;
+      gp.position.set(pw.x, 1.05 + Math.sin(U.uTime.value * 3 + i) * 0.12, -(pw.z - S.z));
+      gp.children[0].rotation.set(U.uTime.value * 1.5, U.uTime.value * 2.2, 0);
+      gp.children[1].rotation.set(0, U.uTime.value * 1.2, 0);
+      gp.children.forEach((m) => (m.material = powerMats[pw.kind]));
+    });
+    // the punch: an arm that snaps out toward the rival on a strike
+    if (punch) {
+      const sw = S.swing > 0 && S.rival ? Math.sin((S.swing / 0.25) * Math.PI) : 0;
+      punch.visible = sw > 0.05 && P.bike;
+      if (punch.visible) { const side = Math.sign(S.rival.x - S.x) || 1; punch.position.set(side * 0.2, 1.34, -0.05); punch.rotation.set(0, 0, -side * (Math.PI / 2) * sw); }
+    }
+
+    // police: a dark cruiser with a red/blue bar, shown once it draws level (or wide of the camera)
+    const K = S.cop;
+    if (K && sim.mode === 'play') {
+      if (!cop) {
+        cop = kit.make('sedan', 0);
+        cop.group.children[0].material = new THREE.MeshStandardMaterial({ color: '#0c0d14', metalness: 0.5, roughness: 0.35 }); // unmarked black cruiser
+        const bar = new THREE.Group();
+        const red = new THREE.MeshBasicMaterial({ color: new THREE.Color('#ff1030').multiplyScalar(6) });
+        const blue = new THREE.MeshBasicMaterial({ color: new THREE.Color('#2a6bff').multiplyScalar(6) });
+        const bL = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.12, 0.22), red), bR = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.12, 0.22), blue);
+        bL.position.set(-0.3, 0, 0); bR.position.set(0.3, 0, 0);
+        bar.add(bL, bR); bar.position.set(0, 1.5, 0.2);
+        cop.group.add(bar);
+        cop.bar = [bL, bR];
+        scene.add(cop.group);
+      }
+      const zw = -(K.z - S.z);
+      cop.group.visible = zw < 1.2 || Math.abs(K.x - S.x) > 2.6;
+      cop.group.position.set(K.x, 0, zw);
+      const ph = Math.floor(U.uTime.value * 8) % 2;
+      cop.bar[0].visible = ph === 0; cop.bar[1].visible = ph === 1;
+    } else if (cop) cop.group.visible = false;
 
     // particles: sparks while scraping, embers on overclock, spray in rain
     if (S.scrape > 0) emit(5, { x: S.x + Math.sign(S.x) * 1.0, y: 0.4, z: 0.6 }, { color: '#ffd27a', gain: 6, speed: 5, life: 0.45, size: 0.09, gravity: 14, vz: 6, vx: -Math.sign(S.x) * 2 });
@@ -807,6 +867,8 @@ export function createWorld(renderer, initialCfg) {
 
   function burst(kind, x) {
     if (kind === 'shard') emit(26, { x, y: 1.1, z: -0.5 }, { color: '#b8ff2e', gain: 5, speed: 7, life: 0.55, size: 0.12, vz: 8 });
+    if (kind === 'ghost' || kind === 'nitro') emit(46, { x, y: 1.0, z: -1 }, { color: kind === 'ghost' ? '#5ff6ff' : '#ffb020', gain: 6, speed: 8, life: 0.6, size: 0.12, vz: 6 });
+    if (kind === 'strike') emit(34, { x, y: 1.0, z: 0 }, { color: '#fff1b0', gain: 8, speed: 7, life: 0.4, size: 0.09, gravity: 8, vz: 3 });
     if (kind === 'hit') emit(60, { x, y: 0.6, z: -2 }, { color: '#ffd27a', gain: 7, speed: 9, life: 0.7, size: 0.1, gravity: 12, vz: 4 });
     if (kind === 'slip') emit(40, { x, y: 0.5, z: 2.5 }, { color: '#00f0ff', gain: 5, speed: 4, life: 0.6, size: 0.1, vz: 14, spread: 1.4 });
     if (kind === 'file') emit(70, { x, y: 1.4, z: -1 }, { color: '#fcee0a', gain: 6, speed: 9, life: 0.9, size: 0.14, vz: 6 });

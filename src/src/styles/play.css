@@ -193,6 +193,7 @@
 .pad__act button { height: 64px; padding: 0 var(--sp-4); font: 700 0.85rem / 1 var(--f-display); letter-spacing: 0.1em; clip-path: var(--shape-sm); }
 .pad__oc { background: var(--signal); color: #0d0d0d; min-width: 140px; height: 76px !important; }
 .pad__brake { background: rgba(13,13,13,.5); border: 2px solid var(--alert); color: var(--alert-text); min-width: 110px; }
+.pad__strike { background: #ff2bd6; color: #12051f; min-width: 110px; font-weight: 700; }
 .pad button:active { filter: brightness(1.35); }
 @media (pointer: coarse) {
   .pad { display: flex; }
@@ -236,3 +237,31 @@
   .bendsign { top: 30%; } .bendsign b { font-size: 1.8rem; }
 }
 @media (prefers-reduced-motion: reduce) { .bendsign { animation: none; } }
+.hud2__cop { position: absolute; left: 50%; top: calc(var(--sp-5) + 58px); transform: translateX(-50%); display: flex; gap: 10px; align-items: center; padding: 5px 12px; background: rgba(13,13,13,.6); clip-path: var(--shape-sm); }
+.hud2__cop b { color: #ffd23a; font-size: 1rem; letter-spacing: 2px; } .hud2__cop b i { font-style: normal; color: rgba(255,255,255,.2); }
+.hud2__cop span { font: 700 var(--fs-hud) / 1 var(--f-mono); letter-spacing: var(--track-hud); color: #ff6b81; }
+.siren { position: absolute; inset: 0; pointer-events: none; box-shadow: inset 60px 0 80px -60px rgba(255,16,48,.0), inset -60px 0 80px -60px rgba(42,107,255,.0); }
+.siren.near { animation: siren .5s steps(2) infinite; }
+@keyframes siren { 0% { box-shadow: inset 90px 0 90px -60px rgba(255,16,48,.55), inset -90px 0 90px -60px rgba(42,107,255,.1); } 50% { box-shadow: inset 90px 0 90px -60px rgba(255,16,48,.1), inset -90px 0 90px -60px rgba(42,107,255,.55); } }
+@media (max-width: 760px) { .hud2__cop { top: auto; bottom: calc(46% - 44px); } }
+@media (prefers-reduced-motion: reduce) { .siren.near { animation: none; box-shadow: inset 0 0 0 3px rgba(255,16,48,.5); } }
+
+/* ---------- call-outs: loud, but on a solid plate so they always read ---------- */
+.pops { top: 30%; }
+.pop { color: var(--data); position: relative; padding: 12px 28px 14px; background: #0b0910; border-left: 8px solid currentColor; box-shadow: 10px 10px 0 color-mix(in srgb, currentColor 45%, #000), 0 0 60px -10px currentColor; transform: skewX(-9deg); animation: pop-slam 1.3s var(--ease-impact) both; }
+.pop > * { transform: skewX(9deg); }
+.pop b { color: currentColor !important; font: 400 clamp(2.2rem, 6vw, 4.2rem) / 0.95 var(--f-name) !important; letter-spacing: 0.02em !important; text-shadow: 3px 3px 0 #000 !important; }
+.pop span { font: 700 0.85rem / 1.2 var(--f-mono); letter-spacing: 0.16em; color: #fff; }
+.pop--ok { color: var(--success); } .pop--alert { color: #ff3355; } .pop--signal { color: var(--signal); } .pop--data { color: var(--data); } .pop--dim { color: var(--ink-muted); }
+.pop--route { color: var(--signal); } .pop--routex { color: var(--data); }
+@keyframes pop-slam { 0% { opacity: 0; transform: skewX(-9deg) scale(1.6); } 10% { opacity: 1; transform: skewX(-9deg) scale(.96); } 16% { transform: skewX(-9deg) scale(1); } 80% { opacity: 1; } 100% { opacity: 0; transform: skewX(-9deg) translateX(40px); } }
+@media (prefers-reduced-motion: reduce) { .pop { animation: fade-in .2s both; } }
+.strike-ready { position: absolute; left: 50%; bottom: 6%; transform: translateX(-50%) skewX(-9deg); padding: 10px 22px; background: #ff2bd6; color: #0b0910; font: 400 clamp(1.6rem, 4vw, 2.4rem) / 1 var(--f-name); box-shadow: 8px 8px 0 #000; animation: blink .3s steps(2) infinite; }
+.strike-ready kbd { font: 700 0.9rem / 1 var(--f-mono); background: #0b0910; color: #fff; padding: 4px 8px; margin-left: 8px; vertical-align: middle; }
+.ghost-chip { position: absolute; left: var(--sp-6); top: 40%; padding: 8px 14px; background: #0b0910; color: #5ff6ff; border-left: 6px solid #5ff6ff; font: 700 1rem / 1 var(--f-mono); letter-spacing: .2em; box-shadow: 0 0 30px -6px #5ff6ff; }
+@media (prefers-reduced-motion: reduce) { .strike-ready { animation: none; } }
+.radio { position: absolute; left: var(--sp-6); bottom: calc(var(--sp-6) + 70px); display: grid; gap: 4px; width: 200px; pointer-events: auto; }
+.radio span { font: 700 0.65rem / 1 var(--f-mono); letter-spacing: .14em; color: var(--ink); text-shadow: 0 1px 4px #000; }
+.radio iframe { width: 200px; height: 113px; border: 0; border-radius: 4px; box-shadow: 0 8px 24px rgba(0,0,0,.6); }
+.radio-link { width: 100%; font: 400 0.85rem / 1 var(--f-body); color: var(--ink); background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.18); padding: 9px 10px; }
+@media (max-width: 760px) { .radio { left: auto; right: var(--sp-3); top: 64px; bottom: auto; width: 140px; } .radio iframe { width: 140px; height: 79px; } }

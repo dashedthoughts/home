@@ -5,6 +5,17 @@
 // Paths are relative to index.html at the repo root.
 export const ROOT = './';
 
+// Links, résumé and the photo folder are read from /site.json at load (see main.jsx), so they can be
+// changed by editing that file in the repo, no rebuild. These are the defaults if it can't be read.
+export const SITE = {
+  email: 'anur.dash@gmail.com',
+  reddit: 'https://www.reddit.com/user/dashedthoughts',
+  linkedin: 'https://www.linkedin.com/in/adash14/',
+  classic: 'https://dashedthoughts.github.io/portfolio/',
+  resume: 'resume.pdf',
+  photosRepo: 'dashedthoughts/home',
+  photosFolder: 'photos',
+};
 export const EMAIL = 'anur.dash@gmail.com';
 export const REDDIT = 'https://www.reddit.com/user/dashedthoughts';
 export const LINKEDIN = 'https://www.linkedin.com/in/adash14/';

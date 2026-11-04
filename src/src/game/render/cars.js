@@ -337,8 +337,8 @@ function buildBike(livery, glowHex) {
   return { group: g, wheels: wheelList, flames: [flame], M, glowLight, tailLight, length: L * STRETCH, width: W + 0.6, wheelR: R, rearZ: RZ * STRETCH, tailY: 1.0 * LOW, tailHalfW: 0.12, bike: true };
 }
 
-export function buildPlayerCar(kind, livery, glowHex) {
-  if (kind === 'bike') return buildTsubame(livery, glowHex);
+export function buildPlayerCar(kind, livery, glowHex, style) {
+  if (kind === 'bike') return buildTsubame(livery, glowHex, style);
   if (kind === 'wedge') return buildVantaGT(livery, glowHex);
   const C = CHASSIS[kind] || CHASSIS.wedge;
   const g = new THREE.Group();

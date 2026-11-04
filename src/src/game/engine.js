@@ -85,6 +85,13 @@ export function createRedline(canvas, opts = {}) {
       case 'slipstream': world.burst('slip', S.x); audio?.sfx('slip'); break;
       case 'hit': world.burst('hit', S.x); audio?.sfx('hit'); break;
       case 'scrape': audio?.sfx('scrape'); break;
+      case 'strike': world.burst('strike', e.x); audio?.sfx('hit'); break;
+      case 'struck': world.burst('strike', e.x); audio?.sfx('scrape'); break;
+      case 'whiff': audio?.sfx('ui'); break;
+      case 'police': audio?.sfx('glitch'); break;
+      case 'power': world.burst(e.kind, e.x); audio?.sfx(e.kind === 'nitro' ? 'slip' : 'file'); break;
+      case 'busted': world.burst('hit', S.x); audio?.sfx('hit'); break;
+      case 'escaped': audio?.sfx('file'); break;
       case 'glitch': audio?.sfx('glitch'); break;
       case 'count': audio?.sfx('count'); break;
       case 'go': audio?.sfx('go'); break;
@@ -204,6 +211,10 @@ export function createRedline(canvas, opts = {}) {
       bend: (() => { if (S.finale) return 0; const ahead = sim.curveAt(S.z + 170), now = sim.curveAt(S.z); return Math.abs(ahead) > 0.3 && Math.abs(ahead - now) > 0.3 ? Math.sign(ahead) * Math.min(3, Math.ceil(Math.abs(ahead) * 3)) : 0; })(),
       cam: fx.cam,
       race: cfg.race !== false,
+      wanted: Math.ceil(S.wanted || 0),
+      ghost: S.ghost > 0 ? Math.ceil(S.ghost) : 0,
+      beside: !!(cfg.rash && S.car.bike && S.rival && Math.abs(S.rival.z - S.z) < 3.4 && Math.abs(S.rival.x - S.x) < 3.0 && S.strikeCd <= 0),
+      copGap: S.cop ? Math.round(S.z - S.cop.z) : null,
       pos: S.pos,
       rivalGap: Math.round(S.rival ? S.rival.z - S.z : 0),
     });
@@ -261,8 +272,8 @@ export function createRedline(canvas, opts = {}) {
       sim.setMode(m);
       if (m === 'play' && audio) {
         audio.unlock();
-        audio.configure({ sound: cfg.sound, music: cfg.music, volume: cfg.volume });
-        if (cfg.music) audio.musicStart();
+        audio.configure({ sound: cfg.sound, music: (cfg.music && (!cfg.radio || cfg.radio === 'synth')), volume: cfg.volume });
+        if ((cfg.music && (!cfg.radio || cfg.radio === 'synth'))) audio.musicStart();
       }
       if (m !== 'play') { audio?.engine(false, 0, false); audio?.musicStop(); }
     },
@@ -273,8 +284,8 @@ export function createRedline(canvas, opts = {}) {
       sim.configure(cfg);
       world.applyConfig(cfg);
       if (audio) {
-        audio.configure({ sound: cfg.sound, music: cfg.music, volume: cfg.volume });
-        if (sim.mode === 'play' && !sim.S.over) cfg.music ? audio.musicStart() : audio.musicStop();
+        audio.configure({ sound: cfg.sound, music: (cfg.music && (!cfg.radio || cfg.radio === 'synth')), volume: cfg.volume });
+        if (sim.mode === 'play' && !sim.S.over) (cfg.music && (!cfg.radio || cfg.radio === 'synth')) ? audio.musicStart() : audio.musicStop();
       }
       if (prevQ !== cfg.quality) {
         effective = resolveQuality(cfg.quality);

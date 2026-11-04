@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { RESUME, LINKEDIN } from '../data/content.js';
+import { SITE } from '../data/content.js';
 import { getMood, setMood } from '../lib/store.js';
 import Logo from './Logo.jsx';
 
@@ -50,10 +50,13 @@ export default function Nav() {
         <Link to="/play" className="nav__play">
           REDLINE ▸
         </Link>
-        <a href={RESUME} target="_blank" rel="noreferrer" className="nav__ext">
+        <Link to="/chill" className="nav__chill">
+          NIGHT SHIFT ☾
+        </Link>
+        <a href={SITE.resume} target="_blank" rel="noreferrer" className="nav__ext">
           RESUME
         </a>
-        <a href={LINKEDIN} target="_blank" rel="noreferrer" className="nav__ext">
+        <a href={SITE.linkedin} target="_blank" rel="noreferrer" className="nav__ext">
           LINKEDIN
         </a>
       </div>

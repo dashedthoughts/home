@@ -33,12 +33,13 @@ export function createPlayerTrails(scene) {
   });
 
   // ring buffer of recent positions (no per-frame allocation)
-  const hx = new Float32Array(N), hz = new Float64Array(N), ht = new Float64Array(N);
+  const hx = new Float32Array(N), hz = new Float64Array(N), ht = new Float64Array(N), hr = new Float32Array(N);
   let head = 0, count = 0;
   return {
-    update(S, rearZ, halfW, y, life = 0.38) {
+    // roll: the vehicle's lean, so the trail leaves the tail light where it really is (bikes lean hard)
+    update(S, rearZ, halfW, y, life = 0.38, roll = 0) {
       head = (head + N - 1) % N;
-      hx[head] = S.x; hz[head] = S.z; ht[head] = S.time;
+      hx[head] = S.x; hz[head] = S.z; ht[head] = S.time; hr[head] = roll;
       count = Math.min(N, count + 1);
       const w = 0.045, on = S.speed > 8 ? 1 : 0;
       for (let ri = 0; ri < 2; ri++) {
@@ -46,9 +47,10 @@ export function createPlayerTrails(scene) {
         for (let i = 0; i < N; i++) {
           const k = (head + Math.min(i, count - 1)) % N;
           const f = Math.max(0, 1 - (S.time - ht[k]) / life) * on;
-          const x = hx[k] + side * halfW, z = rearZ + (S.z - hz[k]), o = i * 6;
-          pos[o] = x; pos[o + 1] = y + w; pos[o + 2] = z;
-          pos[o + 3] = x; pos[o + 4] = y - w; pos[o + 5] = z;
+          const r = hr[k], cr = Math.cos(r), sr = Math.sin(r);
+          const x = hx[k] + side * halfW * cr - y * sr, yy = y * cr + side * halfW * sr, z = rearZ + 0.12 + (S.z - hz[k]), o = i * 6;
+          pos[o] = x; pos[o + 1] = yy + w; pos[o + 2] = z;
+          pos[o + 3] = x; pos[o + 4] = yy - w; pos[o + 5] = z;
           fade[i * 2] = fade[i * 2 + 1] = f;
         }
         r.g.attributes.position.needsUpdate = true;

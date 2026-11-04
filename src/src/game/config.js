@@ -67,10 +67,10 @@ export const TIMES = {
   },
   outrun: {
     name: 'OUTRUN',
-    zenith: '#14042e', horizon: '#ff2f7a', glow: '#ff6a3d', fog: '#3d0b52',
-    body: { kind: 'sun', color: '#ffe14a', size: 230, y: 92 },
-    hemi: ['#ff4fb0', '#12051f', 0.6], key: ['#ff9a6a', 0.4],
-    windows: ['#ff2bd6', '#00e5ff', '#ffb347', '#ff6a3d'], stars: 0.6, fogDensity: 0.0034,
+    zenith: '#0a0726', horizon: '#ff5a4e', glow: '#ffb347', fog: '#2b1140',
+    body: { kind: 'sun', color: '#ffe36b', size: 270, y: 150 },
+    hemi: ['#ff9a6a', '#0b0720', 0.65], key: ['#ffc58a', 0.5],
+    windows: ['#00e5ff', '#ffb347', '#ffe36b', '#7ff3ff'], stars: 0.8, fogDensity: 0.0024,
   },
 };
 
@@ -98,6 +98,7 @@ export const resolveQuality = (q) => (q === 'auto' || !QUALITY[q] ? (isPhone() ?
 
 export const DEFAULT_CONFIG = {
   race: true,
+  rash: false,
   car: 'wedge',
   livery: 0,
   glow: 0,

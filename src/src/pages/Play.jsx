@@ -12,9 +12,26 @@ const KEYS = {
   ArrowRight: 'right', KeyD: 'right',
   ArrowUp: 'boost', KeyW: 'boost', Space: 'boost', ShiftLeft: 'boost',
   ArrowDown: 'brake', KeyS: 'brake',
+  KeyX: 'strike', KeyF: 'strike',
 };
 const STAT_MAX = { top: 1.1, accel: 1.3, grip: 1.3, cool: 1.35 };
 const pad2 = (n) => String(n).padStart(2, '0');
+
+// radio: the built-in synth, two picks, or any YouTube video / playlist link
+const STATIONS = { nightcall: { v: 'MV_3Dpw-BRY', name: 'Nightcall · Kavinsky' }, dracula: { v: 'xnP7qKxwzjg', name: 'Dracula · Tame Impala' } };
+const parseYT = (s) => {
+  const list = String(s).match(/[?&]list=([\w-]+)/);
+  const v = String(s).match(/(?:v=|youtu\.be\/|embed\/|shorts\/)([\w-]{11})/) || String(s).match(/^([\w-]{11})$/);
+  return list ? { list: list[1] } : v ? { v: v[1] } : null;
+};
+const ytSrc = (r) => (r.list
+  ? `https://www.youtube-nocookie.com/embed/videoseries?list=${r.list}&autoplay=1`
+  : `https://www.youtube-nocookie.com/embed/${r.v}?autoplay=1&loop=1&playlist=${r.v}&rel=0`);
+function radioOf(cfg) {
+  if (!cfg.radio || cfg.radio === 'synth') return null;
+  if (STATIONS[cfg.radio]) return { ...STATIONS[cfg.radio] };
+  return cfg.radioLink ? { ...parseYT(cfg.radioLink), name: 'Your pick' } : null;
+}
 
 function Seg({ label, value, options, onChange }) {
   return (
@@ -92,8 +109,8 @@ export default function Play() {
   // ---------- callouts ----------
   const pop = useCallback((text, tone = 'data', sub = '') => {
     const id = Math.random();
-    setPops((p) => [...p.slice(-3), { id, text, tone, sub }]);
-    setTimeout(() => setPops((p) => p.filter((x) => x.id !== id)), 1500);
+    setPops([{ id, text, tone, sub }]); // one call-out at a time: the newest wins, nothing stacks
+    setTimeout(() => setPops((p) => p.filter((x) => x.id !== id)), 1300);
   }, []);
 
   const onEvent = useCallback(
@@ -123,6 +140,12 @@ export default function Play() {
           pop(e.route === 'backstreets' ? 'BACKSTREETS' : 'EXPRESSWAY', e.route === 'backstreets' ? 'route' : 'routex', e.route === 'backstreets' ? 'SHARDS ×1.5 · TIGHTER STREETS · SLOWER TRAFFIC' : 'OPEN ROAD · FAST TRAFFIC');
           break;
         case 'finale': pop(e.won === null ? 'ALL TEN FILES' : e.won ? 'YOU WIN' : 'KUROGANE WINS', e.won === false ? 'alert' : 'ok', 'LAST EXIT: THE LOOKOUT'); break;
+        case 'strike': pop('HIT', 'ok', 'KUROGANE GOES WIDE'); break;
+        case 'struck': pop('STRUCK', 'alert', 'KUROGANE SWINGS'); break;
+        case 'power': pop(e.kind === 'ghost' ? 'GHOST' : 'NITRO', e.kind === 'ghost' ? 'data' : 'signal', e.kind === 'ghost' ? '5 SECONDS · RIDE THROUGH ANYTHING' : 'INSTANT SLIPSTREAM · ENGINE COOLED'); break;
+        case 'police': pop('POLICE', 'alert', `WANTED ${'★'.repeat(e.stars)} · OUTRUN THEM`); break;
+        case 'busted': pop('BUSTED', 'alert', e.lives > 0 ? `INTEGRITY −1 · ${e.lives} LEFT` : 'END OF THE LINE'); break;
+        case 'escaped': pop('LOST THEM', 'ok', `+${e.pts.toLocaleString('en-IN')}`); break;
         case 'overtake': pop('OVERTAKE', 'ok', 'P1 · HOLD IT TO THE LOOKOUT'); break;
         case 'overtaken': pop('KUROGANE PASSES', 'alert', 'P2 · TAKE IT BACK'); break;
         case 'complete': {
@@ -285,6 +308,14 @@ export default function Play() {
             <button type="button" className="hud2__cam" onClick={() => eng()?.cycleCam()} aria-label="Change camera">{CAMS[hud.cam] || 'CHASE'}</button>
             <button type="button" className="hud2__pause" onClick={togglePause} aria-label="Pause">❚❚</button>
           </div>
+          {hud.copGap != null && (
+            <>
+              <div className={`siren ${hud.copGap < 45 ? 'near' : ''}`} />
+              <div className="hud2__cop"><b>{'★'.repeat(hud.wanted)}<i>{'★'.repeat(Math.max(0, 3 - hud.wanted))}</i></b><span>POLICE {hud.copGap > 0 ? `${hud.copGap} M BEHIND` : 'ALONGSIDE'}</span></div>
+            </>
+          )}
+          {hud.beside && <div className="strike-ready">STRIKE <kbd>X</kbd></div>}
+          {hud.ghost > 0 && <div className="ghost-chip">GHOST {hud.ghost}</div>}
           {hud.race && (
             <div className={`hud2__race ${hud.pos === 1 ? 'lead' : 'trail'}`}>
               <b>P{hud.pos || 1}<small>/2</small></b>
@@ -325,10 +356,16 @@ export default function Play() {
       {counting && (
         <div className="countdown" aria-live="assertive">
           <b key={Math.ceil(hud.count)}>{Math.ceil(hud.count)}</b>
-          <p className="countdown__brief">GRAB <em>5 SHARDS</em> TO OPEN A CASE FILE · OPEN <em>10</em> TO REACH THE LOOKOUT<br /><small>C · CHANGE CAMERA</small></p>
+          <p className="countdown__brief">GRAB <em>5 SHARDS</em> TO OPEN A CASE FILE · OPEN <em>10</em> TO REACH THE LOOKOUT<br /><small>C · CHANGE CAMERA{cfg.rash && cfg.car === 'bike' && cfg.race !== false ? ' · X · STRIKE' : ''}</small></p>
         </div>
       )}
 
+      {(phase === 'run' || phase === 'paused') && radioOf(cfg) && (radioOf(cfg).v || radioOf(cfg).list) && (
+        <div className="radio">
+          <span>♪ {radioOf(cfg).name}</span>
+          <iframe src={ytSrc(radioOf(cfg))} title={radioOf(cfg).name} allow="autoplay; encrypted-media" />
+        </div>
+      )}
       <div className="pops" aria-live="polite">
         {pops.map((p) => (
           <p key={p.id} className={`pop pop--${p.tone}`}>
@@ -347,6 +384,7 @@ export default function Play() {
           <div className="pad__act">
             <button type="button" className="pad__brake" {...hold('brake')}>BRAKE</button>
             <button type="button" className="pad__oc" {...hold('boost')}>OVERCLOCK</button>
+            {cfg.rash && cfg.car === 'bike' && cfg.race !== false && <button type="button" className="pad__strike" {...hold('strike')}>STRIKE</button>}
           </div>
         </div>
       )}
@@ -376,10 +414,22 @@ export default function Play() {
                 </p>
                 <Seg
                   label="MODE"
-                  value={cfg.race === false ? 'free' : 'race'}
-                  options={[['race', 'RACE KUROGANE'], ['free', 'FREE RUN']]}
-                  onChange={(v) => update({ race: v === 'race' })}
+                  value={cfg.race === false ? 'free' : cfg.rash && cfg.car === 'bike' ? 'rash' : 'race'}
+                  options={[['race', 'RACE KUROGANE'], ...(cfg.car === 'bike' ? [['rash', 'RASH · BIKE BRAWL']] : []), ['free', 'FREE RUN']]}
+                  onChange={(v) => update({ race: v !== 'free', rash: v === 'rash' })}
                 />
+                <Seg
+                  label="RADIO"
+                  value={cfg.radio || 'synth'}
+                  options={[['synth', 'SYNTH LOOP'], ['nightcall', 'NIGHTCALL'], ['dracula', 'DRACULA'], ['link', 'YOUR LINK']]}
+                  onChange={(v) => update({ radio: v })}
+                />
+                {cfg.radio === 'link' && (
+                  <input className="radio-link" defaultValue={cfg.radioLink || ''} placeholder="Paste a YouTube video or playlist link" aria-label="YouTube link"
+                    onChange={(e) => { if (parseYT(e.target.value.trim())) update({ radioLink: e.target.value.trim() }); }} />
+                )}
+                <Seg label="POLICE" value={cfg.police === false ? 'off' : 'on'} options={[['on', 'ON · CRASHES DRAW HEAT'], ['off', 'OFF']]} onChange={(v) => update({ police: v === 'on' })} />
+                {cfg.car === 'bike' && cfg.rash && <p className="garage__warn">Rash: ride up beside KUROGANE and hit X (or STRIKE) to knock him wide. He hits back.</p>}
                 <Seg
                   label="TRAFFIC"
                   value={cfg.difficulty}

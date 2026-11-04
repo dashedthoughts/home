@@ -1,13 +1,14 @@
+import { SITE } from '../data/content.js';
 import { useEffect, useState } from 'react';
 
-const REPO = 'dashedthoughts/portfolio';
+
 const IMG = /\.(jpe?g|png|gif|webp|avif)$/i;
 
 // Reads /photos from the repo at runtime: dropping a file in that folder is all it takes.
 export default function PhotoStrip() {
   const [photos, setPhotos] = useState([]);
   useEffect(() => {
-    fetch(`https://api.github.com/repos/${REPO}/contents/photos`)
+    fetch(`https://api.github.com/repos/${SITE.photosRepo}/contents/${SITE.photosFolder}`)
       .then((r) => (r.ok ? r.json() : []))
       .then((list) =>
         setPhotos(

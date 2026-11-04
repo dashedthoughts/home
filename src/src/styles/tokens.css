@@ -93,15 +93,15 @@
   --bg: #12051f;
   --bg-panel: #1c0a30;
   --bg-raised: #28103f;
-  --signal: #ff2bd6;
+  --signal: #ff9a3c;      /* sunset orange, not pink */
   --on-signal: #12051f;
   --data: #00e5ff;
-  --hype: #ffb347;
+  --hype: #ffd166;
   --success: #ffe14a;
   --alert: #ff3f6e;
   --fill-deep: #3d0b52;
   --shadow-hard: 8px 8px 0 #ff6a3d;
-  --shadow-data: 6px 6px 0 #ff2bd6;
+  --shadow-data: 6px 6px 0 #ff6a3d;
 }
 :root[data-mood='outrun'] body { background: linear-gradient(180deg, #12051f 0%, #12051f 55%, #2a0b3d 85%, #3d0b52 100%) fixed; }
 :root[data-mood='outrun'] .home::before {

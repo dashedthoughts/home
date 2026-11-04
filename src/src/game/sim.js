@@ -39,8 +39,9 @@ export function createSim(opts = {}) {
   const emit = opts.onEvent || (() => {});
   let mode = opts.mode || 'attract';
   let cfg = { car: 'wedge', difficulty: 'street', weather: 'clear', assist: false, ...(opts.config || {}) };
-  const input = { left: false, right: false, boost: false, brake: false, axis: 0 };
+  const input = { left: false, right: false, boost: false, brake: false, axis: 0, strike: false };
   const S = {};
+  let prnd = Math.random;
   let rnd = Math.random;
 
   // ---------- track: curvature & hills as smooth sections, generated lazily ----------
@@ -136,6 +137,7 @@ export function createSim(opts = {}) {
   // ---------- reset ----------
   function reset(seed) {
     rnd = seed != null ? mulberry(seed) : Math.random;
+    prnd = seed != null ? mulberry(seed * 7 + 3) : Math.random; // pickups have their own stream, so traffic stays the same
     const car = CARS[cfg.car] || CARS.wedge;
     const diff = DIFFICULTY[cfg.difficulty] || DIFFICULTY.street;
     Object.assign(S, {
@@ -149,7 +151,7 @@ export function createSim(opts = {}) {
       car, ai: { target: 0, think: 0 },
       route: 'expressway', routes: [{ z0: -1e9, route: 'expressway' }], nextJunction: SECTOR, sector: 1,
       finale: false, finaleT: 0, done: false,
-      rival: { z: 0, x: LANES[2], lane: 2, target: 2, speed: mode === 'attract' ? MAX * 0.8 : 0, swapT: -9, think: 0 }, pos: 1, raceWon: null,
+      rival: { z: 0, x: LANES[2], lane: 2, target: 2, speed: mode === 'attract' ? MAX * 0.8 : 0, swapT: -9, think: 0, stun: 0, cd: 2, hits: 0, fight: false, fightT: 0, fightCd: 4 }, pos: 1, raceWon: null, strikeCd: 0, swing: 0, wanted: 0, cop: null, busts: 0, powers: [], nextPowerZ: 520, ghost: 0,
     });
     sections = [];
     extendTrack(1200);
@@ -181,8 +183,9 @@ export function createSim(opts = {}) {
     const d = ai.target - S.x - S.vx * 0.35;
     input.axis = clamp(d * 0.9, -1, 1);
     input.left = input.right = false;
-    input.boost = S.heat < 62 && Math.abs(curveAt(S.z + 30)) < 0.45;
-    input.brake = false;
+    const cap = MAX * (cfg.cruise || 1.4); // ambient screens can set a cruising speed
+    input.boost = S.heat < 62 && Math.abs(curveAt(S.z + 30)) < 0.45 && S.speed < cap;
+    input.brake = S.speed > cap + 4;
   }
 
   // ---------- step ----------
@@ -346,18 +349,21 @@ export function createSim(opts = {}) {
       c.z += c.speed * dt;
 
       // interactions with the player
-      const dz = c.z - S.z;
+      // real footprints: per-kind length (trucks are long and sit 0.9 m back), and the bike's narrow track can split two lanes
+      const dzRaw = c.z - S.z;
+      const dz = c.kind === 'hauler' ? dzRaw - 0.9 : dzRaw;
       const dx = c.x - S.x;
-      const hitW = car.bike ? 1.45 : CAR_W;
+      const hitW = car.bike ? 1.22 : CAR_W;
+      const hitL = (c.kind === 'hauler' ? 4.4 : c.kind === 'hatch' ? 2.0 : 2.25) + (car.bike ? 1.1 : 2.2);
       // never draw two vehicles inside each other: the autopilot follows, and after a hit traffic is shoved clear
-      if (Math.abs(dz) < CAR_LEN && Math.abs(dx) < hitW && (mode !== 'play' || S.invuln > 0 || !racing)) {
-        if (dz >= 0) { c.z = S.z + CAR_LEN + 0.15; c.speed = Math.max(c.speed, S.speed + 2); }
-        else { c.z = S.z - CAR_LEN - 0.15; c.speed = Math.min(c.speed, Math.max(0, S.speed - 2)); }
+      if (Math.abs(dz) < hitL && Math.abs(dx) < hitW && (mode !== 'play' || S.invuln > 0 || !racing)) {
+        if (dz >= 0) { c.z = S.z + hitL + 0.15 + (dzRaw - dz); c.speed = Math.max(c.speed, S.speed + 2); }
+        else { c.z = S.z - hitL - 0.15 + (dzRaw - dz); c.speed = Math.min(c.speed, Math.max(0, S.speed - 2)); }
         c.prevDz = c.z - S.z;
         continue;
       }
       if (mode !== 'play' && dz > 0 && dz < 16 && Math.abs(dx) < hitW + 0.3) S.speed = Math.min(S.speed, Math.max(c.speed - 0.5, 0));
-      if (racing && Math.abs(dz) < CAR_LEN && Math.abs(dx) < hitW) {
+      if (racing && Math.abs(dz) < hitL && Math.abs(dx) < hitW) {
         if (mode === 'play' && S.invuln <= 0) {
           S.lives -= 1;
           S.invuln = 1.6;
@@ -371,6 +377,7 @@ export function createSim(opts = {}) {
           S.chain = 0;
           if (cfg.effects !== 'reduced') { S.shake = 0.45; S.flash = 0.35; }
           emit({ type: 'hit', lives: S.lives });
+          if (mode === 'play' && cfg.police !== false) S.wanted = Math.min(3, S.wanted + 1); // crashes draw the police
           if (S.lives <= 0) {
             S.over = true;
             emit({
@@ -410,7 +417,8 @@ export function createSim(opts = {}) {
       // pace follows the player (rubber band), with slow surges and fades so the lead changes hands
       const wave = 1 + 0.08 * Math.sin(S.time * 0.21) + 0.04 * Math.sin(S.time * 0.67 + 1.3);
       const ref = Math.max(MAX * 0.85, S.speed);
-      let want = ref * wave * (diff.rival || 1);
+      const rash = cfg.rash && S.car.bike;
+      let want = ref * wave * (diff.rival || 1) * (rash ? 1.04 : 1);
       if (gap < -40) want = Math.max(want, ref * 1.12); else if (gap > 140) want = Math.min(want, ref * 0.88);
       want = Math.min(want, MAX * 1.4);
       if (S.finale) want = Math.max(0, R.speed - 14 * dt);
@@ -425,8 +433,47 @@ export function createSim(opts = {}) {
         }
       }
       if (lead && R.target === R.lane) want = Math.min(want, lead.speed - 1);
+      // rash: the rival comes looking for a fight, rides your flank for a few seconds, then breaks off
+      if (rash && racing) {
+        R.fightCd -= dt;
+        if (!R.fight && R.fightCd <= 0 && Math.abs(gap) < 40 && R.stun <= 0) { R.fight = true; R.fightT = 0; }
+        if (R.fight) {
+          R.fightT += dt;
+          const pl = S.x < -LANE_W / 2 ? 0 : S.x > LANE_W / 2 ? 2 : 1;
+          const flank = pl === 0 ? 1 : pl === 2 ? 1 : (R.x >= S.x ? 2 : 0);
+          if (!S.cars.some((o) => Math.abs(o.x - LANES[flank]) < 2.4 && o.z - R.z > -6 && o.z - R.z < 20)) R.target = flank;
+          want = clamp(S.speed - gap * 0.9, 0, MAX * 1.45);
+          if (R.fightT > 7 || R.stun > 0.8) { R.fight = false; R.fightCd = 8 + rnd() * 4; }
+        }
+      }
       R.speed += clamp(want - R.speed, -16 * dt, 11 * dt);
+      if (R.stun > 0) { R.stun -= dt; want *= 0.8; }
       R.x += clamp(LANES[R.target] - R.x, -5.5 * dt, 5.5 * dt);
+      // ---- rash: strikes when side by side (bike vs bike) ----
+      if (rash && racing) {
+        S.strikeCd -= dt; S.swing = Math.max(0, S.swing - dt); R.cd -= dt;
+        const beside = Math.abs(R.z - S.z) < 3.4 && Math.abs(R.x - S.x) < 3.0;
+        if (input.strike && S.strikeCd <= 0) {
+          S.strikeCd = 0.7; S.swing = 0.25; input.strike = false;
+          if (beside) {
+            R.stun = 1.3; R.speed *= 0.72; R.hits++;
+            const side = Math.sign(R.x - S.x) || 1;
+            R.x = clamp(R.x + side * 1.3, -RAIL + 1, RAIL - 1);
+            R.target = clamp(R.lane + side, 0, 2);
+            S.score += 250;
+            emit({ type: 'strike', x: (R.x + S.x) / 2 });
+            if (cfg.police !== false) S.wanted = Math.min(3, S.wanted + 0.5);
+          } else emit({ type: 'whiff' });
+        }
+        if (beside && R.cd <= 0 && R.stun <= 0 && S.invuln <= 0) {
+          R.cd = 1.4 + rnd() * 1.2;
+          if (rnd() < 0.6) {
+            const side = Math.sign(S.x - R.x) || 1;
+            S.speed *= 0.82; S.vx += side * 6; S.shake = 0.35; S.heat = Math.min(100, S.heat + 8);
+            emit({ type: 'struck', x: (R.x + S.x) / 2 });
+          }
+        }
+      }
       if (Math.abs(LANES[R.target] - R.x) < 0.05) R.lane = R.target;
       R.z += R.speed * dt;
       R.z = clamp(R.z, S.z - 400, S.z + 400); // never out of the race, whatever happens to the player
@@ -441,6 +488,66 @@ export function createSim(opts = {}) {
         S.pos = pos;
       }
     }
+
+    // ---- police: crashes and brawls raise the wanted level; outrun them, or they pull alongside and bust you ----
+    if (mode === 'play' && cfg.police !== false && racing && !S.finale) {
+      const stars = Math.ceil(S.wanted);
+      if (stars >= 1 && !S.cop) { S.cop = { z: S.z - 170, x: S.x, lane: 1, target: 1, speed: S.speed, along: 0, lost: 0 }; emit({ type: 'police', stars }); }
+      const K = S.cop;
+      if (K) {
+        const gap = S.z - K.z; // + = cop behind
+        const cap = MAX * (1.12 + 0.07 * stars);
+        let want = Math.min(cap, Math.max(S.speed * 1.08, MAX * 0.9));
+        if (gap < 4) want = Math.min(want, S.speed); // pace alongside
+        // close in: in the last stretch, take the lane beside the player
+        if (gap < 22) {
+          const pl = S.x < -LANE_W / 2 ? 0 : S.x > LANE_W / 2 ? 2 : 1;
+          K.target = pl === 0 ? 1 : pl === 2 ? 1 : (K.x > S.x ? 2 : 0);
+        } else K.target = S.x < -LANE_W / 2 ? 0 : S.x > LANE_W / 2 ? 2 : 1;
+        K.speed += clamp(want - K.speed, -16 * dt, 12 * dt);
+        K.x += clamp(LANES[K.target] - K.x, -6 * dt, 6 * dt);
+        K.z += K.speed * dt;
+        for (const o of S.cars) if (Math.abs(o.z - K.z) < CAR_LEN && Math.abs(o.x - K.x) < CAR_W) { K.z = o.z - CAR_LEN - 0.1; K.speed = Math.min(K.speed, o.speed); }
+        if (Math.abs(K.z - S.z) < CAR_LEN && Math.abs(K.x - S.x) < CAR_W) K.z = S.z - CAR_LEN - 0.1;
+        // busted: held alongside
+        if (Math.abs(K.z - S.z) < 3.6 && Math.abs(K.x - S.x) < 3.4 && S.invuln <= 0) {
+          K.along += dt;
+          if (K.along > 1.6) {
+            S.lives -= 1; S.busts += 1; S.invuln = 2.5; S.speed *= 0.5; S.cop = null; S.wanted = 0; S.chain = 0;
+            emit({ type: 'busted', lives: S.lives });
+            if (S.lives <= 0) {
+              S.over = true;
+              emit({ type: 'over', busted: true, score: Math.round(S.score), files: S.files, dist: S.dist, top: S.topSpeed, nearMisses: S.nearMisses, shards: S.shards });
+            }
+          }
+        } else K.along = Math.max(0, K.along - dt * 2);
+        // escaped: far enough behind for long enough
+        if (S.cop && gap > 240) {
+          K.lost += dt;
+          if (K.lost > 5) { const pts = 1000 * stars; S.score += pts; S.cop = null; S.wanted = 0; emit({ type: 'escaped', pts }); }
+        } else if (S.cop) K.lost = Math.max(0, K.lost - dt);
+        if (S.cop) K.z = Math.max(K.z, S.z - 420);
+      }
+    }
+
+    // ---- power-ups: GHOST (5 s invulnerable, ride through traffic) and NITRO (instant slipstream, engine cooled) ----
+    if (mode === 'play' && !S.finale) {
+      while (S.nextPowerZ < S.z + 420) {
+        S.powers.push({ id: S.uid++, z: S.nextPowerZ, x: LANES[(prnd() * 3) | 0], kind: prnd() < 0.5 ? 'ghost' : 'nitro', taken: false });
+        S.nextPowerZ += 650 + prnd() * 550;
+      }
+      for (const p of S.powers) {
+        if (p.taken || !racing) continue;
+        if (Math.abs(p.z - S.z) < 2.6 && Math.abs(p.x - S.x) < 1.7) {
+          p.taken = true;
+          if (p.kind === 'ghost') { S.ghost = 5; S.invuln = Math.max(S.invuln, 5); }
+          else { S.slip = 2.6; S.heat = 0; S.draft = 0; }
+          emit({ type: 'power', kind: p.kind, x: p.x });
+        }
+      }
+      S.powers = S.powers.filter((p) => !p.taken && p.z > S.z - 20);
+    }
+    if (S.ghost > 0) S.ghost -= dt;
 
     // ---- shards ----
     for (const s of S.shardList) {

@@ -1,9 +1,10 @@
-import { useEffect } from 'react';
+import { useEffect, lazy, Suspense } from 'react';
 import { Routes, Route, useLocation } from 'react-router-dom';
 import Home from './pages/Home.jsx';
 import Project from './pages/Project.jsx';
 import Play from './pages/Play.jsx';
 import System from './pages/System.jsx';
+const Chill = lazy(() => import('./pages/Chill.jsx'));
 import { InkDefs } from './components/Comic.jsx';
 
 export default function App() {
@@ -19,6 +20,7 @@ export default function App() {
       <Route path="/p/:slug" element={<Project />} />
       <Route path="/play" element={<Play />} />
       <Route path="/system" element={<System />} />
+      <Route path="/chill" element={<Suspense fallback={<main className="chill" />}><Chill /></Suspense>} />
       <Route path="*" element={<Project />} />
     </Routes>
     </>

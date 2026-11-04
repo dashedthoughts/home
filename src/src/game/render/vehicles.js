@@ -173,11 +173,14 @@ function lights(g, glowHex, rearZ, under = 26) {
 
 // ---------------------------------------------------------------- VANTA GT
 export function buildVantaGT(livery, glowHex) {
-  const L = 4.6, W = 2.0, R = 0.355;
+  // proportions after the classic early-90s mid-engine coupé: 4.4 m long, 1.82 m wide, 1.17 m tall, 2.53 m wheelbase,
+  // short front overhang, cab-forward canopy, long flat rear deck
+  const L = 4.4, W = 1.82, R = 0.33;
   const g = new THREE.Group();
   const M = materials(livery, glowHex);
-  const FX = 3.75, RX = 0.85; // wheel centres along the profile (x from the rear)
-  const ARCH = 0.44, AY = 0.35;
+  const FX = 3.53, RX = 1.0; // wheel centres along the profile (x from the rear)
+  const ARCH = 0.4, AY = 0.33;
+  const ZF = L / 2 - FX, ZR = L / 2 - RX; // axle z
   const arch = (s, cx) => {
     const a0 = -Math.asin((AY - 0.22) / ARCH);
     s.lineTo(cx + Math.cos(a0) * ARCH, 0.22);
@@ -185,14 +188,15 @@ export function buildVantaGT(livery, glowHex) {
   };
   const body = (s) => {
     s.moveTo(0.05, 0.3);
-    s.lineTo(0.0, 0.66);
-    s.quadraticCurveTo(0.02, 0.86, 0.32, 0.88);
-    s.lineTo(1.2, 0.93);
-    s.quadraticCurveTo(2.2, 0.98, 2.95, 0.86);
-    s.quadraticCurveTo(3.55, 0.84, 3.95, 0.83);
-    s.quadraticCurveTo(4.45, 0.75, 4.6, 0.47);
-    s.quadraticCurveTo(4.66, 0.3, 4.5, 0.24);
-    s.lineTo(4.25, 0.22);
+    s.lineTo(0.0, 0.64);
+    s.quadraticCurveTo(0.02, 0.84, 0.3, 0.86);
+    s.lineTo(1.5, 0.89);                     // long flat rear deck
+    s.quadraticCurveTo(2.6, 0.92, 3.25, 0.8); // shoulder to the cowl
+    // sharp wedge: one straight hood line down to a knife-edge nose
+    s.lineTo(4.36, 0.5);
+    s.lineTo(4.44, 0.43);
+    s.lineTo(4.36, 0.27);
+    s.lineTo(4.05, 0.22);
     arch(s, FX);
     s.lineTo(1.3, 0.22);
     arch(s, RX);
@@ -207,7 +211,7 @@ export function buildVantaGT(livery, glowHex) {
   const stripe = profile(body, L, 0.34, 0);
   bin.add('stripe', stripe, [0, 0, 0], null, [1, 1.008, 1.006]);
   // greenhouse
-  bin.add('glass', profile((s) => { s.moveTo(1.05, 0.9); s.quadraticCurveTo(1.4, 1.2, 2.05, 1.23); s.lineTo(2.75, 1.21); s.quadraticCurveTo(3.25, 1.12, 3.62, 0.86); s.lineTo(1.05, 0.9); }, L, 1.48, 0.06));
+  bin.add('glass', profile((s) => { s.moveTo(1.45, 0.88); s.quadraticCurveTo(1.85, 1.15, 2.4, 1.17); s.lineTo(2.75, 1.16); s.quadraticCurveTo(3.05, 1.1, 3.32, 0.79); s.lineTo(1.45, 0.88); }, L, 1.36, 0.06));
   // side skirts + intakes + door seams
   for (const sx of [-1, 1]) {
     bin.add('carbon', new THREE.BoxGeometry(0.06, 0.09, 2.02), [sx * (W / 2 + 0.005), 0.25, 0.0]);
@@ -216,14 +220,14 @@ export function buildVantaGT(livery, glowHex) {
     bin.add('carbon', new THREE.BoxGeometry(0.02, 0.5, 0.012), [sx * (W / 2 + 0.003), 0.62, -0.38]);
     bin.add('carbon', new THREE.BoxGeometry(0.02, 0.012, 1.1), [sx * (W / 2 + 0.003), 0.86, -0.05]);
     // mirrors on stalks
-    bin.rod('carbon', [sx * 0.74, 0.92, -0.62], [sx * 1.02, 0.98, -0.66], 0.015);
-    bin.add('paint', new RoundedBoxGeometry(0.2, 0.09, 0.13, 2, 0.03), [sx * 1.07, 0.99, -0.66]);
+    bin.rod('carbon', [sx * 0.66, 0.88, -0.9], [sx * 0.92, 0.94, -0.93], 0.015);
+    bin.add('paint', new RoundedBoxGeometry(0.18, 0.08, 0.12, 2, 0.03), [sx * 0.97, 0.95, -0.93]);
   }
   // rear deck louvres
-  for (let k = 0; k < 6; k++) bin.add('carbon', new THREE.BoxGeometry(1.2, 0.02, 0.06), [0, 0.95 - k * 0.006, 1.25 + k * 0.14], [-0.12, 0, 0]);
+  for (let k = 0; k < 6; k++) bin.add('carbon', new THREE.BoxGeometry(1.2, 0.02, 0.06), [0, 0.9 - k * 0.004, 0.95 + k * 0.15], [-0.04, 0, 0]);
   // swan-neck wing
-  bin.add('carbon', new THREE.BoxGeometry(W * 0.98, 0.04, 0.36), [0, 1.17, RZ - 0.42], [-0.07, 0, 0]);
-  bin.add('carbon', new THREE.BoxGeometry(W * 0.98, 0.012, 0.12), [0, 1.2, RZ - 0.25], [-0.5, 0, 0]);
+  bin.add('carbon', new THREE.BoxGeometry(W * 0.98, 0.04, 0.36), [0, 1.06, RZ - 0.4], [-0.07, 0, 0]);
+  bin.add('carbon', new THREE.BoxGeometry(W * 0.98, 0.012, 0.12), [0, 1.09, RZ - 0.23], [-0.5, 0, 0]);
   for (const sx of [-1, 1]) {
     bin.rod('carbon', [sx * 0.5, 0.92, RZ - 0.28], [sx * 0.46, 1.18, RZ - 0.5], 0.025);
     bin.add('carbon', new THREE.BoxGeometry(0.025, 0.2, 0.42), [sx * W * 0.49, 1.15, RZ - 0.42]);
@@ -232,7 +236,8 @@ export function buildVantaGT(livery, glowHex) {
   bin.add('carbon', new THREE.BoxGeometry(W * 0.86, 0.12, 0.5), [0, 0.23, RZ - 0.25], [0.2, 0, 0]);
   for (let i = -3; i <= 3; i++) bin.add('carbon', new THREE.BoxGeometry(0.018, 0.17, 0.42), [i * 0.2, 0.27, RZ - 0.14]);
   // front splitter
-  bin.add('carbon', new THREE.BoxGeometry(W * 0.92, 0.03, 0.26), [0, 0.2, -L / 2 + 0.05]);
+  bin.add('carbon', new THREE.BoxGeometry(W * 0.96, 0.025, 0.42), [0, 0.2, -L / 2 - 0.02]);
+  for (const sx of [-1, 1]) bin.add('carbon', new THREE.BoxGeometry(0.02, 0.12, 0.4), [sx * W * 0.47, 0.26, -L / 2 - 0.02]); // splitter end plates
   // quad exhausts
   for (const x of [-0.42, -0.28, 0.28, 0.42]) {
     bin.add('metal', new THREE.CylinderGeometry(0.052, 0.052, 0.16, 18, 1, true).rotateX(Math.PI / 2), [x, 0.33, RZ - 0.06]);
@@ -240,20 +245,22 @@ export function buildVantaGT(livery, glowHex) {
   }
   // segmented light blade + fangs + third brake light
   // full-width louvred tail: a continuous light panel behind six black horizontal slats, framed top and bottom
-  bin.add('tail', new THREE.BoxGeometry(1.7, 0.2, 0.03), [0, 0.73, RZ - 0.03]);
-  for (let i = 0; i < 6; i++) bin.add('carbon', new THREE.BoxGeometry(1.76, 0.016, 0.05), [0, 0.645 + i * 0.034, RZ - 0.0]);
-  bin.add('trim', new THREE.BoxGeometry(1.8, 0.03, 0.06), [0, 0.845, RZ - 0.01]);
-  bin.add('trim', new THREE.BoxGeometry(1.8, 0.03, 0.06), [0, 0.615, RZ - 0.01]);
-  for (const sx of [-1, 1]) bin.add('tail', new THREE.BoxGeometry(0.06, 0.2, 0.04), [sx * 0.86, 0.64, RZ - 0.03]);
-  bin.add('tail', new THREE.BoxGeometry(0.42, 0.025, 0.03), [0, 1.0, 1.72]);
+  bin.add('tail', new THREE.BoxGeometry(W * 0.86, 0.2, 0.03), [0, 0.73, RZ - 0.03]);
+  for (let i = 0; i < 6; i++) bin.add('carbon', new THREE.BoxGeometry(W * 0.89, 0.016, 0.05), [0, 0.645 + i * 0.034, RZ - 0.0]);
+  bin.add('trim', new THREE.BoxGeometry(W * 0.91, 0.03, 0.06), [0, 0.845, RZ - 0.01]);
+  bin.add('trim', new THREE.BoxGeometry(W * 0.91, 0.03, 0.06), [0, 0.615, RZ - 0.01]);
+  for (const sx of [-1, 1]) bin.add('tail', new THREE.BoxGeometry(0.06, 0.2, 0.04), [sx * W * 0.44, 0.64, RZ - 0.03]);
+  bin.add('tail', new THREE.BoxGeometry(0.36, 0.025, 0.03), [0, 0.93, RZ - 0.35]);
   bin.add('glass', new THREE.PlaneGeometry(W * 0.74, 0.25), [0, 0.47, RZ + 0.005]);
   // headlights
-  for (const sx of [-1, 1]) {
-    bin.add('head', new THREE.BoxGeometry(0.38, 0.03, 0.05), [sx * 0.6, 0.62, -L / 2 + 0.17], [0.5, 0, sx * 0.05]);
-    bin.add('glass', new THREE.BoxGeometry(0.42, 0.08, 0.06), [sx * 0.6, 0.6, -L / 2 + 0.2], [0.5, 0, sx * 0.05]);
-  }
+  // a slim full-width light blade in a dark visor along the nose, plus a lower intake slot
+  const HOOD = Math.atan2(0.3, 1.11);
+  bin.add('carbon', new THREE.BoxGeometry(W * 0.86, 0.075, 0.05), [0, 0.505, -L / 2 + 0.01], [HOOD, 0, 0]);
+  bin.add('head', new THREE.BoxGeometry(W * 0.8, 0.022, 0.03), [0, 0.512, -L / 2 - 0.005], [HOOD, 0, 0]);
+  for (const sx of [-1, 1]) bin.add('head', new THREE.BoxGeometry(0.05, 0.05, 0.03), [sx * W * 0.41, 0.5, -L / 2 + 0.0], [HOOD, 0, 0]);
+  bin.add('carbon', new THREE.BoxGeometry(W * 0.6, 0.06, 0.06), [0, 0.33, -L / 2 - 0.03]);
   // brake calipers (static, behind the spokes)
-  for (const [z, sx] of [[-1.45, -1], [-1.45, 1], [1.45, -1], [1.45, 1]]) bin.add('caliper', new RoundedBoxGeometry(0.06, 0.16, 0.1, 2, 0.02), [sx * (W / 2 - 0.17), 0.48, z - 0.06]);
+  for (const [z, sx] of [[ZF, -1], [ZF, 1], [ZR, -1], [ZR, 1]]) bin.add('caliper', new RoundedBoxGeometry(0.06, 0.16, 0.1, 2, 0.02), [sx * (W / 2 - 0.17), 0.48, z - 0.06]);
   bin.build(g, M);
 
   // plate
@@ -263,7 +270,7 @@ export function buildVantaGT(livery, glowHex) {
 
   // wheels: front pair first (steering)
   const wheels = [];
-  for (const z of [-1.45, 1.45]) for (const sx of [-1, 1]) {
+  for (const z of [ZF, ZR]) for (const sx of [-1, 1]) {
     const w = buildWheel({ R, width: 0.27, rimR: 0.25, spokes: 10, mats: M, disc: { r: 0.18, xs: [-0.06 * sx] }, glowRing: !!glowHex });
     if (sx < 0) w.rotation.y = Math.PI;
     const holder = new THREE.Group();
@@ -276,11 +283,15 @@ export function buildVantaGT(livery, glowHex) {
   const flames = flamesAt([[-0.35, 0.33, RZ + 0.3], [0.35, 0.33, RZ + 0.3]]);
   flames.forEach((f) => g.add(f));
   const { glowLight, tailLight } = lights(g, glowHex, RZ);
-  return { group: g, wheels, flames, M, glowLight, tailLight, length: L, width: W, wheelR: R, rearZ: RZ, tailY: 0.74, tailHalfW: 0.82 };
+  return { group: g, wheels, flames, M, glowLight, tailLight, length: L, width: W, wheelR: R, rearZ: RZ, tailY: 0.74, tailHalfW: W * 0.42 };
 }
 
 // ---------------------------------------------------------------- TSUBAME (naked superbike)
-export function buildTsubame(livery, glowHex) {
+// style 'monster': muscular naked streetfighter (red trellis, bulky tank, single round lamp, side-stacked pipes)
+// style 'roadster': naked roadster (silver frame, long flat tank, twin round lamps, under-tail pipes)
+export function buildTsubame(livery, glowHex, style = 'monster') {
+  const roadster = style === 'roadster';
+  const FR = roadster ? 'metal' : 'frame';
   const g = new THREE.Group();
   const M = materials(livery, glowHex);
   const R = 0.31, FZ = -0.74, RZw = 0.72; // wheel radius, front/rear axle z
@@ -291,14 +302,14 @@ export function buildTsubame(livery, glowHex) {
   for (const sx of [-1, 1]) {
     const h1 = N(sx * 0.07, 0.94, -0.5), h2 = N(sx * 0.07, 0.76, -0.45);
     const t = N(sx * 0.13, 0.9, 0.08), m = N(sx * 0.15, 0.66, -0.2), p = N(sx * 0.15, 0.48, 0.1), u = N(sx * 0.13, 0.78, -0.08);
-    for (const [a, b] of [[h1, u], [u, t], [h2, m], [m, p], [h1, m], [m, u], [u, p], [t, p], [h2, h1]]) bin.rod('frame', a, b, 0.016);
+    for (const [a, b] of [[h1, u], [u, t], [h2, m], [m, p], [h1, m], [m, u], [u, p], [t, p], [h2, h1]]) bin.rod(FR, a, b, 0.016);
     // subframe up to the tail
-    bin.rod('frame', t, [sx * 0.09, 0.98, 0.62], 0.013);
-    bin.rod('frame', p, [sx * 0.09, 0.9, 0.55], 0.012);
+    bin.rod(FR, t, [sx * 0.09, 0.98, 0.62], 0.013);
+    bin.rod(FR, p, [sx * 0.09, 0.9, 0.55], 0.012);
   }
-  bin.rod('frame', [-0.13, 0.9, 0.08], [0.13, 0.9, 0.08], 0.014);
-  bin.rod('frame', [-0.15, 0.48, 0.1], [0.15, 0.48, 0.1], 0.02);
-  bin.add('frame', new THREE.CylinderGeometry(0.045, 0.045, 0.22, 16), [0, 0.86, -0.49], [-0.42, 0, 0]); // steering head
+  bin.rod(FR, [-0.13, 0.9, 0.08], [0.13, 0.9, 0.08], 0.014);
+  bin.rod(FR, [-0.15, 0.48, 0.1], [0.15, 0.48, 0.1], 0.02);
+  bin.add(FR, new THREE.CylinderGeometry(0.045, 0.045, 0.22, 16), [0, 0.86, -0.49], [-0.42, 0, 0]); // steering head
 
   // V-twin engine: crankcase, finned cylinders, heads, clutch cover, radiator
   bin.add('engine', new RoundedBoxGeometry(0.3, 0.26, 0.44, 3, 0.06), [0, 0.38, -0.06]);
@@ -323,15 +334,30 @@ export function buildTsubame(livery, glowHex) {
   // exhaust: headers sweep under the engine to stacked mufflers under the tail
   bin.tube('pipe', [[frontHead.x, frontHead.y - 0.04, frontHead.z - 0.04], [0.02, 0.32, -0.48], [0.04, 0.17, -0.25], [0.05, 0.18, 0.12], [0.06, 0.4, 0.42], [0.04, 0.7, 0.6]], 0.026);
   bin.tube('pipe', [[rearHead.x, rearHead.y, rearHead.z + 0.06], [0.08, 0.56, 0.22], [0.07, 0.52, 0.4], [0.04, 0.72, 0.58]], 0.024);
-  for (const [y, r] of [[0.74, 0.05], [0.86, 0.045]]) {
-    bin.add('pipe', new THREE.CylinderGeometry(r, r * 1.08, 0.38, 20).rotateX(Math.PI / 2), [0, y, 0.74]);
-    bin.add('exGlow', new THREE.CircleGeometry(r * 0.7, 16), [0, y, 0.932]);
+  const pipeEnds = roadster ? [[0, 0.74, 0.932], [0, 0.86, 0.932]] : [[0.21, 0.5, 0.86], [0.21, 0.63, 0.83]];
+  if (roadster) {
+    for (const [y, r] of [[0.74, 0.05], [0.86, 0.045]]) {
+      bin.add('pipe', new THREE.CylinderGeometry(r, r * 1.08, 0.38, 20).rotateX(Math.PI / 2), [0, y, 0.74]);
+      bin.add('exGlow', new THREE.CircleGeometry(r * 0.7, 16), [0, y, 0.932]);
+    }
+  } else {
+    // two short stacked silencers up the right flank, kicked up toward the tail
+    for (const [y, z] of [[0.5, 0.66], [0.63, 0.63]]) {
+      bin.add('pipe', new THREE.CylinderGeometry(0.05, 0.056, 0.42, 20).rotateX(Math.PI / 2 - 0.22), [0.21, y, z]);
+      bin.add('carbon', new THREE.CylinderGeometry(0.058, 0.058, 0.05, 20).rotateX(Math.PI / 2 - 0.22), [0.21, y + 0.045, z + 0.2]);
+      bin.add('exGlow', new THREE.CircleGeometry(0.036, 16).rotateX(-0.22), [0.21, y + 0.05, z + 0.23]);
+    }
+    bin.tube('pipe', [[0.06, 0.4, 0.42], [0.18, 0.44, 0.5], [0.21, 0.47, 0.5]], 0.024);
   }
 
   // tank, seat, tail
-  const tank = (s) => { s.moveTo(0.0, 0.0); s.quadraticCurveTo(0.08, 0.2, 0.35, 0.24); s.quadraticCurveTo(0.58, 0.22, 0.66, 0.08); s.lineTo(0.62, -0.04); s.quadraticCurveTo(0.3, -0.06, 0.0, 0.0); };
-  bin.add('paint', profile(tank, 0.66, 0.42, 0.07), [0, 0.86, -0.2]);
-  bin.add('stripe', profile(tank, 0.66, 0.12, 0), [0, 0.862, -0.2], null, [1, 1.03, 1.0]);
+  const tank = roadster
+    ? (s) => { s.moveTo(0.0, 0.0); s.quadraticCurveTo(0.06, 0.16, 0.36, 0.19); s.quadraticCurveTo(0.62, 0.19, 0.72, 0.08); s.lineTo(0.7, -0.04); s.quadraticCurveTo(0.34, -0.06, 0.0, 0.0); }
+    : (s) => { s.moveTo(0.0, 0.0); s.quadraticCurveTo(0.02, 0.26, 0.26, 0.31); s.quadraticCurveTo(0.5, 0.33, 0.62, 0.14); s.lineTo(0.6, -0.05); s.quadraticCurveTo(0.3, -0.08, 0.0, 0.0); };
+  const TW = roadster ? 0.4 : 0.5;
+  bin.add('paint', profile(tank, 0.66, TW, 0.08), [0, 0.86, -0.2]);
+  bin.add('stripe', profile(tank, 0.66, roadster ? 0.06 : 0.12, 0), [0, 0.862, -0.2], null, [1, 1.03, 1.0]);
+  if (!roadster) for (const sx of [-1, 1]) bin.add('carbon', new RoundedBoxGeometry(0.03, 0.12, 0.26, 2, 0.012), [sx * (TW / 2 + 0.01), 0.9, -0.02]); // tank shrouds
   const seat = (s) => { s.moveTo(0, 0); s.lineTo(0.38, 0.02); s.quadraticCurveTo(0.46, 0.06, 0.48, 0.1); s.lineTo(0.02, 0.07); s.lineTo(0, 0); };
   bin.add('carbon', profile(seat, 0.48, 0.3, 0.03), [0, 0.92, 0.3]);
   const tail = (s) => { s.moveTo(0, 0); s.lineTo(0.5, 0.02); s.quadraticCurveTo(0.6, 0.06, 0.62, 0.16); s.lineTo(0.08, 0.1); s.quadraticCurveTo(0.0, 0.06, 0, 0); };
@@ -355,12 +381,20 @@ export function buildTsubame(livery, glowHex) {
   bin.add('engine', new THREE.BoxGeometry(0.24, 0.035, 0.1), [0, 0.98, -0.53], [rake, 0, 0]);
   bin.add('engine', new THREE.BoxGeometry(0.24, 0.03, 0.09), [0, 0.86, -0.58], [rake, 0, 0]);
   bin.add('paint', profile((s) => { s.moveTo(0, 0); s.quadraticCurveTo(0.2, 0.12, 0.42, 0.04); s.lineTo(0.4, 0.0); s.quadraticCurveTo(0.2, 0.08, 0.02, -0.03); s.lineTo(0, 0); }, 0.42, 0.14, 0.01), [0, 0.6, FZ - 0.02]);
-  bin.add('carbon', new RoundedBoxGeometry(0.2, 0.2, 0.12, 2, 0.04), [0, 0.92, -0.66], [rake, 0, 0]);
-  for (const sx of [-1, 1]) bin.add('head', new THREE.BoxGeometry(0.035, 0.12, 0.02), [sx * 0.05, 0.92, -0.73], [rake, 0, 0]);
+  // round headlamps: one big lamp (monster) or a twin pair (roadster)
+  const lampQ = new THREE.Quaternion().setFromEuler(new THREE.Euler(Math.PI / 2 - 0.15, 0, 0));
+  for (const [x, r] of roadster ? [[-0.075, 0.068], [0.075, 0.068]] : [[0, 0.1]]) {
+    bin.add('carbon', new THREE.CylinderGeometry(r + 0.014, r * 0.75, 0.11, 24), [x, 0.88, -0.66], lampQ);
+    bin.add('metal', new THREE.TorusGeometry(r + 0.004, 0.009, 8, 28), [x, 0.886, -0.718], [-0.15, 0, 0]);
+    bin.add('head', new THREE.CircleGeometry(r, 24), [x, 0.886, -0.72], [Math.PI - 0.15, 0, 0]);
+  }
+  // wide, upright bars on risers, mirrors on stalks
   for (const sx of [-1, 1]) {
-    bin.rod('carbon', [sx * 0.09, 0.99, -0.5], [sx * 0.33, 0.97, -0.42], 0.014);
-    bin.rod('carbon', [sx * 0.16, 1.0, -0.47], [sx * 0.26, 1.12, -0.5], 0.008);
-    bin.add('carbon', new RoundedBoxGeometry(0.11, 0.06, 0.02, 2, 0.01), [sx * 0.28, 1.13, -0.5]);
+    bin.rod('carbon', [sx * 0.05, 1.0, -0.5], [sx * 0.06, 1.07, -0.48], 0.016);
+    bin.rod('metal', [sx * 0.06, 1.07, -0.48], [sx * 0.37, 1.09, -0.42], 0.013);
+    bin.rod('carbon', [sx * 0.3, 1.09, -0.43], [sx * 0.39, 1.09, -0.41], 0.019);
+    bin.rod('carbon', [sx * 0.24, 1.09, -0.45], [sx * 0.3, 1.27, -0.47], 0.007);
+    bin.add('carbon', new RoundedBoxGeometry(0.1, 0.055, 0.02, 2, 0.01), [sx * 0.31, 1.29, -0.47]);
   }
 
   // single-sided swingarm (left), chain (right), rear caliper
@@ -380,19 +414,24 @@ export function buildTsubame(livery, glowHex) {
     const len = A.distanceTo(B);
     bin.add(key, new THREE.CapsuleGeometry(r, Math.max(0.01, len - r * 2), 6, 12), [(A.x + B.x) / 2, (A.y + B.y) / 2, (A.z + B.z) / 2], new THREE.Quaternion().setFromUnitVectors(UP, B.clone().sub(A).normalize()));
   };
-  limb([0, 1.06, 0.34], [0, 1.32, -0.18], 0.16, 'suit');
-  limb([0, 1.24, 0.12], [0, 1.4, -0.08], 0.1, 'suitAccent'); // aero hump
+  limb([0, 1.06, 0.34], [0, 1.4, -0.04], 0.16, 'suit'); // upright naked-bike posture
   for (const sx of [-1, 1]) {
-    limb([sx * 0.18, 1.28, -0.14], [sx * 0.26, 1.08, -0.42], 0.055, 'suit');
-    limb([sx * 0.26, 1.08, -0.42], [sx * 0.31, 0.99, -0.45], 0.04, 'carbon');
+    limb([sx * 0.19, 1.36, -0.02], [sx * 0.3, 1.2, -0.3], 0.055, 'suit');
+    limb([sx * 0.3, 1.2, -0.3], [sx * 0.35, 1.1, -0.42], 0.04, 'carbon');
     limb([sx * 0.14, 1.04, 0.3], [sx * 0.24, 0.9, -0.08], 0.075, 'suit');
     limb([sx * 0.24, 0.9, -0.08], [sx * 0.2, 0.58, 0.24], 0.06, 'suit');
     limb([sx * 0.2, 0.58, 0.24], [sx * 0.2, 0.55, 0.33], 0.045, 'carbon');
-    bin.add('suitAccent', new THREE.SphereGeometry(0.06, 10, 8), [sx * 0.2, 1.3, -0.14]);
+    bin.add('suitAccent', new THREE.SphereGeometry(0.06, 10, 8), [sx * 0.2, 1.38, -0.02]);
   }
-  bin.add('helmet', new THREE.SphereGeometry(0.15, 28, 20), [0, 1.42, -0.34], null, [1, 0.96, 1.16]);
-  bin.add('glow', new THREE.BoxGeometry(0.24, 0.04, 0.03), [0, 1.43, -0.5]);
-  bin.add('carbon', new THREE.BoxGeometry(0.06, 0.03, 0.18), [0, 1.56, -0.3]);
+  // full-face race helmet: shell, chin bar, wrap-around glowing visor, centre stripe, side vents, rear spoiler
+  const HZ = -0.14, HY = 1.56;
+  bin.add('helmet', new THREE.SphereGeometry(0.15, 32, 24), [0, HY, HZ], null, [1, 0.97, 1.14]);
+  bin.add('helmet', new THREE.TorusGeometry(0.11, 0.045, 10, 24, Math.PI), [0, HY - 0.07, HZ - 0.04], [Math.PI / 2 + 0.35, 0, 0], [1.05, 1.1, 0.9]); // chin bar
+  bin.add('glow', new THREE.CylinderGeometry(0.152, 0.152, 0.055, 32, 1, true, Math.PI * 0.62, Math.PI * 0.76), [0, HY + 0.01, HZ], null, [1, 1, 1.14]); // visor band
+  bin.add('carbon', new THREE.CylinderGeometry(0.155, 0.155, 0.012, 32, 1, true, Math.PI * 0.6, Math.PI * 0.8), [0, HY + 0.045, HZ], null, [1, 1, 1.15]); // visor brow
+  bin.add('stripe', new THREE.BoxGeometry(0.035, 0.012, 0.32), [0, HY + 0.148, HZ + 0.01], [0.08, 0, 0]);
+  for (const sx of [-1, 1]) bin.add('carbon', new RoundedBoxGeometry(0.02, 0.05, 0.08, 2, 0.008), [sx * 0.145, HY + 0.01, HZ + 0.03]); // side vents
+  bin.add('carbon', new RoundedBoxGeometry(0.16, 0.025, 0.07, 2, 0.01), [0, HY + 0.1, HZ + 0.15], [-0.35, 0, 0]); // rear spoiler
 
   bin.build(g, M);
 
@@ -412,7 +451,7 @@ export function buildTsubame(livery, glowHex) {
     g.add(holder);
     wheels.push(holder);
   }
-  const flames = flamesAt([[0, 0.74, 1.1], [0, 0.86, 1.1]], 0.9);
+  const flames = flamesAt(pipeEnds.map(([x, y, z]) => [x, y, z + 0.16]), 0.9);
   flames.forEach((f) => g.add(f));
   const { glowLight, tailLight } = lights(g, null, TZ); // rims and pool carry the glow; a point light this low mirrors as a hot spot on the wet road
   return { group: g, wheels, flames, M, glowLight, tailLight, length: 2.2, width: 0.75, wheelR: R, rearZ: TZ, tailY: 1.04, tailHalfW: 0.08, bike: true };
