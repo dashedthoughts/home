@@ -366,7 +366,7 @@ export default function Chill() {
         </div>
         <StreetLine />
       </aside>
-      <aside className="ch-side ch-side--r" style={rightEnd ? { bottom: 'auto', height: rightEnd } : undefined}>
+      <aside className="ch-side ch-side--r" style={rightEnd ? { bottom: 'auto', minHeight: rightEnd } : undefined}>
         <div className={shown.music ? '' : 'ch-keep'}><Music /></div>
         <div hidden={!shown.notes} className="ch-notes-wrap"><Notes /></div>
       </aside>

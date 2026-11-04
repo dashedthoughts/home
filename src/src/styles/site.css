@@ -778,3 +778,4 @@ h1, h2, h3 { font-family: var(--f-display); font-weight: 700; letter-spacing: 0.
 .chill--vibe .nav { opacity: 0; visibility: hidden; }
 .chill--vibe .ch-drive, .chill--vibe .ch-drive--line { opacity: .55; }
 .chill--vibe .ch-drive--line:hover, .chill--vibe .ch-drive--line:focus-within { opacity: 1; }
+.ch-side--r .ch-music { flex: none; }

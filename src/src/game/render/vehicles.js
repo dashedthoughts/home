@@ -394,8 +394,8 @@ export function buildTsubame(livery, glowHex, style = 'monster') {
     pa.needsUpdate = true; geo.computeVertexNormals();
     return geo;
   };
-  bin.add('paint', tear(profile(tank, 0.66, TW, 0.08)), [0, 0.86, -0.2]);
-  bin.add('stripe', tear(profile(tank, 0.66, roadster ? 0.06 : 0.1, 0)), [0, 0.862, -0.2], null, [1, 1.03, 1.0]);
+  bin.add('paint', tear(profile(tank, 0.66, TW, 0.08)), [0, 0.86, -0.2], null, [1, 0.72, 1]); // low, lean tank
+  bin.add('stripe', tear(profile(tank, 0.66, roadster ? 0.06 : 0.1, 0)), [0, 0.862, -0.2], null, [1, 0.74, 1.0]);
   if (!roadster) for (const sx of [-1, 1]) bin.add('carbon', new RoundedBoxGeometry(0.025, 0.09, 0.2, 2, 0.01), [sx * (TW / 2 - 0.02), 0.89, -0.1]); // tank shrouds
   const seat = (s) => { s.moveTo(0, 0); s.lineTo(0.38, 0.02); s.quadraticCurveTo(0.46, 0.06, 0.48, 0.1); s.lineTo(0.02, 0.07); s.lineTo(0, 0); };
   bin.add('carbon', profile(seat, 0.48, 0.3, 0.03), [0, 0.92, 0.3]);
