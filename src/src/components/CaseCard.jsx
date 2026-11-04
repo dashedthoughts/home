@@ -8,6 +8,9 @@ const SWATCH = {
   ferrari: '#e8b100', 'finance-chatbot': '#0aa5a0',
 };
 
+// project artwork that should front a tile instead of the deck's first page
+const COVERS = { reelationships: 'cases/reelationships/cover.jpg' };
+
 function inside(slug) {
   const body = caseStudies[slug] || [];
   const decks = body.filter((b) => b[0] === 'deck').map((b) => b[1]);
@@ -15,7 +18,8 @@ function inside(slug) {
   const live = body.some((b) => b[0] === 'embed');
   const video = body.some((b) => b[0] === 'video');
   const d = decks[0];
-  const cover = d ? { src: `${ROOT}${d.dir}/${d.files[0]}-800.jpg`, tall: d.ratio < 0.95 } : null;
+  const own = COVERS[slug];
+  const cover = own ? { src: ROOT + own, tall: false, full: true } : d ? { src: `${ROOT}${d.dir}/${d.files[0]}-800.jpg`, tall: d.ratio < 0.95 } : null;
   const parts = [pages ? `${pages}-page deck${decks.length > 1 ? 's' : ''}` : null, live ? 'live prototype' : null, video ? 'demo' : null].filter(Boolean);
   return { cover, label: parts.join(' · ') };
 }
@@ -27,7 +31,7 @@ export default function CaseCard({ p, fileNo }) {
     <Link to={`/p/${p.slug}`} className="tile reveal" style={{ '--c': SWATCH[p.slug] || '#ff5a36' }}>
       <span className="tile__field" aria-hidden="true">
         <span className="tile__no">{String(fileNo).padStart(2, '0')}</span>
-        {cover && <img className={`tile__cover ${cover.tall ? 'is-tall' : ''}`} src={cover.src} alt="" loading="lazy" decoding="async" />}
+        {cover && <img className={`tile__cover ${cover.tall ? 'is-tall' : ''} ${cover.full ? 'is-full' : ''}`} src={cover.src} alt="" loading="lazy" decoding="async" />}
         {(p.brand || p.brandUrl) && (
           <img className="tile__brand" src={p.brandUrl || `https://cdn.simpleicons.org/${p.brand}/ffffff`} alt="" loading="lazy" onError={(e) => (e.currentTarget.style.display = 'none')} />
         )}
