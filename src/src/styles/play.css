@@ -51,7 +51,7 @@
 .seg__opts button:first-child { clip-path: polygon(6px 0, 100% 0, 100% 100%, 0 100%, 0 6px); }
 .seg__opts button:last-child { clip-path: polygon(0 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%); }
 
-.cars { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--sp-2); }
+.cars { display: grid; grid-template-columns: repeat(2, 1fr); gap: var(--sp-2); }
 .carcard { display: grid; gap: 6px; padding: var(--sp-3); text-align: left; background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.08); clip-path: var(--shape-sm); transition: background var(--t-instant), border-color var(--t-instant); }
 .carcard:hover { border-color: rgba(255,255,255,.3); }
 .carcard.on { background: color-mix(in srgb, var(--signal) 14%, transparent); border-color: var(--signal); }
@@ -97,7 +97,7 @@
   .rl-logo { font-size: 2.4rem; margin-bottom: var(--sp-2); }
   .garage__head .hud-label { display: none; }
   .showroom-tag { top: var(--sp-5); bottom: auto; right: var(--sp-4); }
-  .cars { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .cars { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .carcard { padding: var(--sp-2); }
   .controls div { grid-template-columns: 110px 1fr; }
 }

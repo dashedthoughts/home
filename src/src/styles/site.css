@@ -339,7 +339,6 @@ h1, h2, h3 { font-family: var(--f-display); font-weight: 700; letter-spacing: 0.
 .case:hover::before, .case:focus-visible::before { background: var(--signal); }
 .case:hover::after, .case:focus-visible::after { transform: translate(9px, 9px); }
 .case:hover .case__frame { background: var(--bg-raised); }
-.case:focus-visible { outline: none; }
 .case { transition: transform var(--t-snap) var(--ease-snap); }
 .case__hud { display: flex; justify-content: space-between; gap: var(--sp-2); font: 400 0.68rem / 1 var(--f-mono); letter-spacing: var(--track-hud); color: var(--data); padding-bottom: var(--sp-2); border-bottom: 1px solid color-mix(in srgb, var(--data) 30%, transparent); margin-bottom: var(--sp-2); }
 .case__state { color: var(--ink-dim); }
@@ -498,3 +497,26 @@ h1, h2, h3 { font-family: var(--f-display); font-weight: 700; letter-spacing: 0.
 .game-poster { position: absolute; inset: 0; background: #07050c url('./poster.jpg') center 62% / cover no-repeat; }
 .game-canvas--live .game-poster { opacity: 0; transition: opacity 600ms 200ms; }
 .game-note { position: absolute; left: 50%; bottom: 12%; transform: translateX(-50%); font: 400 var(--fs-hud) / 1.4 var(--f-mono); letter-spacing: var(--track-hud); color: var(--ink-muted); background: rgba(7,5,12,.7); padding: 6px 10px; text-align: center; }
+
+/* ---------- the AD mark ---------- */
+.logo { display: block; overflow: visible; }
+.logo__badge { fill: var(--signal); }
+.logo__ink path { fill: #0d0d0d; }
+.logo__plate path { mix-blend-mode: multiply; }
+.logo__plate--c path { fill: var(--data); }
+.logo__plate--m path { fill: var(--hype); }
+.logo__plate--c { transform: translate(-1.6px, 0.8px); }
+.logo__plate--m { transform: translate(1.6px, -0.8px); }
+.logo__slash { fill: var(--alert); }
+.logo__speed path { stroke: #0d0d0d; stroke-width: 2.4; stroke-linecap: square; }
+.nav__brand:hover .logo__plate--c, .nav__brand:focus-visible .logo__plate--c { animation: plate-c 0.33s steps(2) 1 forwards; }
+.nav__brand:hover .logo__plate--m, .nav__brand:focus-visible .logo__plate--m { animation: plate-m 0.33s steps(2) 1 forwards; }
+@keyframes plate-c { 0% { transform: translate(-6px, 2px); } 100% { transform: translate(-1px, 0); } }
+@keyframes plate-m { 0% { transform: translate(6px, -2px); } 100% { transform: translate(1px, 0); } }
+.nav__word { display: grid; gap: 3px; line-height: 1; }
+.nav__word b { font: 400 0.95rem / 1 var(--f-name); letter-spacing: 0.06em; color: var(--ink); }
+.nav__word i { font: 400 0.6rem / 1 var(--f-mono); font-style: normal; letter-spacing: var(--track-hud); color: var(--success); }
+@media (max-width: 860px) { .nav__word { display: none; } }
+@media (prefers-reduced-motion: reduce) { .nav__brand .logo__plate { animation: none !important; } }
+/* case cards: a visible keyboard focus ring */
+.case:focus-visible { outline: 3px solid var(--signal); outline-offset: 5px; }

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { RESUME, LINKEDIN } from '../data/content.js';
 import { getMood, setMood } from '../lib/store.js';
+import Logo from './Logo.jsx';
 
 const LINKS = [
   { href: '#work', label: 'CASE FILES' },
@@ -29,8 +30,11 @@ export default function Nav() {
   return (
     <nav className="nav" aria-label="Main">
       <Link to="/" className="nav__brand" aria-label="Anuraag Dash, home">
-        <span className="nav__badge">AD</span>
-        <span className="nav__id">ID:AD-0417 <i>// ONLINE</i></span>
+        <Logo size={38} />
+        <span className="nav__word">
+          <b>ANURAAG DASH</b>
+          <i>● ONLINE · NIGHT BUILD</i>
+        </span>
       </Link>
       <div className="nav__links">
         {home ? (
