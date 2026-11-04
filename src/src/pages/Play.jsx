@@ -238,7 +238,7 @@ export default function Play() {
     };
     const up = (e) => {
       const k = KEYS[e.code];
-      if (k && eng()) eng().input[k] = false;
+      if (k && k !== 'strike' && k !== 'wheelie' && eng()) eng().input[k] = false; // X and E are one-shot presses: the game clears them
     };
     window.addEventListener('keydown', down);
     window.addEventListener('keyup', up);

@@ -124,7 +124,7 @@ export function createRedline(canvas, opts = {}) {
   let raf = 0, running = false, paused = false, last = 0, acc = 0, tick = 0;
   let frameAvg = 16, slowFor = 0, fastFor = 0, lastScaleChange = 0;
   const fx = { full: cfg.effects !== 'reduced', view: opts.view || 'chase', cam: 'chase' };
-  const keyInput = { left: false, right: false, boost: false, brake: false };
+  const keyInput = { left: false, right: false, boost: false, brake: false, strike: false, wheelie: false };
 
   function frame(now) {
     if (!running) return;
@@ -140,6 +140,9 @@ export function createRedline(canvas, opts = {}) {
       sim.input.right = keyInput.right;
       sim.input.boost = keyInput.boost || !!pad?.boost;
       sim.input.brake = keyInput.brake || !!pad?.brake;
+      // one-shot actions: a press fires once
+      if (keyInput.strike) { sim.input.strike = true; keyInput.strike = false; }
+      if (keyInput.wheelie) { sim.input.wheelie = true; keyInput.wheelie = false; }
       sim.input.axis = pad ? pad.axis : 0;
     }
 
@@ -303,6 +306,8 @@ export function createRedline(canvas, opts = {}) {
     advance(sec) {
       if (fx.view === 'showroom') sec = 0;
       Object.assign(sim.input, { left: keyInput.left, right: keyInput.right, boost: keyInput.boost, brake: keyInput.brake });
+      if (keyInput.strike) { sim.input.strike = true; keyInput.strike = false; }
+      if (keyInput.wheelie) { sim.input.wheelie = true; keyInput.wheelie = false; }
       const n = Math.round(sec / STEP);
       for (let i = 0; i < n; i++) {
         sim.step(STEP);

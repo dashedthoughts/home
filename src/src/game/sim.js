@@ -522,7 +522,12 @@ export function createSim(opts = {}) {
 
     // ---- police: speed and crashes build heat (up to 3 stars); each star brings a cruiser. They take your flanks
     // and your tail; boxed in for long enough and you're busted. Lose them all and you get away.
-    if (mode === 'play' && cfg.police !== false && !cfg.zen && racing && !S.finale) {
+    if (S.swarmT > 0) {
+      S.swarmT -= dt;
+      for (const K of S.cops) { K.z = S.z + K.off; K.x = clamp(S.x + K.side * 3.6, -RAIL, RAIL); K.speed = S.speed; }
+      S.speed = Math.max(0, S.speed - 30 * dt);
+      if (S.swarmT <= 0) { S.cops = []; S.cop = null; }
+    } else if (mode === 'play' && cfg.police !== false && !cfg.zen && racing && !S.finale) {
       if (S.speed > MAX * 0.95) S.wanted = Math.min(3, S.wanted + dt * 0.035 * (S.speed / MAX));
       const stars = Math.ceil(S.wanted - 0.001);
       S.cops = S.cops || [];
@@ -555,7 +560,10 @@ export function createSim(opts = {}) {
       }
       S.bust = S.invuln > 0 ? 0 : Math.max(0, (S.bust || 0) + (pressure > 0 ? dt * pressure * 0.75 : -dt * 0.8));
       if (S.bust >= 1) {
-        S.lives -= 1; S.busts += 1; S.invuln = 2.5; S.speed *= 0.4; S.cops = []; S.wanted = 0; S.bust = 0; S.chain = 0;
+        S.lives -= 1; S.busts += 1; S.invuln = 2.5; S.speed *= 0.4; S.wanted = 0; S.bust = 0; S.chain = 0;
+        // the swarm: three cruisers box you in (tail and both flanks) for a beat, then let you go
+        S.swarmT = 2.2;
+        S.cops = [{ off: -6.5, side: 0 }, { off: 0.8, side: -1 }, { off: 0.8, side: 1 }].map((c, i) => ({ ...c, z: S.z + c.off, x: S.x + c.side * 3.6, speed: S.speed, slot: i, target: 1 }));
         emit({ type: 'busted', lives: S.lives });
         if (S.lives <= 0) { S.over = true; emit({ type: 'over', busted: true, score: Math.round(S.score), files: S.files, dist: S.dist, top: S.topSpeed, nearMisses: S.nearMisses, shards: S.shards }); }
       }
