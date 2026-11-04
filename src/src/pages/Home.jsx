@@ -150,6 +150,7 @@ export default function Home() {
 
       <section id="memes" className="section memes">
         <HudHeader index={2} title="CERTIFIED MEMELORE" meta="SOURCE: u/dashedthoughts" />
+        <img className="reddit-neon" src="https://cdn.simpleicons.org/reddit/FF4500" alt="" loading="lazy" decoding="async" onError={(e) => (e.currentTarget.style.display = 'none')} />
         <div className="memes__body reveal">
           <p className="lede">
             Community Architect &amp; Creator Partner at Reddit since 2020. Scaled r/memes +123% in 3 years. Multiple

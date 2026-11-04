@@ -565,3 +565,13 @@ h1, h2, h3 { font-family: var(--f-display); font-weight: 700; letter-spacing: 0.
 .tile__meta i { font-style: normal; transition: transform var(--t-snap); }
 .tile:hover .tile__meta i { transform: translateX(4px); }
 @media (prefers-reduced-motion: reduce) { .tile, .tile__cover, .tile__meta i { transition: none !important; } .tile:hover { transform: none; } }
+
+/* ---------- memes: the official Reddit mark (unmodified, via simpleicons) lit like a neon sign ---------- */
+.memes { position: relative; }
+.memes > :not(.reddit-neon) { position: relative; z-index: 1; }
+.reddit-neon { position: absolute; z-index: 0; right: var(--gutter); top: 50%; width: clamp(160px, 22vw, 340px); height: auto; pointer-events: none; transform: translateY(-50%) rotate(-8deg); filter: drop-shadow(0 0 18px rgba(255,69,0,.75)) drop-shadow(0 0 60px rgba(255,69,0,.45)); animation: reddit-pop 5s ease-in-out infinite, reddit-buzz 7s steps(1) infinite; }
+@keyframes reddit-pop { 0%, 100% { transform: translateY(-50%) rotate(-8deg) scale(1); } 50% { transform: translateY(-52%) rotate(-4deg) scale(1.05); } }
+@keyframes reddit-buzz { 0%, 61%, 63%, 100% { opacity: 1; } 62% { opacity: .55; } }
+@media (min-width: 900px) { .memes .meme-wall { max-width: 68%; } }
+@media (max-width: 899px) { .reddit-neon { opacity: .22; } }
+@media (prefers-reduced-motion: reduce) { .reddit-neon { animation: none !important; } }
