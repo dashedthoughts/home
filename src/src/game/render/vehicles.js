@@ -6,6 +6,8 @@ import * as THREE from 'three';
 import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import { plateTexture } from './textures.js';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 
 const HDR = (hex, k) => new THREE.Color(hex).multiplyScalar(k);
 const UP = new THREE.Vector3(0, 1, 0);
@@ -271,7 +273,7 @@ export function buildVantaGT(livery, glowHex) {
   }
   const flames = flamesAt([[-0.35, 0.33, RZ + 0.3], [0.35, 0.33, RZ + 0.3]]);
   flames.forEach((f) => g.add(f));
-  const { glowLight, tailLight } = lights(g, glowHex, RZ);
+  const { glowLight, tailLight } = lights(g, null, RZ);
   return { group: g, wheels, flames, M, glowLight, tailLight, length: L, width: W, wheelR: R, rearZ: RZ, tailY: 0.74, tailHalfW: 0.82 };
 }
 
@@ -410,6 +412,175 @@ export function buildTsubame(livery, glowHex) {
   }
   const flames = flamesAt([[0, 0.74, 1.1], [0, 0.86, 1.1]], 0.9);
   flames.forEach((f) => g.add(f));
-  const { glowLight, tailLight } = lights(g, glowHex, TZ, 18);
+  const { glowLight, tailLight } = lights(g, null, TZ); // rims and pool carry the glow; a point light this low mirrors as a hot spot on the wet road
   return { group: g, wheels, flames, M, glowLight, tailLight, length: 2.2, width: 0.75, wheelR: R, rearZ: TZ, tailY: 1.04, tailHalfW: 0.08, bike: true };
+}
+
+// ---------------------------------------------------------------- Concept car (GLB)
+// "Car Concept" © 2024 Darmstadt Graphics Group (model and textures: Eric Chadwick), CC BY 4.0,
+// derived from a CC0 model by Unity Fan. Changes: logos removed, textures resized, variants dropped,
+// meshopt-compressed, recoloured at runtime from the player's livery.
+
+
+// ~100 glTF parts → one mesh per material for the body, one per material per wheel (≈25 draw calls)
+const WHEEL_RE = /^Wheel(Front|Rear)[LR]$/;
+function floatGeometry(src, matrix) {
+  const g = new THREE.BufferGeometry();
+  for (const name of ['position', 'normal', 'uv', 'uv1']) {
+    const a = src.getAttribute(name);
+    if (!a) continue;
+    const arr = new Float32Array(a.count * a.itemSize);
+    for (let i = 0; i < a.count; i++) for (let k = 0; k < a.itemSize; k++) arr[i * a.itemSize + k] = a.getComponent(i, k);
+    g.setAttribute(name, new THREE.BufferAttribute(arr, a.itemSize));
+  }
+  if (src.index) g.setIndex(Array.from(src.index.array));
+  else g.setIndex([...Array(g.getAttribute('position').count).keys()]);
+  if (!g.getAttribute('uv')) g.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(g.getAttribute('position').count * 2), 2));
+  if (!g.getAttribute('uv1')) g.setAttribute('uv1', g.getAttribute('uv').clone()); // AO maps read channel 1
+  if (!g.getAttribute('normal')) g.computeVertexNormals();
+  g.applyMatrix4(matrix);
+  return g;
+}
+function flatten(scene) {
+  scene.updateMatrixWorld(true);
+  const inv = new THREE.Matrix4().copy(scene.matrixWorld).invert();
+  const out = new THREE.Group();
+  const buckets = new Map(); // owner → material → geometries
+  const owners = new Map([[null, out]]);
+  scene.traverse((o) => {
+    if (WHEEL_RE.test(o.name || '')) {
+      const w = new THREE.Group();
+      w.name = o.name;
+      new THREE.Matrix4().multiplyMatrices(inv, o.matrixWorld).decompose(w.position, w.quaternion, w.scale);
+      // the file poses the front wheels steered: rotate the axle back onto the car's x (keeps mirroring and roll)
+      const axle = new THREE.Vector3(1, 0, 0).applyQuaternion(w.quaternion);
+      w.quaternion.premultiply(new THREE.Quaternion().setFromUnitVectors(axle, new THREE.Vector3(Math.sign(axle.x) || 1, 0, 0)));
+      out.add(w);
+      owners.set(o, w);
+    }
+  });
+  scene.traverse((o) => {
+    if (!o.isMesh) return;
+    let wheel = null;
+    for (let p = o; p; p = p.parent) if (owners.has(p) && p !== null) { wheel = p; break; }
+    const base = wheel ? new THREE.Matrix4().copy(wheel.matrixWorld).invert() : inv;
+    const geo = floatGeometry(o.geometry, new THREE.Matrix4().multiplyMatrices(base, o.matrixWorld));
+    if (!buckets.has(wheel)) buckets.set(wheel, new Map());
+    const byMat = buckets.get(wheel);
+    if (!byMat.has(o.material)) byMat.set(o.material, []);
+    byMat.get(o.material).push(geo);
+  });
+  for (const [owner, byMat] of buckets) {
+    for (const [mat, geos] of byMat) {
+      const merged = geos.length > 1 ? mergeGeometries(geos) : geos[0];
+      if (!merged) continue;
+      const m = new THREE.Mesh(merged, mat);
+      m.name = mat.name;
+      owners.get(owner).add(m);
+    }
+  }
+  return out;
+}
+
+let conceptPromise = null;
+export function loadConceptCar() {
+  if (!conceptPromise) {
+    const loader = new GLTFLoader();
+    loader.setMeshoptDecoder(MeshoptDecoder);
+    conceptPromise = loader
+      .loadAsync(new URL('models/concept-car.glb', document.baseURI).href)
+      .then((gltf) => flatten(gltf.scene))
+      .catch((err) => { conceptPromise = null; throw err; });
+  }
+  return conceptPromise;
+}
+
+export function buildConceptCar(proto, livery, glowHex) {
+  const LENGTH = 4.55;
+  const g = new THREE.Group();
+  const body = proto.clone(true);
+  const container = new THREE.Group();
+  container.add(body);
+  g.add(container);
+
+  // materials: recolour paint, make lights bloom, swap costly transmission glass for tinted gloss
+  const recolour = new Map();
+  body.traverse((o) => {
+    if (!o.isMesh) return;
+    o.frustumCulled = false;
+    const mats = Array.isArray(o.material) ? o.material : [o.material];
+    const next = mats.map((m) => {
+      if (!m) return m;
+      if (!recolour.has(m)) {
+        const c = m.clone();
+        const n = (m.name || '').toLowerCase();
+        if (n.startsWith('paint 1')) { c.color.set(livery.body); c.emissive = new THREE.Color(livery.body); c.emissiveIntensity = 0.08; c.metalness = 0.18; c.roughness = 0.32; c.clearcoat = 1; c.clearcoatRoughness = 0.05; }
+        else if (n.startsWith('paint 2')) { c.color.set(livery.trim); c.metalness = 0.45; c.roughness = 0.35; }
+        else if (n.startsWith('interior 3')) c.color.set(livery.stripe).multiplyScalar(0.7);
+        else if (n === 'brakelight') { c.emissive = new THREE.Color('#ff1a3c'); c.emissiveIntensity = 7; c.color.set('#3a0008'); }
+        else if (n === 'headlight') { c.emissive = new THREE.Color('#e8f4ff'); c.emissiveIntensity = 5; }
+        else if (n === 'signallight') { c.emissive = new THREE.Color('#ffa000'); c.emissiveIntensity = 1.2; }
+        if (c.transmission > 0) { c.transmission = 0; c.transparent = true; c.opacity = 0.55; c.color.set('#0a0a12'); c.metalness = 0.9; c.roughness = 0.05; }
+        c.envMapIntensity = 1.1;
+        recolour.set(m, c);
+      }
+      return recolour.get(m);
+    });
+    o.material = Array.isArray(o.material) ? next : next[0];
+  });
+
+  // orient: nose toward −z (compare headlight and brakelight positions), scale to length, sit on the ground
+  container.updateMatrixWorld(true);
+  // world-space box around every mesh that uses a material called `name`
+  const boxOf = (name) => {
+    const b = new THREE.Box3();
+    body.traverse((o) => { if (o.isMesh && (Array.isArray(o.material) ? o.material : [o.material]).some((m) => (m.name || '').toLowerCase() === name)) b.expandByObject(o); });
+    return b;
+  };
+  const hp = boxOf('headlight').getCenter(new THREE.Vector3());
+  const bp = boxOf('brakelight').getCenter(new THREE.Vector3());
+  if (hp.z > bp.z) container.rotation.y = Math.PI;
+  container.updateMatrixWorld(true);
+  let box = new THREE.Box3().setFromObject(container, true);
+  const size = box.getSize(new THREE.Vector3());
+  container.scale.setScalar(LENGTH / size.z);
+  container.updateMatrixWorld(true);
+  box = new THREE.Box3().setFromObject(container, true);
+  const center = box.getCenter(new THREE.Vector3());
+  container.position.set(-center.x, -box.min.y, -center.z);
+  container.updateMatrixWorld(true);
+  g.updateMatrixWorld(true);
+
+  // wheels: steer pivot → spin pivot → original node (front pair first)
+  const wheelNodes = [];
+  body.traverse((o) => { if (/^Wheel(Front|Rear)[LR]$/.test(o.name || '')) wheelNodes.push(o); });
+  const v = new THREE.Vector3();
+  const wheels = wheelNodes
+    .map((node) => ({ node, pos: g.worldToLocal(node.getWorldPosition(v.clone())) }))
+    .sort((a, b) => a.pos.z - b.pos.z)
+    .map(({ node, pos }) => {
+      const steer = new THREE.Group();
+      steer.position.copy(pos);
+      const spin = new THREE.Group();
+      steer.add(spin);
+      g.add(steer);
+      g.updateMatrixWorld(true);
+      spin.attach(node);
+      steer.userData = { spin, sign: 1 };
+      return steer;
+    });
+  const wheelR = wheels.length ? wheels[0].position.y : 0.36;
+
+  // tail-light anchors from the real brake lights
+  const bb = boxOf('brakelight');
+  const rearZ = new THREE.Box3().setFromObject(container).max.z;
+  const tailY = (bb.min.y + bb.max.y) / 2;
+  const tailHalfW = Math.max(0.3, (bb.max.x - bb.min.x) / 2 - 0.08);
+
+  // plate + flames + lights (same contract as the procedural cars)
+  const flames = flamesAt([[-0.35, 0.3, rearZ + 0.3], [0.35, 0.3, rearZ + 0.3]]);
+  flames.forEach((f) => g.add(f));
+  // no underglow point light here: through this car's open floor it mirrors as a hot spot on the wet road; the glow pool does the job
+  const { glowLight, tailLight } = lights(g, null, rearZ);
+  return { group: g, wheels, flames, M: {}, glowLight, tailLight, length: LENGTH, width: box.getSize(new THREE.Vector3()).x, wheelR, rearZ, tailY, tailHalfW, gltf: true };
 }

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import GameCanvas from '../components/GameCanvas.jsx';
 import { projects, rankFor } from '../data/content.js';
-import { CARS, LIVERIES, GLOWS, TIMES, WEATHER, DIFFICULTY, QUALITY } from '../game/config.js';
+import { CARS, LIVERIES, GLOWS, TIMES, WEATHER, DIFFICULTY, QUALITY, resolveQuality } from '../game/config.js';
 import { addDecrypted, getRaceConfig, setRaceConfig, getBestBy, setBestBy } from '../lib/store.js';
 
 const KEYS = {
@@ -91,6 +91,7 @@ export default function Play() {
 
   const onEvent = useCallback(
     (e) => {
+      if (e.type === 'quality-auto') { pop('GRAPHICS → LOW', 'data', 'AUTO KEPT THE FRAME RATE UP'); return; }
       if (e.type === 'context-lost') {
         setPhase('title');
         setTab('run');
@@ -378,6 +379,11 @@ export default function Play() {
                   ))}
                 </div>
                 <p className="garage__note">{car.blurb}</p>
+                {cfg.car === 'wedge' && (
+                  <p className="garage__credit">
+                    Model: <a href="https://github.com/KhronosGroup/glTF-Sample-Assets/tree/main/Models/CarConcept" target="_blank" rel="noreferrer">Car Concept</a> © 2024 Darmstadt Graphics Group (Eric Chadwick), from a CC0 model by Unity Fan · <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noreferrer">CC BY 4.0</a> · logos removed, simplified, recoloured.
+                  </p>
+                )}
                 <div className="swatches-row" role="radiogroup" aria-label="Livery">
                   <span className="seg__label">LIVERY · {LIVERIES[cfg.livery].name}</span>
                   <div>
@@ -403,6 +409,7 @@ export default function Play() {
                 <Seg label="WEATHER" value={cfg.weather} options={Object.entries(WEATHER).map(([k, t]) => [k, t.name])} onChange={(v) => update({ weather: v })} />
                 {cfg.weather === 'rain' && <p className="garage__note">Wet road: less grip, longer reflections. Brake earlier.</p>}
                 <Seg label="GRAPHICS" value={cfg.quality} options={Object.entries(QUALITY).map(([k, t]) => [k, t.name])} onChange={(v) => update({ quality: v })} />
+                <p className="garage__note">{cfg.quality === 'auto' ? `AUTO picked ${QUALITY[resolveQuality('auto')].name} for this device and drops to LOW by itself if it struggles.` : cfg.quality === 'high' ? 'HIGH: full resolution and 4× anti-aliasing. For strong GPUs.' : cfg.quality === 'low' ? 'LOW: fewer pixels, lighter bloom, no searchlights or light pools.' : 'BALANCED: the full look at a sane pixel budget.'}</p>
                 <Toggle label="Steering assist" hint="Gently settles you into the nearest lane." checked={cfg.assist} onChange={(v) => update({ assist: v })} />
                 <Toggle label="Reduced effects" hint="No shake, flashes, tearing or speed blur." checked={cfg.effects === 'reduced'} onChange={(v) => update({ effects: v ? 'reduced' : 'full' })} />
                 <Toggle label="Sound effects" checked={cfg.sound} onChange={(v) => update({ sound: v })} />

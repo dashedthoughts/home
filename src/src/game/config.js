@@ -4,23 +4,13 @@
 export const CARS = {
   wedge: {
     name: 'VANTA GT',
-    blurb: 'The all-rounder. Sharp wedge, honest grip, no surprises.',
+    blurb: 'Low, wide concept two-seater on staggered wheels. Honest grip, no surprises.',
     top: 1.0, accel: 1.0, grip: 1.0, cool: 1.0,
-  },
-  coupe: {
-    name: 'HALCYON',
-    blurb: 'Long-legged grand tourer. Highest top end, sheds heat fast, lazy in the bends.',
-    top: 1.07, accel: 0.88, grip: 0.9, cool: 1.3,
   },
   bike: {
     name: 'TSUBAME',
-    blurb: 'Long, low, fully faired. The quickest thing in the garage off the line; leans hard and slips through gaps a car can\'t.',
+    blurb: 'Naked superbike, long and low. The quickest thing in the garage off the line; leans hard and slips through gaps a car can\'t.',
     top: 1.04, accel: 1.18, grip: 1.08, cool: 0.95, bike: true,
-  },
-  kei: {
-    name: 'MOSQUITO',
-    blurb: 'Tiny city box. Launches like a slingshot and darts between lanes. Runs hot.',
-    top: 0.93, accel: 1.25, grip: 1.25, cool: 0.85,
   },
 };
 
@@ -89,11 +79,15 @@ export const DIFFICULTY = {
 };
 
 // Render budgets are in pixels, not device ratios: a 4K laptop and a phone both get a frame they can hold at 60.
+// AUTO (default) resolves to BALANCED on desktops and LOW on phones, and steps down to LOW by itself if a machine can't hold the frame rate.
 export const QUALITY = {
-  low: { name: 'LOW', pixels: 0.55e6, samples: 0, bloom: 0.4 },
-  balanced: { name: 'BALANCED', pixels: 0.95e6, samples: 0, bloom: 0.45 },
-  high: { name: 'HIGH', pixels: 2.1e6, samples: 4, bloom: 0.5 },
+  auto: { name: 'AUTO' },
+  low: { name: 'LOW', pixels: 0.5e6, samples: 0, bloom: 0.3, buildings: 0.6, extras: false, cull: 260 },
+  balanced: { name: 'BALANCED', pixels: 0.8e6, samples: 0, bloom: 0.4, buildings: 1, extras: true, cull: 380 },
+  high: { name: 'HIGH', pixels: 2.1e6, samples: 4, bloom: 0.5, buildings: 1, extras: true, cull: 700 },
 };
+export const isPhone = () => typeof window !== 'undefined' && (navigator.maxTouchPoints > 0 && Math.min(screen.width, screen.height) < 820);
+export const resolveQuality = (q) => (q === 'auto' || !QUALITY[q] ? (isPhone() ? 'low' : 'balanced') : q);
 
 export const DEFAULT_CONFIG = {
   car: 'wedge',
@@ -104,7 +98,7 @@ export const DEFAULT_CONFIG = {
   difficulty: 'street',
   assist: false,
   effects: 'full', // 'full' | 'reduced' (no shake, no flashes, no tearing)
-  quality: 'balanced',
+  quality: 'auto',
   sound: true,
   music: true,
   volume: 0.7,

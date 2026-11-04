@@ -96,9 +96,9 @@ for (const difficulty of ['chill', 'street', 'redline']) {
 const wet = run({ seconds: 120, bot: driver(), seed: 3, config: { weather: 'rain' } });
 console.log('rain     :', fmt(wet));
 
-// 6) cars differ: kei out-accelerates the coupe over the first 3s after GO
+// 6) vehicles differ: the bike out-accelerates the car over the first 3s after GO
 const launch = (car) => run({ seconds: 3.6 + 3, bot: (i) => { i.boost = false; }, config: { car } }).S.speed;
-assert.ok(launch('kei') > launch('coupe'), 'kei launches harder than the coupe');
+assert.ok(launch('bike') > launch('wedge'), 'bike launches harder than the car');
 
 // 7) files: five shards each
 for (const r of [...runs, lazy, wet]) assert.equal(r.ev.casefile || 0, Math.min(10, Math.floor((r.ev.shard || 0) / 5)));

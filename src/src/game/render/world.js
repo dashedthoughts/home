@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { U, std, basic, buildingMaterial, glowMaterial, decalMaterial, skyMaterial, celestialMaterial, particleMaterial, underglowMaterial } from './materials.js';
 import { roadTextures, kerbTexture, gridTexture, billboardTexture, neonEnvironment } from './textures.js';
 import { buildPlayerCar, createTrafficKit } from './cars.js';
+import { loadConceptCar, buildConceptCar } from './vehicles.js';
 import { TIMES, WEATHER, LIVERIES, GLOWS, SLOGANS } from '../config.js';
 import { LANES, MAX, mulberry, SECTOR, TUNNEL } from '../sim.js';
 import { createPlayerTrails, createTrafficTrails, createSearchlights, signTextures, createViaduct, createTower, createTunnel, createCityCarpet } from './megacity.js';
@@ -342,14 +343,16 @@ export function createWorld(renderer, initialCfg) {
   let player = null;
   const glowPlane = new THREE.Mesh(new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2), underglowMaterial());
   glowPlane.position.y = 0.03;
-  function buildPlayer() {
+  let playerToken = 0, disposed = false, rendererRef = null;
+  function installPlayer(next) {
     if (player) {
       scene.remove(player.group);
-      player.group.traverse((o) => { if (o.isMesh && o !== glowPlane) { o.geometry.dispose(); } });
+      // GLB clones share geometry with the cached prototype: never dispose those
+      if (!player.gltf) player.group.traverse((o) => { if (o.isMesh && o !== glowPlane) o.geometry.dispose(); });
     }
-    const liv = LIVERIES[cfg.livery] || LIVERIES[0];
+    if (player) { next.lastSpeed = player.lastSpeed; next.slide = player.slide; next.group.position.copy(player.group.position); next.group.rotation.copy(player.group.rotation); }
+    player = next;
     const glow = (GLOWS[cfg.glow] || GLOWS[0]).color;
-    player = buildPlayerCar(cfg.car, liv, glow);
     glowPlane.scale.set(player.bike ? 2.2 : player.width + 2.4, 1, player.length + (player.bike ? 1.6 : 2.6));
     glowPlane.rotation.set(0, 0, 0);
     glowPlane.material.uniforms.uColor.value.set(glow || '#000000');
@@ -357,6 +360,22 @@ export function createWorld(renderer, initialCfg) {
     glowPlane.visible = !!glow;
     player.group.add(glowPlane);
     scene.add(player.group);
+  }
+  function buildPlayer() {
+    const liv = LIVERIES[cfg.livery] || LIVERIES[0];
+    const glow = (GLOWS[cfg.glow] || GLOWS[0]).color;
+    const token = ++playerToken;
+    installPlayer(buildPlayerCar(cfg.car, liv, glow));
+    // the car's full-detail model streams in; the procedural body stands in until it lands
+    if (cfg.car === 'wedge' && !disposed) {
+      loadConceptCar()
+        .then((proto) => {
+          if (token !== playerToken || disposed) return;
+          installPlayer(buildConceptCar(proto, liv, glow));
+          if (rendererRef) precompile(rendererRef); // light count is unchanged, so only the car's new programs compile
+        })
+        .catch(() => {}); // network or decode failure: keep the procedural car
+    }
   }
 
   // ---------------------------------------------------------------- particles
@@ -425,9 +444,27 @@ export function createWorld(renderer, initialCfg) {
   const searchlights = createSearchlights(far);
   const viaduct = createViaduct(scene, ROAD_LEN, NEAR);
   const tower = createTower(far);
-  createCityCarpet(far);
+  const carpet = createCityCarpet(far);
+  carpet.visible = false; // only for the lookout finale
   const tunnel = createTunnel(scene, TUNNEL);
   let lastReroute = -1;
+
+  // ---------------------------------------------------------------- quality
+  let quality = { buildings: 1, extras: true, cull: 380 };
+  function applyQuality(qq) {
+    quality = { ...quality, ...qq };
+    buildings.count = Math.round(B_COUNT * quality.buildings);
+    for (const sm of signMeshes) sm.count = buildings.count;
+    pools.visible = streaks.visible = quality.extras;
+    searchlights.visible = quality.extras && !!(TIMES[cfg.time] || TIMES.dusk).searchlights;
+  }
+  function precompile(r) {
+    rendererRef = r;
+    const hidden = [];
+    scene.traverse((o) => { if (!o.visible) { hidden.push(o); o.visible = true; } });
+    r.compile(scene, camera);
+    hidden.forEach((o) => (o.visible = false));
+  }
 
   // ---------------------------------------------------------------- config
   function applyConfig(next) {
@@ -473,7 +510,7 @@ export function createWorld(renderer, initialCfg) {
     tailStreaks.material.uniforms.uGain.value = 0.5 + Wt.wet * 1.0;
     pools.material.uniforms.uGain.value = 0.25 + Wt.wet * 0.2;
     rain.visible = !!Wt.rain;
-    searchlights.visible = !!T.searchlights;
+    searchlights.visible = !!T.searchlights && quality.extras;
     if (!prev._applied || prev.car !== cfg.car || prev.livery !== cfg.livery || prev.glow !== cfg.glow) buildPlayer();
     cfg._applied = true;
   }
@@ -554,6 +591,7 @@ export function createWorld(renderer, initialCfg) {
     const tunZ = S.z < lastJ + TUNNEL + 40 && lastJ > 0 ? lastJ : S.nextJunction;
     tunnel.position.set(0, 0, -(tunZ - S.z));
     tunnel.visible = !S.finale;
+    carpet.visible = !!S.finale;
     // inside the tunnel, rebuild the city ahead for the route just chosen (hidden by the walls)
     if (lastJ > 0 && S.z > lastJ + 25 && S.z < lastJ + TUNNEL && lastReroute !== lastJ) {
       lastReroute = lastJ;
@@ -596,7 +634,9 @@ export function createWorld(renderer, initialCfg) {
       const zw = -(c.z - S.z);
       if (zw < -720) continue;
       seen.add(c.id);
+      const vis = zw > -quality.cull;
       const v = getCar(c);
+      v.group.visible = vis;
       const prevX = v.group.position.x;
       v.group.position.set(c.x, 0, zw);
       const lat = dt > 0 ? (c.x - prevX) / dt : 0;
@@ -667,7 +707,7 @@ export function createWorld(renderer, initialCfg) {
       f.scale.set(1, 0.7 + Math.random() * 0.8 + (S.slip > 0 ? 0.6 : 0), 1);
     }
     pg.visible = !(S.invuln > 0 && Math.floor(S.time * 16) % 2 === 0 && sim.mode === 'play');
-    if (P.glowLight) P.glowLight.intensity = 26 * (0.85 + 0.15 * Math.sin(U.uTime.value * 9));
+    if (P.glowLight) P.glowLight.intensity = (P.glowBase || 26) * (0.85 + 0.15 * Math.sin(U.uTime.value * 9));
     trails.update(S, P.rearZ, P.tailHalfW, P.tailY, fx.view === 'showroom' ? 0 : 0.38);
     head.position.set(S.x, 0.75, -2.3);
     headTarget.position.set(S.x - S.vx * 0.3, 0, -26);
@@ -757,6 +797,7 @@ export function createWorld(renderer, initialCfg) {
   }
 
   function dispose() {
+    disposed = true;
     scene.traverse((o) => {
       if (o.geometry) o.geometry.dispose();
       if (o.material) (Array.isArray(o.material) ? o.material : [o.material]).forEach((mm) => { for (const k in mm) if (mm[k] && mm[k].isTexture) mm[k].dispose(); mm.dispose(); });
@@ -764,5 +805,5 @@ export function createWorld(renderer, initialCfg) {
     if (envRT) envRT.dispose();
   }
 
-  return { scene, camera, update, applyConfig, resize, burst, dispose, get config() { return cfg; } };
+  return { scene, camera, update, applyConfig, applyQuality, precompile, resize, burst, dispose, get config() { return cfg; } };
 }

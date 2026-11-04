@@ -696,7 +696,9 @@ h1, h2, h3 { font-family: var(--f-display); font-weight: 700; letter-spacing: 0.
 .seg__opts button:first-child { clip-path: polygon(6px 0, 100% 0, 100% 100%, 0 100%, 0 6px); }
 .seg__opts button:last-child { clip-path: polygon(0 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%); }
 
-.cars { display: grid; grid-template-columns: repeat(2, 1fr); gap: var(--sp-2); }
+.cars { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sp-2); }
+.garage__credit { margin: -4px 0 0; font: 400 0.62rem / 1.45 var(--f-mono); letter-spacing: 0.03em; color: var(--ink-muted); }
+.garage__credit a { color: var(--data); text-decoration: underline; text-underline-offset: 2px; }
 .carcard { display: grid; gap: 6px; padding: var(--sp-3); text-align: left; background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.08); clip-path: var(--shape-sm); transition: background var(--t-instant), border-color var(--t-instant); }
 .carcard:hover { border-color: rgba(255,255,255,.3); }
 .carcard.on { background: color-mix(in srgb, var(--signal) 14%, transparent); border-color: var(--signal); }
@@ -1058,5 +1060,5 @@ h1, h2, h3 { font-family: var(--f-display); font-weight: 700; letter-spacing: 0.
 </style>
 </head><body><div id="root"></div>
 <noscript><p style="padding:2rem;font-family:monospace;color:#f5f2ea;background:#0d0d0d">This page needs JavaScript. Contact: anur.dash@gmail.com</p></noscript>
-<script type="module" src="./assets/app-GWJ7JR5S.js"></script>
+<script type="module" src="./assets/app-OG4EX7JV.js"></script>
 </body></html>

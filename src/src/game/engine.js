@@ -5,7 +5,7 @@ import { createSim, MAX } from './sim.js';
 import { createWorld } from './render/world.js';
 import { createPost } from './render/post.js';
 import { createAudio } from './audio.js';
-import { DEFAULT_CONFIG, QUALITY } from './config.js';
+import { DEFAULT_CONFIG, QUALITY, resolveQuality } from './config.js';
 
 let audioSingleton = null;
 export const getAudio = () => (audioSingleton ||= createAudio());
@@ -42,16 +42,17 @@ export function createRedline(canvas, opts = {}) {
   const world = createWorld(renderer, cfg);
 
   // ---- resolution: device ratio capped by quality, then adapted to hold frame rate ----
-  const q = () => QUALITY[cfg.quality] || QUALITY.balanced;
+  let effective = resolveQuality(cfg.quality);
+  const q = () => QUALITY[effective];
   let scale = 1; // dynamic resolution multiplier (0.7..1), changed rarely and smoothly
   const pixelRatio = () => {
     const w = Math.max(1, canvas.clientWidth), h = Math.max(1, canvas.clientHeight);
-    const budget = lite ? 0.42e6 : q().pixels;
+    const budget = lite ? 0.4e6 : q().pixels;
     const fit = Math.sqrt(budget / (w * h));
     return Math.max(0.45, Math.min(window.devicePixelRatio || 1, fit)) * scale;
   };
   renderer.setPixelRatio(pixelRatio());
-  let post = createPost(renderer, world.scene, world.camera, { samples: lite ? 0 : q().samples, bloom: lite ? 0.35 : q().bloom });
+  let post = createPost(renderer, world.scene, world.camera, { samples: lite ? 0 : q().samples, bloom: lite ? 0.3 : q().bloom });
 
   function resize() {
     const w = Math.max(1, canvas.clientWidth), h = Math.max(1, canvas.clientHeight);
@@ -59,6 +60,16 @@ export function createRedline(canvas, opts = {}) {
     renderer.setSize(w, h, false);
     post.setSize(w, h);
     world.resize(w, h);
+  }
+  world.applyQuality(lite ? { ...QUALITY.low, extras: false } : q());
+  // compile every shader up front (including things that appear later: tunnel, finale), so nothing hitches mid-run
+  try { world.precompile(renderer); } catch { /* best effort */ }
+  function rebuildPost() {
+    post.dispose();
+    renderer.setPixelRatio(pixelRatio());
+    post = createPost(renderer, world.scene, world.camera, { samples: lite ? 0 : q().samples, bloom: lite ? 0.3 : q().bloom });
+    world.applyQuality(lite ? { ...QUALITY.low, extras: false } : q());
+    resize();
   }
   const ro = new ResizeObserver(resize);
   ro.observe(canvas);
@@ -153,6 +164,12 @@ export function createRedline(canvas, opts = {}) {
     if (frameAvg > 21) { slowFor += dtRaw; fastFor = 0; } else if (frameAvg < 15) { fastFor += dtRaw; slowFor = 0; } else { slowFor = fastFor = 0; }
     if (now - lastScaleChange > 5000) {
       if (slowFor > 2.5 && scale > 0.7) { scale = Math.max(0.7, scale - 0.1); slowFor = 0; lastScaleChange = now; resize(); }
+      else if (slowFor > 3 && cfg.quality === 'auto' && effective !== 'low' && !lite) {
+        // AUTO governor: still slow at the lowest resolution step, so drop to LOW for this device
+        effective = 'low'; scale = 1; slowFor = 0; lastScaleChange = now;
+        rebuildPost();
+        onEvent({ type: 'quality-auto', to: 'low' });
+      }
       else if (fastFor > 8 && scale < 1) { scale = Math.min(1, scale + 0.1); fastFor = 0; lastScaleChange = now; resize(); }
     }
 
@@ -248,10 +265,9 @@ export function createRedline(canvas, opts = {}) {
         if (sim.mode === 'play' && !sim.S.over) cfg.music ? audio.musicStart() : audio.musicStop();
       }
       if (prevQ !== cfg.quality) {
-        post.dispose();
-        renderer.setPixelRatio(pixelRatio());
-        post = createPost(renderer, world.scene, world.camera, { samples: lite ? 0 : q().samples, bloom: q().bloom });
-        resize();
+        effective = resolveQuality(cfg.quality);
+        scale = 1;
+        rebuildPost();
       }
       if (!running || paused) { world.update(sim, 0, fx); post.render(0); }
     },
@@ -269,6 +285,20 @@ export function createRedline(canvas, opts = {}) {
     },
     uiSound(name) { audio?.unlock(); audio?.sfx(name); },
     state: () => sim.S,
+    drawList: () => {
+      const rows = {};
+      world.scene.traverseVisible((o) => {
+        if (!(o.isMesh || o.isLine || o.isPoints)) return;
+        const k = (o.material?.type || '?') + (o.isInstancedMesh ? ' (instanced)' : '');
+        rows[k] = rows[k] || { n: 0, tris: 0 };
+        rows[k].n++;
+        const g = o.geometry, idx = g.index ? g.index.count : g.attributes.position.count;
+        rows[k].tris += Math.round((idx / 3) * (o.isInstancedMesh ? o.count : 1));
+      });
+      return rows;
+    },
+    quality: () => effective,
+    stats: () => ({ calls: renderer.info.render.calls, triangles: renderer.info.render.triangles, geometries: renderer.info.memory.geometries, textures: renderer.info.memory.textures, programs: renderer.info.programs?.length, pixelRatio: +renderer.getPixelRatio().toFixed(2), size: [canvas.width, canvas.height] }),
     get lens() { return post.lens; },
     get mode() { return sim.mode; },
     destroy() {

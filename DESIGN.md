@@ -21,7 +21,7 @@ Sources: Katie Dill's Power, Craft, Beauty framework (via the `intentional-desig
 7. **House rules.** No em-dashes in UI copy. Stats only from the CV.
 
 ## The world (REDLINE)
-Art direction: an 80s cel-anime megacity at 2am, inspired by the *look* of films like Akira (tail-light trails smeared behind the car, dense lit windows, blade signs, searchlights, an elevated expressway, a film grade with red halation). No assets, characters, vehicles, logos or named places from any film or game are used. All cars, signage and music are original; signage uses generic Japanese words (高速 expressway, 出口 exit, 未来 future…).
+Art direction: an 80s cel-anime megacity at 2am, inspired by the *look* of films like Akira (tail-light trails smeared behind the car, dense lit windows, blade signs, searchlights, an elevated expressway, a film grade with red halation). No assets, characters, vehicles, logos or named places from any film or game are used. Signage and music are original, the bike is an original procedural model, and the car is the openly licensed Car Concept glTF (CC BY 4.0, credited in the garage and README); signage uses generic Japanese words (高速 expressway, 出口 exit, 未来 future…).
 
 Default world: **Midnight Tokyo**. Others: Dusk, Neon Blue, Dawn; Clear or Rain.
 

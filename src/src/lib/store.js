@@ -1,4 +1,4 @@
-import { DEFAULT_CONFIG } from '../game/config.js';
+import { DEFAULT_CONFIG, CARS } from '../game/config.js';
 
 // Per-viewer conveniences only. Everything must still work if storage throws or is empty.
 const KEY = 'nc2:';
@@ -33,7 +33,15 @@ export const getMood = () => read('mood', 'street');
 export const setMood = (m) => write('mood', m);
 
 // REDLINE garage + settings
-export const getRaceConfig = () => ({ ...DEFAULT_CONFIG, ...read('redline', {}) });
-export const setRaceConfig = (c) => write('redline', c);
+// v2: graphics moved to AUTO by default; older saves keep their car and livery but get AUTO graphics once
+export const getRaceConfig = () => {
+  const saved = read('redline', {});
+  const c = { ...DEFAULT_CONFIG, ...saved };
+  if (saved.v !== 2) c.quality = 'auto';
+  if (!CARS[c.car]) c.car = 'wedge'; // the coupe and kei retired from the garage
+  c.v = 2;
+  return c;
+};
+export const setRaceConfig = (c) => write('redline', { ...c, v: 2 });
 export const getBestBy = (difficulty) => read('best:' + difficulty, 0);
 export const setBestBy = (difficulty, n) => write('best:' + difficulty, n);
