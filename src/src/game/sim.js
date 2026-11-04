@@ -348,6 +348,14 @@ export function createSim(opts = {}) {
       const dz = c.z - S.z;
       const dx = c.x - S.x;
       const hitW = car.bike ? 1.45 : CAR_W;
+      // never draw two vehicles inside each other: the autopilot follows, and after a hit traffic is shoved clear
+      if (Math.abs(dz) < CAR_LEN && Math.abs(dx) < hitW && (mode !== 'play' || S.invuln > 0 || !racing)) {
+        if (dz >= 0) { c.z = S.z + CAR_LEN + 0.15; c.speed = Math.max(c.speed, S.speed + 2); }
+        else { c.z = S.z - CAR_LEN - 0.15; c.speed = Math.min(c.speed, Math.max(0, S.speed - 2)); }
+        c.prevDz = c.z - S.z;
+        continue;
+      }
+      if (mode !== 'play' && dz > 0 && dz < 16 && Math.abs(dx) < hitW + 0.3) S.speed = Math.min(S.speed, Math.max(c.speed - 0.5, 0));
       if (racing && Math.abs(dz) < CAR_LEN && Math.abs(dx) < hitW) {
         if (mode === 'play' && S.invuln <= 0) {
           S.lives -= 1;

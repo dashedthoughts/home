@@ -16,6 +16,7 @@ const GameCanvas = forwardRef(function GameCanvas(
   const cbs = useRef({ onTick, onEvent, onReady });
   cbs.current = { onTick, onEvent, onReady };
   const [state, setState] = useState('loading'); // loading | live | still | failed
+  const [nonce, setNonce] = useState(0); // bumps to rebuild the engine after a GPU reset
 
   useImperativeHandle(ref, () => ({ get engine() { return engine.current; } }));
 
@@ -32,7 +33,14 @@ const GameCanvas = forwardRef(function GameCanvas(
           mode, view, lite, config,
           reducedMotion: reduced(),
           onTick: (s) => cbs.current.onTick?.(s),
-          onEvent: (e) => cbs.current.onEvent?.(e),
+          onEvent: (e) => {
+            if (e.type === 'context-lost' && !dead) {
+              dead = true;
+              setState('loading');
+              setTimeout(() => setNonce((n) => n + 1), 350);
+            }
+            cbs.current.onEvent?.(e);
+          },
         });
         engine.current = g;
         window.__redline = g; // debug/test handle
@@ -56,12 +64,12 @@ const GameCanvas = forwardRef(function GameCanvas(
     };
     // the engine is created once; later changes go through engine.configure / setMode
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [nonce]);
 
   return (
     <div className={`game-canvas game-canvas--${state} ${className}`}>
       <div className="game-poster" aria-hidden="true" />
-      {state !== 'failed' && state !== 'still' && <canvas ref={canvasRef} role="img" aria-label={label || 'REDLINE game'} />}
+      {state !== 'failed' && state !== 'still' && <canvas key={nonce} ref={canvasRef} role="img" aria-label={label || 'REDLINE game'} />}
       {state === 'failed' && <span className="game-note">WebGL2 is off in this browser, so the city is a still tonight.</span>}
     </div>
   );

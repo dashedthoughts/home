@@ -29,7 +29,10 @@ export function createRedline(canvas, opts = {}) {
   let cfg = { ...DEFAULT_CONFIG, ...(opts.config || {}) };
   if (reduced) cfg.effects = 'reduced';
 
-  const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance', alpha: false, stencil: false });
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance', alpha: false, stencil: false, depth: true });
+  // if the GPU driver resets, don't leave a dead black canvas: tell the shell so it can rebuild
+  let lost = false;
+  canvas.addEventListener('webglcontextlost', (e) => { e.preventDefault(); lost = true; onEvent({ type: 'context-lost' }); });
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 0.88;
   renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -40,10 +43,15 @@ export function createRedline(canvas, opts = {}) {
 
   // ---- resolution: device ratio capped by quality, then adapted to hold frame rate ----
   const q = () => QUALITY[cfg.quality] || QUALITY.balanced;
-  let scale = 1; // dynamic resolution multiplier (0.55..1)
-  const pixelRatio = () => Math.min(window.devicePixelRatio || 1, lite ? 0.85 : q().pixelRatio) * scale;
+  let scale = 1; // dynamic resolution multiplier (0.7..1), changed rarely and smoothly
+  const pixelRatio = () => {
+    const w = Math.max(1, canvas.clientWidth), h = Math.max(1, canvas.clientHeight);
+    const budget = lite ? 0.42e6 : q().pixels;
+    const fit = Math.sqrt(budget / (w * h));
+    return Math.max(0.45, Math.min(window.devicePixelRatio || 1, fit)) * scale;
+  };
   renderer.setPixelRatio(pixelRatio());
-  let post = createPost(renderer, world.scene, world.camera, { samples: lite ? 0 : 4, bloom: q().bloom });
+  let post = createPost(renderer, world.scene, world.camera, { samples: lite ? 0 : q().samples, bloom: lite ? 0.35 : q().bloom });
 
   function resize() {
     const w = Math.max(1, canvas.clientWidth), h = Math.max(1, canvas.clientHeight);
@@ -81,8 +89,9 @@ export function createRedline(canvas, opts = {}) {
   // ---- gamepad ----
   let padStart = false;
   function pollPad() {
-    const pads = navigator.getGamepads ? navigator.getGamepads() : [];
-    const p = pads && [...pads].find((x) => x && x.connected);
+    const pads = navigator.getGamepads ? navigator.getGamepads() : null;
+    let p = null;
+    if (pads) for (let k = 0; k < pads.length; k++) if (pads[k] && pads[k].connected) { p = pads[k]; break; }
     if (!p) return null;
     const ax = Math.abs(p.axes[0]) > 0.15 ? p.axes[0] : 0;
     const b = (i) => !!(p.buttons[i] && (p.buttons[i].pressed || p.buttons[i].value > 0.3));
@@ -94,7 +103,7 @@ export function createRedline(canvas, opts = {}) {
 
   // ---- loop ----
   let raf = 0, running = false, paused = false, last = 0, acc = 0, tick = 0;
-  let frameAvg = 16, slowFor = 0, fastFor = 0;
+  let frameAvg = 16, slowFor = 0, fastFor = 0, lastScaleChange = 0;
   const fx = { full: cfg.effects !== 'reduced', view: opts.view || 'chase' };
   const keyInput = { left: false, right: false, boost: false, brake: false };
 
@@ -103,7 +112,7 @@ export function createRedline(canvas, opts = {}) {
     raf = requestAnimationFrame(frame);
     const dtRaw = Math.min(0.1, (now - last) / 1000 || 0.016);
     last = now;
-    if (paused) return;
+    if (paused || lost) return;
 
     // input merge (keys + touch + pad); attract mode drives itself
     if (sim.mode === 'play') {
@@ -134,15 +143,18 @@ export function createRedline(canvas, opts = {}) {
     if (lite) L.uSpeed.value *= 0.55;
     L.uLines.value += (Math.max(0, linesT) - L.uLines.value) * Math.min(1, dt * 6);
     if (fx.view === 'showroom') L.uSpeed.value = 0;
-    post.render(dt);
+    // the hero backdrop only needs 30fps: render every other frame, keep the sim at full rate
+    if (!lite || tick % 2 === 0) post.render(dt);
 
     if (audio && sim.mode === 'play') audio.engine(S.count <= 0 && !S.over, sp, S.overclock);
 
     // dynamic resolution: keep ~60fps, recover when there's headroom
-    frameAvg += (dtRaw * 1000 - frameAvg) * 0.05;
-    if (frameAvg > 22) { slowFor += dtRaw; fastFor = 0; } else if (frameAvg < 14) { fastFor += dtRaw; slowFor = 0; }
-    if (slowFor > 1.5 && scale > 0.55) { scale = Math.max(0.55, scale - 0.15); slowFor = 0; resize(); }
-    if (fastFor > 4 && scale < 1) { scale = Math.min(1, scale + 0.1); fastFor = 0; resize(); }
+    frameAvg += (dtRaw * 1000 - frameAvg) * 0.03;
+    if (frameAvg > 21) { slowFor += dtRaw; fastFor = 0; } else if (frameAvg < 15) { fastFor += dtRaw; slowFor = 0; } else { slowFor = fastFor = 0; }
+    if (now - lastScaleChange > 5000) {
+      if (slowFor > 2.5 && scale > 0.7) { scale = Math.max(0.7, scale - 0.1); slowFor = 0; lastScaleChange = now; resize(); }
+      else if (fastFor > 8 && scale < 1) { scale = Math.min(1, scale + 0.1); fastFor = 0; lastScaleChange = now; resize(); }
+    }
 
     if (++tick % 6 === 0) emitTick();
   }
@@ -238,7 +250,7 @@ export function createRedline(canvas, opts = {}) {
       if (prevQ !== cfg.quality) {
         post.dispose();
         renderer.setPixelRatio(pixelRatio());
-        post = createPost(renderer, world.scene, world.camera, { samples: lite ? 0 : 4, bloom: q().bloom });
+        post = createPost(renderer, world.scene, world.camera, { samples: lite ? 0 : q().samples, bloom: q().bloom });
         resize();
       }
       if (!running || paused) { world.update(sim, 0, fx); post.render(0); }

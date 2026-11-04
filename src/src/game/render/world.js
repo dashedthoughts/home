@@ -353,6 +353,7 @@ export function createWorld(renderer, initialCfg) {
     glowPlane.scale.set(player.bike ? 2.2 : player.width + 2.4, 1, player.length + (player.bike ? 1.6 : 2.6));
     glowPlane.rotation.set(0, 0, 0);
     glowPlane.material.uniforms.uColor.value.set(glow || '#000000');
+    glowPlane.material.uniforms.uGain.value = player.bike ? 0.75 : 1.6;
     glowPlane.visible = !!glow;
     player.group.add(glowPlane);
     scene.add(player.group);
@@ -372,8 +373,9 @@ export function createWorld(renderer, initialCfg) {
   particles.frustumCulled = false;
   scene.add(particles);
   let pNext = 0;
+  const emitCol = new THREE.Color();
   function emit(n, at, opt) {
-    const col = new THREE.Color(opt.color);
+    const col = emitCol.set(opt.color);
     for (let k = 0; k < n; k++) {
       const i = pNext++ % P_MAX;
       pPos[i * 3] = at.x + (Math.random() - 0.5) * (opt.spread || 0.3);
@@ -486,6 +488,8 @@ export function createWorld(renderer, initialCfg) {
   // ---------------------------------------------------------------- per-frame
   const v3 = new THREE.Vector3();
   const look = new THREE.Vector3();
+  const Q0 = new THREE.Quaternion(), qRot = new THREE.Quaternion(), eul = new THREE.Euler();
+  const SHARD_S = new THREE.Vector3(1, 1.25, 1), GLOW_S = new THREE.Vector3(4.2, 4.2, 4.2), sv = new THREE.Vector3(), lookT = new THREE.Vector3();
   let lastZ = 0;
   let blinkClock = 0;
 
@@ -564,17 +568,17 @@ export function createWorld(renderer, initialCfg) {
 
     // shards
     let si = 0;
-    const m = tmpM, q = new THREE.Quaternion();
+    const m = tmpM;
     for (const s of S.shardList) {
       if (si >= SHARD_MAX) break;
       const zw = -(s.z - S.z);
       if (s.taken || zw < -700) continue;
       const bob = 1.1 + Math.sin(U.uTime.value * 3 + s.id) * 0.18;
-      q.setFromEuler(new THREE.Euler(0, U.uTime.value * 2.2 + s.id, 0));
-      m.compose(v3.set(s.x, bob, zw), q, new THREE.Vector3(1, 1.25, 1));
+      qRot.setFromEuler(eul.set(0, U.uTime.value * 2.2 + s.id, 0));
+      m.compose(v3.set(s.x, bob, zw), qRot, SHARD_S);
       shardMesh.setMatrixAt(si, m);
       shardCore.setMatrixAt(si, m);
-      m.compose(v3.set(s.x, bob, zw), new THREE.Quaternion(), new THREE.Vector3(4.2, 4.2, 4.2));
+      m.compose(v3.set(s.x, bob, zw), Q0, GLOW_S);
       shardGlow.setMatrixAt(si, m);
       si++;
     }
@@ -614,7 +618,7 @@ export function createWorld(renderer, initialCfg) {
         const rearZ = zw + v.len / 2;
         const w = c.kind === 'hauler' ? 1.05 : 0.65;
         for (const sx of [-1, 1]) {
-          m.compose(v3.set(c.x + sx * w, 0.025, rearZ + 5.5), new THREE.Quaternion(), new THREE.Vector3(0.7, 1, c.brake ? 13 : 10));
+          m.compose(v3.set(c.x + sx * w, 0.025, rearZ + 5.5), Q0, sv.set(0.7, 1, c.brake ? 13 : 10));
           tailStreaks.setMatrixAt(ti * 2 + (sx > 0 ? 1 : 0), m);
         }
         ti++;
@@ -653,7 +657,9 @@ export function createWorld(renderer, initialCfg) {
     P.lastSpeed = S.speed;
     const spin = (S.speed * dt) / P.wheelR;
     P.wheels.forEach((w, i) => {
-      w.rotation.x -= spin;
+      const sp = w.userData.spin;
+      if (sp) sp.rotation.x -= spin * w.userData.sign;
+      else w.rotation.x -= spin;
       if (P.bike ? i === 0 : i < 2) w.rotation.y = -S.steer * (P.bike ? 0.12 : 0.32);
     });
     for (const f of P.flames) {
@@ -690,12 +696,12 @@ export function createWorld(renderer, initialCfg) {
     if (fx.view === 'showroom') {
       // slow orbit around the parked car
       const a = U.uTime.value * 0.16 + 0.6;
-      const r = (6.4 + Math.sin(U.uTime.value * 0.1) * 0.6) * (camera.aspect < 1 ? 1.9 : 1);
+      const r = (6.4 + Math.sin(U.uTime.value * 0.1) * 0.6) * (camera.aspect < 1 ? 1.9 : 1) * (player.bike ? 0.6 : 1);
       fov += (42 - fov) * Math.min(1, dt * 2);
       camera.fov = fov;
       camera.updateProjectionMatrix();
-      camera.position.set(S.x + Math.sin(a) * r, 1.35 + Math.sin(U.uTime.value * 0.13) * 0.25, Math.cos(a) * r);
-      camera.lookAt(S.x, 0.55, 0);
+      camera.position.set(S.x + Math.sin(a) * r, (player.bike ? 1.0 : 1.35) + Math.sin(U.uTime.value * 0.13) * 0.2, Math.cos(a) * r);
+      camera.lookAt(S.x, player.bike ? 0.7 : 0.55, 0);
       camPos.copy(camera.position);
       camRoll = 0;
       return;
@@ -709,7 +715,7 @@ export function createWorld(renderer, initialCfg) {
       camera.fov = fov;
       camera.updateProjectionMatrix();
       camera.position.set(S.x * (1 - e), 2.1 + e * 165, 6.2 + e * 60);
-      const lookAt = new THREE.Vector3(S.x * 0.9, 0.95, -16).lerp(tw.clone().setY(tw.y + 150), e);
+      const lookAt = lookT.set(S.x * 0.9, 0.95, -16).lerp(tw.setY(tw.y + 150), e);
       camera.lookAt(lookAt);
       camPos.copy(camera.position);
       return;

@@ -9,7 +9,6 @@ const HDR = (c, k) => new THREE.Color(c).multiplyScalar(k);
 // A ribbon per tail light, built from the car's recent lateral history, so every swerve is drawn in light.
 export function createPlayerTrails(scene) {
   const N = 56;
-  const hist = []; // { x, z, t }
   const ribbons = [-1, 1].map(() => {
     const pos = new Float32Array(N * 2 * 3);
     const fade = new Float32Array(N * 2);
@@ -33,25 +32,28 @@ export function createPlayerTrails(scene) {
     return { m, pos, fade, g };
   });
 
+  // ring buffer of recent positions (no per-frame allocation)
+  const hx = new Float32Array(N), hz = new Float64Array(N), ht = new Float64Array(N);
+  let head = 0, count = 0;
   return {
     update(S, rearZ, halfW, y, life = 0.38) {
-      hist.unshift({ x: S.x, z: S.z, t: S.time });
-      while (hist.length > N) hist.pop();
-      const w = 0.045;
-      ribbons.forEach((r, ri) => {
-        const side = ri ? 1 : -1;
+      head = (head + N - 1) % N;
+      hx[head] = S.x; hz[head] = S.z; ht[head] = S.time;
+      count = Math.min(N, count + 1);
+      const w = 0.045, on = S.speed > 8 ? 1 : 0;
+      for (let ri = 0; ri < 2; ri++) {
+        const r = ribbons[ri], side = ri ? 1 : -1, pos = r.pos, fade = r.fade;
         for (let i = 0; i < N; i++) {
-          const h = hist[Math.min(i, hist.length - 1)];
-          const age = S.time - h.t;
-          const f = Math.max(0, 1 - age / life) * (S.speed > 8 ? 1 : 0);
-          const x = h.x + side * halfW;
-          const z = rearZ + (S.z - h.z);
-          r.pos.set([x, y + w, z, x, y - w, z], i * 6);
-          r.fade[i * 2] = r.fade[i * 2 + 1] = f;
+          const k = (head + Math.min(i, count - 1)) % N;
+          const f = Math.max(0, 1 - (S.time - ht[k]) / life) * on;
+          const x = hx[k] + side * halfW, z = rearZ + (S.z - hz[k]), o = i * 6;
+          pos[o] = x; pos[o + 1] = y + w; pos[o + 2] = z;
+          pos[o + 3] = x; pos[o + 4] = y - w; pos[o + 5] = z;
+          fade[i * 2] = fade[i * 2 + 1] = f;
         }
         r.g.attributes.position.needsUpdate = true;
         r.g.attributes.aFade.needsUpdate = true;
-      });
+      }
     },
     setColor(c) { ribbons.forEach((r) => r.m.material.uniforms.uColor.value.copy(c)); },
   };

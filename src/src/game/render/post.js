@@ -40,16 +40,19 @@ const LensShader = {
       float blur = sp * sp * 0.05 * smoothstep(0.35, 1.0, r);
       float ca = 0.0015 + uSpeed * 0.0035 + uGlitch * 0.012;
       vec3 col = vec3(0.0);
-      const int N = 8;
-      for (int i = 0; i < N; i++) {
-        float k = float(i) / float(N - 1);
-        vec2 o = c * (1.0 - blur * k);
-        vec2 dir = normalize(c + 1e-5) * ca * r;
-        col.r += texture2D(tDiffuse, vec2(0.5, 0.56) + o + dir).r;
-        col.g += texture2D(tDiffuse, vec2(0.5, 0.56) + o).g;
-        col.b += texture2D(tDiffuse, vec2(0.5, 0.56) + o - dir).b;
+      vec2 dir = normalize(c + 1e-5) * ca * r;
+      if (blur < 0.0005) {
+        col = vec3(texture2D(tDiffuse, uv + dir).r, texture2D(tDiffuse, uv).g, texture2D(tDiffuse, uv - dir).b);
+      } else {
+        const int N = 5;
+        for (int i = 0; i < N; i++) {
+          vec2 o = c * (1.0 - blur * float(i) / float(N - 1));
+          col.r += texture2D(tDiffuse, vec2(0.5, 0.56) + o + dir).r;
+          col.g += texture2D(tDiffuse, vec2(0.5, 0.56) + o).g;
+          col.b += texture2D(tDiffuse, vec2(0.5, 0.56) + o - dir).b;
+        }
+        col /= float(N);
       }
-      col /= float(N);
       // cel-anime speed lines: thin radial streaks that flicker at the frame edges
       if (uLines > 0.0) {
         float ang = atan(c.y, c.x * uAspect);

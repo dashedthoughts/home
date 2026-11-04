@@ -91,6 +91,12 @@ export default function Play() {
 
   const onEvent = useCallback(
     (e) => {
+      if (e.type === 'context-lost') {
+        setPhase('title');
+        setTab('run');
+        pop('GRAPHICS RESET', 'data', 'THE CITY IS REBUILDING. JACK IN AGAIN.');
+        return;
+      }
       if (e.type === 'pad-start') {
         if (phaseRef.current === 'title' || phaseRef.current === 'over') start();
         else togglePause();

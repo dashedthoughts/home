@@ -1,10 +1,11 @@
 // Vehicles. All original designs, modelled from extruded side profiles + primitives.
 // Convention: origin on the ground at the car's centre, nose pointing −z (the direction of travel).
 import * as THREE from 'three';
-import { mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { mergeVertices, mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import { std, basic } from './materials.js';
 import { plateTexture } from './textures.js';
+import { buildVantaGT, buildTsubame } from './vehicles.js';
 
 const HDR = (hex, k) => new THREE.Color(hex).multiplyScalar(k);
 
@@ -337,7 +338,8 @@ function buildBike(livery, glowHex) {
 }
 
 export function buildPlayerCar(kind, livery, glowHex) {
-  if (kind === 'bike') return buildBike(livery, glowHex);
+  if (kind === 'bike') return buildTsubame(livery, glowHex);
+  if (kind === 'wedge') return buildVantaGT(livery, glowHex);
   const C = CHASSIS[kind] || CHASSIS.wedge;
   const g = new THREE.Group();
   const M = {
@@ -454,38 +456,77 @@ export function createTrafficKit() {
   };
   let n = 0;
 
+  const plateMat = basic({ color: HDR('#d8d4c8', 0.9) });
+  const merge = (list) => {
+    if (!list.length) return null;
+    const out = list.map(([geo, x, y, z, rx = 0]) => {
+      let g = geo.index ? geo.clone() : geo.clone();
+      if (g.attributes.uv) g.deleteAttribute('uv');
+      if (!g.index) g = mergeVertices(g);
+      g.applyMatrix4(new THREE.Matrix4().compose(new THREE.Vector3(x, y, z), new THREE.Quaternion().setFromEuler(new THREE.Euler(rx, 0, 0)), new THREE.Vector3(1, 1, 1)));
+      return g;
+    });
+    return mergeGeometries(out, false);
+  };
+  const cache = {};
+  // static parts per kind, merged per material once and shared by every car of that kind
+  function parts(kind) {
+    if (cache[kind]) return cache[kind];
+    const P = { paint: [], glass: [], dark: [], plate: [], tail: [], amber: [] };
+    if (kind === 'hauler') {
+      P.paint.push([G.cab, 0, 1.25, -3.3]);
+      P.glass.push([new THREE.BoxGeometry(2.0, 0.7, 0.05), 0, 1.75, -4.42]);
+      P.dark.push([new THREE.BoxGeometry(2.5, 0.25, 0.2), 0, 0.4, 4.22]);
+      P.plate.push([new THREE.PlaneGeometry(0.42, 0.11), 0, 0.42, 4.33]);
+      for (const sx of [-1, 1]) { P.tail.push([G.vlamp, sx * 1.05, 0.62, 4.22]); P.amber.push([G.blink, sx * 1.05, 0.88, 4.22]); }
+      for (let i = -2; i <= 2; i++) P.amber.push([G.tiny, i * 0.45, 3.25, 4.22]);
+      for (const z of [-3.3, 1.6, 3.0]) for (const sx of [-1, 1]) P.dark.push([G.tire, sx * 1.05, 0.34, z]);
+    } else {
+      const hatch = kind === 'hatch';
+      const rearZ = hatch ? 2.02 : 2.27;
+      P.paint.push([hatch ? G.hatchBody : G.sedanBody, 0, hatch ? 0.58 : 0.54, 0]);
+      P.glass.push([hatch ? G.hatchCabin : G.sedanCabin, 0, hatch ? 1.12 : 1.04, hatch ? 0.55 : 0.25]);
+      P.paint.push([new THREE.BoxGeometry(hatch ? 1.5 : 1.42, 0.06, hatch ? 1.9 : 1.6), 0, hatch ? 1.43 : 1.32, hatch ? 0.5 : 0.2]); // roof
+      P.dark.push([new THREE.BoxGeometry(1.78, 0.16, 0.12), 0, 0.36, rearZ + 0.02]); // bumper
+      P.dark.push([new THREE.BoxGeometry(1.2, 0.05, 0.05), 0, 0.92, rearZ + 0.01]); // boot lip
+      P.plate.push([new THREE.PlaneGeometry(0.4, 0.1), 0, 0.5, rearZ + 0.03]);
+      for (const sx of [-1, 1]) {
+        P.dark.push([new THREE.BoxGeometry(0.14, 0.08, 0.1), sx * 1.0, 0.98, hatch ? -0.6 : -0.75]); // mirrors
+        P.amber.push([G.blink, sx * (hatch ? 0.76 : 0.88), hatch ? 0.62 : 0.66, rearZ]);
+        if (hatch) P.tail.push([G.vlamp, sx * 0.76, 0.86, rearZ]);
+        else { P.tail.push([G.lamp, sx * 0.6, 0.68, rearZ]); P.tail.push([new THREE.BoxGeometry(0.18, 0.03, 0.04), sx * 0.22, 0.68, rearZ]); }
+      }
+      for (const z of hatch ? [-1.3, 1.25] : [-1.45, 1.45]) for (const sx of [-1, 1]) P.dark.push([G.tire, sx * 0.82, 0.34, z]);
+    }
+    const out = {};
+    for (const [k, list] of Object.entries(P)) if (list.length && k !== 'amber') out[k] = merge(list);
+    out.blinkL = merge(P.amber.filter((a) => a[1] < 0 && Math.abs(a[1]) > 0.5 && a[2] < 1.5));
+    out.blinkR = merge(P.amber.filter((a) => a[1] > 0 && Math.abs(a[1]) > 0.5 && a[2] < 1.5));
+    const markers = P.amber.filter((a) => a[2] > 3);
+    if (markers.length) out.markers = merge(markers);
+    cache[kind] = out;
+    return out;
+  }
+
   function make(kind, paintIdx) {
     const g = new THREE.Group();
     const tail = basic({ color: HDR('#ff1a3c', 3) });
-    const blinkers = [];
-    const add = (geo, mat, x, y, z) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); g.add(m); return m; };
-    const paint = paints[paintIdx % paints.length];
+    const P = parts(kind);
+    const paintMat = kind === 'hauler' ? paints[paintIdx % paints.length] : paints[paintIdx % paints.length];
+    g.add(new THREE.Mesh(P.paint, paintMat));
+    g.add(new THREE.Mesh(P.glass, glass));
+    g.add(new THREE.Mesh(P.dark, dark));
+    g.add(new THREE.Mesh(P.plate, plateMat));
+    g.add(new THREE.Mesh(P.tail, tail));
     if (kind === 'hauler') {
-      add(G.cab, paint, 0, 1.25, -3.3);
-      add(G.box, cargo, 0, 1.85, 0.9);
+      const box = new THREE.Mesh(G.box, cargo); box.position.set(0, 1.85, 0.9); g.add(box);
       const sc = stripeCols[n++ % stripeCols.length];
-      add(G.strip, sc, -1.26, 1.2, 0.9);
-      add(G.strip, sc, 1.26, 1.2, 0.9);
-      add(G.rstrip, sc, 0, 1.2, 4.21);
-      for (const sx of [-1, 1]) {
-        add(G.vlamp, tail, sx * 1.05, 0.62, 4.22);
-        blinkers.push(add(G.blink, amber, sx * 1.05, 0.88, 4.22));
-      }
-      for (let i = -2; i <= 2; i++) add(G.tiny, marker, i * 0.45, 3.25, 4.22);
-      for (const z of [-3.3, 1.6, 3.0]) for (const sx of [-1, 1]) add(G.tire, dark, sx * 1.05, 0.34, z);
-      return { group: g, tail, blinkers, len: 8.8 };
+      for (const [geo, x, y, z] of [[G.strip, -1.26, 1.2, 0.9], [G.strip, 1.26, 1.2, 0.9], [G.rstrip, 0, 1.2, 4.21]]) { const m = new THREE.Mesh(geo, sc); m.position.set(x, y, z); g.add(m); }
+      if (P.markers) g.add(new THREE.Mesh(P.markers, marker));
     }
-    const hatch = kind === 'hatch';
-    add(hatch ? G.hatchBody : G.sedanBody, paint, 0, hatch ? 0.58 : 0.54, 0);
-    add(hatch ? G.hatchCabin : G.sedanCabin, glass, 0, hatch ? 1.12 : 1.04, hatch ? 0.55 : 0.25);
-    const rearZ = hatch ? 2.02 : 2.27;
-    for (const sx of [-1, 1]) {
-      if (hatch) add(G.vlamp, tail, sx * 0.76, 0.86, rearZ);
-      else add(G.lamp, tail, sx * 0.6, 0.66, rearZ);
-      blinkers.push(add(G.blink, amber, sx * (hatch ? 0.76 : 0.88), hatch ? 0.62 : 0.66, rearZ));
-    }
-    for (const z of hatch ? [-1.3, 1.25] : [-1.45, 1.45]) for (const sx of [-1, 1]) add(G.tire, dark, sx * 0.82, 0.34, z);
-    return { group: g, tail, blinkers, len: hatch ? 4.0 : 4.5 };
+    const bl = new THREE.Mesh(P.blinkL || new THREE.BufferGeometry(), amber), br = new THREE.Mesh(P.blinkR || new THREE.BufferGeometry(), amber);
+    g.add(bl, br);
+    return { group: g, tail, blinkers: [bl, br], len: kind === 'hauler' ? 8.8 : kind === 'hatch' ? 4.0 : 4.5 };
   }
 
   return { make };

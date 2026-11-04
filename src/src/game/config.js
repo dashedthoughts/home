@@ -88,10 +88,11 @@ export const DIFFICULTY = {
   redline: { name: 'REDLINE', density: 1.45, trafficSpeed: 1.12, lives: 2, blurb: 'Rush hour. Two hits.' },
 };
 
+// Render budgets are in pixels, not device ratios: a 4K laptop and a phone both get a frame they can hold at 60.
 export const QUALITY = {
-  low: { name: 'LOW', pixelRatio: 0.75, bloom: 0.5, buildings: 90 },
-  balanced: { name: 'BALANCED', pixelRatio: 1, bloom: 0.5, buildings: 140 },
-  high: { name: 'HIGH', pixelRatio: 1.6, bloom: 0.5, buildings: 180 },
+  low: { name: 'LOW', pixels: 0.55e6, samples: 0, bloom: 0.4 },
+  balanced: { name: 'BALANCED', pixels: 0.95e6, samples: 0, bloom: 0.45 },
+  high: { name: 'HIGH', pixels: 2.1e6, samples: 4, bloom: 0.5 },
 };
 
 export const DEFAULT_CONFIG = {

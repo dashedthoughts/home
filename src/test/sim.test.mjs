@@ -130,4 +130,18 @@ assert.equal(expr.S.routes.at(-1).route, 'expressway', 'left lanes at the sign â
   assert.ok(ev.includes('finale') && ev.filter((x) => x === 'complete').length === 1, 'finale then exactly one complete');
   assert.ok(sim.S.done && sim.S.speed <= 0.5 && !sim.S.over, 'car comes to rest at the lookout, not a game over');
 }
+// 11) nothing ever overlaps: attract mode and the invulnerability window after a hit
+for (const [mode, seed] of [['attract', 4], ['play', 6]]) {
+  const sim = createSim({ mode, seed });
+  let overlaps = 0, hitsSeen = 0;
+  for (let t = 0; t < 150; t += 1 / 60) {
+    if (mode === 'play') { sim.input.boost = true; sim.input.axis = (0 - sim.S.x) * 0.4; sim.S.lives = 99; }
+    sim.step(1 / 60);
+    if (sim.S.invuln > 0) hitsSeen++;
+    const S = sim.S, w = S.car.bike ? 1.45 : 1.95;
+    if (S.count <= 0) for (const c of S.cars) if (Math.abs(c.z - S.z) < 4.2 && Math.abs(c.x - S.x) < w - 0.05 && !(mode === 'play' && S.invuln > 1.5)) overlaps++;
+  }
+  console.log(`no-overlap ${mode}: overlapping frames=${overlaps}${mode === 'play' ? `, frames invulnerable=${hitsSeen}` : ''}`);
+  assert.equal(overlaps, 0, `${mode}: vehicles never sit inside each other`);
+}
 console.log('ALL SIM CHECKS PASSED');
