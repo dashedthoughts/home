@@ -490,6 +490,7 @@ export default function Play() {
             <Toggle label="Steering assist" checked={cfg.assist} onChange={(v) => update({ assist: v })} />
             <label className="slider"><span className="seg__label">DIM</span><input type="range" min="0" max="0.7" step="0.05" value={cfg.dim || 0} onChange={(e) => update({ dim: +e.target.value })} aria-label="Dim the screen" /></label>
           </div>
+          <Seg label="BACKDROP" value={cfg.time} options={Object.entries(TIMES).map(([k, t]) => [k, t.name])} onChange={(v) => update({ time: v })} />
           <div className="btn-row">
             <button type="button" className="btn btn--signal" onClick={togglePause} autoFocus>
               RESUME <span className="btn__k">ESC</span>

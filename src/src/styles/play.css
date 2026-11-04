@@ -320,3 +320,4 @@
 .timepick .tp-outrun::after { content: ''; position: absolute; inset: 0; background: linear-gradient(110deg, transparent 35%, rgba(255,255,255,.35) 50%, transparent 65%); transform: translateX(-100%); animation: tp-sheen 3.2s ease-in-out infinite; }
 @keyframes tp-sheen { 60%, 100% { transform: translateX(100%); } }
 @media (prefers-reduced-motion: reduce) { .timepick .tp-outrun::after { animation: none; } }
+.panel--pause .seg { margin: var(--sp-3) 0 var(--sp-4); }
