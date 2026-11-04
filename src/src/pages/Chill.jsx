@@ -263,7 +263,7 @@ function Music() {
       <form className="ch-pick" onSubmit={pick}>
         <input value={draft} onChange={(e) => setDraft(e.target.value)} placeholder="Paste a YouTube video, playlist or Mix" aria-label="YouTube link" />
         <button type="submit" className="ch-btn">LOAD</button>
-        {song.list !== DEFAULT_SONG.list && <button type="button" className="ch-btn" onClick={() => { setSong(DEFAULT_SONG); save('song2', DEFAULT_SONG); }}>NIGHTCALL</button>}
+        {song.list !== DEFAULT_SONG.list && <button type="button" className="ch-btn" title="Back to Nightcall" aria-label="Back to Nightcall" onClick={() => { setSong(DEFAULT_SONG); save('song2', DEFAULT_SONG); }}>↺</button>}
       </form>
     </section>
   );
