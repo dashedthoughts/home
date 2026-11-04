@@ -296,6 +296,25 @@ export default function Chill() {
   const [dim, setDim] = useState(load('chillDim', 0.2));
   const [vibe, setVibe] = useState(false);
   const [shown, setShown] = useState(() => load('chillShown', { timer: true, search: true, music: true, notes: true }));
+  // symmetry: the right column ends where the left column's last panel ends
+  const leftRef = useRef(null);
+  const [rightEnd, setRightEnd] = useState(0);
+  useEffect(() => {
+    const el = leftRef.current;
+    if (!el || !('ResizeObserver' in window)) return undefined;
+    const fit = () => {
+      const kids = [...el.children].filter((k) => !k.hidden && k.offsetHeight);
+      if (!kids.length || innerWidth <= 1100) { setRightEnd(0); return; }
+      const bottom = Math.max(...kids.map((k) => k.getBoundingClientRect().bottom));
+      const right = el.parentElement.querySelector('.ch-side--r');
+      setRightEnd(Math.max(0, bottom - (right ? right.getBoundingClientRect().top : 0)));
+    };
+    const ro = new ResizeObserver(fit);
+    ro.observe(el); [...el.children].forEach((k) => ro.observe(k));
+    addEventListener('resize', fit);
+    fit();
+    return () => { ro.disconnect(); removeEventListener('resize', fit); };
+  }, [shown]);
   const toggle = (k) => setShown((x) => { const n = { ...x, [k]: !x[k] }; save('chillShown', n); return n; });
   useEffect(() => {
     const k = (e) => { if (e.key.toLowerCase() === 'h' && !(e.target instanceof HTMLInputElement) && !(e.target instanceof HTMLTextAreaElement)) setVibe((v) => !v); };
@@ -335,7 +354,7 @@ export default function Chill() {
       </div>
 
       {/* tools live on the sides; each one toggles from the dock. Music stays mounted so it keeps playing */}
-      <aside className="ch-side ch-side--l">
+      <aside className="ch-side ch-side--l" ref={leftRef}>
         <div hidden={!shown.timer}><Clockwork /></div>
         <div hidden={!shown.search}>
           <form className="ch-card ch-search" action="https://www.google.com/search" method="get" target="_blank">
@@ -345,9 +364,9 @@ export default function Chill() {
         </div>
         <StreetLine />
       </aside>
-      <aside className="ch-side ch-side--r">
+      <aside className="ch-side ch-side--r" style={rightEnd ? { bottom: 'auto', height: rightEnd } : undefined}>
         <div className={shown.music ? '' : 'ch-keep'}><Music /></div>
-        <div hidden={!shown.notes}><Notes /></div>
+        <div hidden={!shown.notes} className="ch-notes-wrap"><Notes /></div>
       </aside>
 
       {vibe && <button type="button" className="ch-unvibe" onClick={() => setVibe(false)} aria-label="Show the controls">☾ SHOW <kbd>H</kbd></button>}
