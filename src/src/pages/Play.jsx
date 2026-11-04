@@ -365,7 +365,7 @@ export default function Play() {
       )}
 
       {radioOn && radioOf(cfg) && (radioOf(cfg).v || radioOf(cfg).list) && (
-        <div className="radio">
+        <div className={`radio ${phase === 'title' ? 'radio--away' : ''}`}>
           <span>♪ {radioOf(cfg).name}</span>
           <iframe src={ytSrc(radioOf(cfg))} title={radioOf(cfg).name} allow="autoplay; encrypted-media" />
         </div>
@@ -440,7 +440,6 @@ export default function Play() {
               <Seg label="TRAFFIC" value={cfg.difficulty} options={Object.entries(DIFFICULTY).map(([k, d]) => [k, d.name])} onChange={(v) => update({ difficulty: v })} />
               <p className="garage__note">{DIFFICULTY[cfg.difficulty].blurb} Best: <b>{best.toLocaleString('en-IN')}</b></p>
               {!cfg.zen && <Seg label="POLICE" value={cfg.police === false ? 'off' : 'on'} options={[['on', 'ON'], ['off', 'OFF']]} onChange={(v) => update({ police: v === 'on' })} />}
-              <Seg label="TIME" value={cfg.time} options={Object.entries(TIMES).map(([k, t]) => [k, t.name])} onChange={(v) => update({ time: v })} />
               <Seg label="WEATHER" value={cfg.weather} options={Object.entries(WEATHER).map(([k, t]) => [k, t.name])} onChange={(v) => update({ weather: v })} />
               <Seg label="GRAPHICS" value={cfg.quality} options={Object.entries(QUALITY).map(([k, t]) => [k, t.name])} onChange={(v) => update({ quality: v })} />
               <Toggle label="Steering assist" checked={cfg.assist} onChange={(v) => update({ assist: v })} />
@@ -461,11 +460,17 @@ export default function Play() {
       )}
 
       {phase === 'title' && (
+        <>
+        <nav className="timepick" aria-label="Time of day">
+          <span className="hud-label">TIME</span>
+          {Object.entries(TIMES).map(([k, t]) => <button key={k} type="button" aria-pressed={cfg.time === k} className={cfg.time === k ? 'on' : ''} onClick={() => update({ time: k })}>{t.name}</button>)}
+        </nav>
         <aside className="showroom-tag" aria-hidden="true">
           <span className="hud-label">IN THE BAY</span>
           <b>{car.name}</b>
           <span>{LIVERIES[cfg.livery].name} · {GLOWS[cfg.glow].name} GLOW · {TIMES[cfg.time].name} · {WEATHER[cfg.weather].name}</span>
         </aside>
+        </>
       )}
 
       {/* ------------------------------------------------ PAUSE */}

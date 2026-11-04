@@ -291,3 +291,19 @@
 .bustbar { position: relative; display: inline-block; width: 110px; padding: 3px 6px; font: 700 .6rem / 1 var(--f-mono); letter-spacing: .16em; color: #fff; font-style: normal; background: rgba(255,51,85,.2); overflow: hidden; }
 .bustbar i { position: absolute; inset: 0 auto 0 0; background: #ff3355; z-index: -1; }
 .bustbar { isolation: isolate; }
+
+/* menu: radio plays off-screen, time of day on the right, a compact "more" drawer */
+.radio--away { left: -9999px !important; right: auto !important; }
+.timepick { position: absolute; right: var(--sp-6); top: 50%; transform: translateY(-50%); display: grid; gap: 4px; justify-items: end; z-index: 2; }
+.timepick button { font: 700 .66rem / 1 var(--f-mono); letter-spacing: .14em; color: var(--ink-muted); background: rgba(10,8,16,.55); border: 1px solid rgba(255,255,255,.1); padding: 8px 12px; cursor: pointer; text-transform: uppercase; }
+.timepick button.on { color: var(--on-signal); background: var(--signal); border-color: var(--signal); }
+.more[open] { gap: 10px; }
+.more .seg__label, .more .slider .seg__label { font-size: .6rem; }
+.more .seg > div button, .more .seg button { padding: 7px 8px !important; font-size: .68rem !important; min-height: 0 !important; }
+.more .toggle { grid-template-columns: 34px 1fr; gap: 8px; }
+.more .toggle__ui { width: 34px; height: 18px; } .more .toggle__ui::after { width: 12px; height: 12px; }
+.more .toggle input:checked + .toggle__ui::after { transform: translateX(16px); }
+.more .toggle__text { font-size: .8rem; }
+.more .toggle__text small { display: none; }
+@media (max-width: 760px) { .timepick { top: auto; bottom: 120px; right: var(--sp-3); transform: none; } .timepick button { padding: 6px 8px; } }
+.more .seg { gap: 4px; margin-top: 4px; }

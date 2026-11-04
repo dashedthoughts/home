@@ -382,7 +382,22 @@ export function createWorld(renderer, initialCfg) {
   function buildPlayer() {
     buildRival();
     if (!ghostShell) {
-      ghostShell = new THREE.Mesh(new THREE.SphereGeometry(1, 24, 16), new THREE.MeshBasicMaterial({ color: new THREE.Color('#5ff6ff').multiplyScalar(2), transparent: true, opacity: 0.3, depthWrite: false, blending: THREE.AdditiveBlending }));
+      // energy shield: clear in the middle, bright fresnel rim, faint hex cells and a ripple sweeping over it
+      ghostShell = new THREE.Mesh(new THREE.SphereGeometry(1, 32, 24), new THREE.ShaderMaterial({
+        uniforms: { uTime: U.uTime, opacity: { value: 0.3 }, uColor: { value: new THREE.Color('#5ff6ff') } },
+        transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide,
+        vertexShader: `varying vec3 vN; varying vec3 vV; varying vec3 vP;
+          void main(){ vP = position; vec4 mv = modelViewMatrix * vec4(position, 1.0); vN = normalize(normalMatrix * normal); vV = normalize(-mv.xyz); gl_Position = projectionMatrix * mv; }`,
+        fragmentShader: `uniform float uTime, opacity; uniform vec3 uColor; varying vec3 vN; varying vec3 vV; varying vec3 vP;
+          float hex(vec2 p){ p.x *= 1.1547; p.y += mod(floor(p.x), 2.0) * 0.5; p = abs(fract(p) - 0.5); return abs(max(p.x * 1.5 + p.y, p.y * 2.0) - 1.0); }
+          void main(){
+            float f = pow(1.0 - abs(dot(normalize(vN), normalize(vV))), 2.6);
+            float cells = smoothstep(0.08, 0.0, hex(vec2(atan(vP.z, vP.x) * 3.0, vP.y * 5.0)));
+            float ripple = smoothstep(0.12, 0.0, abs(fract(vP.y * 0.5 - uTime * 0.6) - 0.5));
+            float a = f * 1.4 + cells * 0.18 * (0.4 + f) + ripple * 0.12;
+            gl_FragColor = vec4(uColor * 2.2 * a, a) * opacity * 3.0;
+          }`,
+      }));
       ghostShell.visible = false;
       // the whip: a gloved grip and a tapering lash that cracks toward the rival
       punch = new THREE.Group();
@@ -737,7 +752,7 @@ export function createWorld(renderer, initialCfg) {
       f.scale.set(1, 0.7 + Math.random() * 0.8 + (S.slip > 0 ? 0.6 : 0), 1);
     }
     pg.visible = !(S.invuln > 0 && S.ghost <= 0 && Math.floor(S.time * 16) % 2 === 0 && sim.mode === 'play');
-    if (ghostShell) { ghostShell.visible = S.ghost > 0; ghostShell.scale.setScalar(1 + Math.sin(U.uTime.value * 12) * 0.04); ghostShell.material.opacity = Math.min(1, S.ghost) * 0.35; }
+    if (ghostShell) { ghostShell.visible = S.ghost > 0; ghostShell.scale.setScalar(1 + Math.sin(U.uTime.value * 12) * 0.04); ghostShell.material.uniforms.opacity.value = Math.min(1, S.ghost) * 0.35; }
     if (P.glowLight) P.glowLight.intensity = (P.glowBase || 26) * (0.85 + 0.15 * Math.sin(U.uTime.value * 9));
     trails.update(S, P.rearZ, P.tailHalfW, P.tailY, fx.view === 'showroom' ? 0 : 0.38, pg.rotation.z);
     head.position.set(S.x, 0.75, -2.3);

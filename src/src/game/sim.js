@@ -151,7 +151,7 @@ export function createSim(opts = {}) {
       car, ai: { target: 0, think: 0 },
       route: 'expressway', routes: [{ z0: -1e9, route: 'expressway' }], nextJunction: SECTOR, sector: 1,
       finale: false, finaleT: 0, done: false,
-      rival: { z: 0, x: LANES[2], lane: 2, target: 2, speed: mode === 'attract' ? MAX * 0.8 : 0, swapT: -9, think: 0, stun: 0, cd: 2, hits: 0, fight: false, fightT: 0, fightCd: 4 }, pos: 1, raceWon: null, strikeCd: 0, swing: 0, wanted: 0, cop: null, cops: [], bust: 0, lost: 0, busts: 0, powers: [], nextPowerZ: 520, ghost: 0,
+      rival: { z: -9, x: LANES[2], lane: 2, target: 2, speed: mode === 'attract' ? MAX * 0.8 : 0, swapT: -9, think: 0, stun: 0, cd: 2, hits: 0, fight: false, fightT: 0, fightCd: 4 }, pos: 1, raceWon: null, strikeCd: 0, swing: 0, wanted: 0, cop: null, cops: [], bust: 0, lost: 0, busts: 0, powers: [], nextPowerZ: 520, ghost: 0,
     });
     sections = [];
     extendTrack(1200);
@@ -421,8 +421,11 @@ export function createSim(opts = {}) {
       let want = ref * wave * (diff.rival || 1) * (rash ? 1.04 : 1);
       if (gap < -30) want = Math.max(want, ref * 1.2); else if (gap > 220) want = Math.min(want, ref * 0.97);
       want = Math.min(want, MAX * 1.4);
+      // the launch: KUROGANE starts a length behind and blasts past you off the line
+      const launching = S.dist < 450 && gap < 45;
+      if (launching) want = Math.max(want, S.speed * 1.4 + 10);
       if (S.finale) want = Math.max(0, R.speed - 14 * dt);
-      const lead = S.cars.find((o) => o.z - R.z > 0 && o.z - R.z < 42 && Math.abs(o.x - R.x) < 2.2);
+      const lead = S.cars.find((o) => o.z - R.z > 0 && o.z - R.z < 42 + Math.max(0, R.speed - 40) * 1.2 && Math.abs(o.x - R.x) < 2.2);
       R.think -= dt;
       if (lead && R.target === R.lane && R.think <= 0) {
         R.think = 0.4;
@@ -446,7 +449,7 @@ export function createSim(opts = {}) {
           if (R.fightT > 8 || R.stun > 0.8) { R.fight = false; R.fightCd = 5 + rnd() * 3; }
         }
       }
-      R.speed += clamp(want - R.speed, -16 * dt, 11 * dt);
+      R.speed += clamp(want - R.speed, -16 * dt, (launching ? 30 : 11) * dt);
       if (R.stun > 0) { R.stun -= dt; want *= 0.8; }
       R.x += clamp(LANES[R.target] - R.x, -5.5 * dt, 5.5 * dt);
       // ---- rash: strikes when side by side (bike vs bike) ----
@@ -478,9 +481,13 @@ export function createSim(opts = {}) {
       R.z += R.speed * dt;
       R.z = clamp(R.z, S.z - 400, S.z + 400); // never out of the race, whatever happens to the player
       // never inside the player or a car: hold behind / ahead instead
-      for (const o of S.cars) if (Math.abs(o.z - R.z) < CAR_LEN && Math.abs(o.x - R.x) < CAR_W) { R.z = o.z - CAR_LEN - 0.1; R.speed = Math.min(R.speed, o.speed); }
-      const dz = R.z - S.z;
-      if (Math.abs(dz) < CAR_LEN && Math.abs(R.x - S.x) < CAR_W) R.z = dz >= 0 ? S.z + CAR_LEN + 0.1 : S.z - CAR_LEN - 0.1;
+      for (let pass = 0; pass < 3; pass++) {
+        let moved = false;
+        for (const o of S.cars) if (Math.abs(o.z - R.z) < CAR_LEN && Math.abs(o.x - R.x) < CAR_W) { R.z = o.z - CAR_LEN - 0.1; R.speed = Math.min(R.speed, o.speed); moved = true; }
+        const dz = R.z - S.z;
+        if (Math.abs(dz) < CAR_LEN && Math.abs(R.x - S.x) < CAR_W) { R.z = S.z - CAR_LEN - 0.1; R.speed = Math.min(R.speed, S.speed); moved = true; }
+        if (!moved) break;
+      }
       const pos = R.z > S.z ? 2 : 1;
       if (pos !== S.pos && !S.finale) {
         if (S.time - R.swapT > 1.2 && S.dist > 300) emit({ type: pos === 1 ? 'overtake' : 'overtaken' }); // no call-outs off the line
