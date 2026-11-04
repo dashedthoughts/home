@@ -860,15 +860,15 @@ h1, h2, h3 { font-family: var(--f-display); font-weight: 700; letter-spacing: 0.
 .panel-hero .strip--c { left: 18%; bottom: -12px; width: 22%; height: 22px; transform: rotate(-1.5deg); opacity: 0.85; }
 
 /* hand-lettered SFX */
-.sfx { position: absolute; right: clamp(10px, 4vw, 44px); top: clamp(6px, 3vw, 26px); display: inline-flex; gap: 0.02em; transform: rotate(-7deg) skewX(-8deg); z-index: 2; pointer-events: none; }
+.sfx { position: absolute; right: clamp(10px, 4vw, 44px); top: clamp(6px, 3vw, 26px); display: inline-flex; gap: 0.06em; transform: rotate(-5deg); z-index: 2; pointer-events: none; }
 .sfx__ch { position: relative; display: inline-block; font: 400 clamp(2.4rem, 7vw, 5.2rem) / 0.9 'Bangers', 'Impact', var(--f-display); letter-spacing: 0.01em; color: var(--signal);
-  -webkit-text-stroke: 3px #0d0d0d; paint-order: stroke fill;
-  text-shadow: 5px 5px 0 var(--alert), -3px 0 0 var(--data);
+  -webkit-text-stroke: 2px #0d0d0d; paint-order: stroke fill;
+  text-shadow: 3px 3px 0 #0d0d0d, 6px 6px 0 var(--alert);
   transform: translateY(var(--y)) rotate(var(--r)) scale(var(--s)); animation: sfx-boil 0.5s steps(1) infinite; }
 .sfx__ch::after { content: attr(data-ch); position: absolute; inset: 0; color: transparent; -webkit-text-stroke: 0; text-shadow: none;
-  background-image: radial-gradient(circle, rgba(13,13,13,.5) 1.1px, transparent 1.6px); background-size: 5px 5px; -webkit-background-clip: text; background-clip: text; }
+  background-image: radial-gradient(circle, rgba(13,13,13,.22) 0.9px, transparent 1.3px); background-size: 5px 5px; -webkit-background-clip: text; background-clip: text; }
 .sfx__ch:nth-child(odd) { animation-delay: -0.25s; }
-@keyframes sfx-boil { 0%, 100% { transform: translateY(var(--y)) rotate(var(--r)) scale(var(--s)); } 50% { transform: translateY(calc(var(--y) - 2px)) rotate(calc(var(--r) + 1.5deg)) scale(var(--s)); } }
+@keyframes sfx-boil { 0%, 100% { transform: translateY(var(--y)) rotate(var(--r)) scale(var(--s)); } 50% { transform: translateY(calc(var(--y) - 1px)) rotate(calc(var(--r) + 0.6deg)) scale(var(--s)); } }
 
 /* misregistered print plates on the title: land out of register, snap in */
 .plates { text-shadow: 3px 0 0 color-mix(in srgb, var(--data) 80%, transparent), -3px 0 0 color-mix(in srgb, var(--hype) 80%, transparent); animation: register 0.5s steps(3, end) 0.15s both; }
@@ -914,7 +914,7 @@ h1, h2, h3 { font-family: var(--f-display); font-weight: 700; letter-spacing: 0.
 @media (max-width: 600px) {
   .panel-hero { padding: calc(var(--sp-8) + 18px) var(--sp-4) var(--sp-5); }
   .sfx { top: 4px; right: 8px; }
-  .sfx__ch { font-size: 2.6rem; -webkit-text-stroke-width: 2px; }
+  .sfx__ch { font-size: 2.1rem; -webkit-text-stroke-width: 1.5px; text-shadow: 2px 2px 0 #0d0d0d, 4px 4px 0 var(--alert); }
   .panel-hero .halftone-svg { width: 70%; height: 38%; }
   .panel-hero .strip--a { top: calc(var(--sp-8) + 8px); width: 80%; }
   .note em { font-size: 0.95rem; }
@@ -934,8 +934,8 @@ h1, h2, h3 { font-family: var(--f-display); font-weight: 700; letter-spacing: 0.
 .cf__panel::before { content: ''; position: absolute; inset: 0; z-index: -3; background: linear-gradient(rgba(18,16,26,.93), rgba(18,16,26,.93)), var(--noise), var(--bg-panel); background-size: auto, 180px, auto; border: 3px solid var(--ink); filter: url(#ink-a); animation: boil 0.5s steps(1) infinite; }
 .cf__panel .halftone-svg { position: absolute; right: 0; bottom: 0; width: 70%; height: 46%; z-index: -2; color: color-mix(in srgb, var(--hype) 22%, transparent); }
 .cf__panel .strip--cap { left: -4%; top: 58px; width: 70%; height: 34px; transform: rotate(-2.5deg); }
-.cf__panel .sfx { top: 14px; right: 14px; transform: rotate(-6deg) skewX(-8deg); }
-.cf__panel .sfx__ch { font-size: clamp(1.9rem, 3.2vw, 3rem); -webkit-text-stroke-width: 2.5px; }
+.cf__panel .sfx { top: 14px; right: 16px; transform: rotate(-4deg); }
+.cf__panel .sfx__ch { font-size: clamp(1.8rem, 2.8vw, 2.7rem); -webkit-text-stroke-width: 1.8px; }
 .cf__back { position: relative; z-index: 1; font: 600 0.8rem / 1 var(--f-display); letter-spacing: 0.12em; color: var(--data); text-decoration: none; }
 .cf__back:hover { color: var(--signal); }
 .cf__panel .caption { margin-top: var(--sp-5); }
@@ -1024,5 +1024,5 @@ h1, h2, h3 { font-family: var(--f-display); font-weight: 700; letter-spacing: 0.
 </style>
 </head><body><div id="root"></div>
 <noscript><p style="padding:2rem;font-family:monospace;color:#f5f2ea;background:#0d0d0d">This page needs JavaScript. Contact: anur.dash@gmail.com</p></noscript>
-<script type="module" src="./assets/app-OMHQA7IW.js"></script>
+<script type="module" src="./assets/app-6PCJZ7OT.js"></script>
 </body></html>

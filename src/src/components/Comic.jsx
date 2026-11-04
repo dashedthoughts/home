@@ -80,7 +80,7 @@ export function SFX({ word }) {
   return (
     <span className="sfx" aria-hidden="true">
       {[...word].map((ch, i) => (
-        <span key={i} className="sfx__ch" style={{ '--r': `${(r() - 0.5) * 14}deg`, '--y': `${(r() - 0.5) * 10}px`, '--s': 0.92 + r() * 0.2 }} data-ch={ch}>
+        <span key={i} className="sfx__ch" style={{ '--r': `${(r() - 0.5) * 5}deg`, '--y': `${(r() - 0.5) * 3}px`, '--s': 0.97 + r() * 0.06 }} data-ch={ch}>
           {ch}
         </span>
       ))}
