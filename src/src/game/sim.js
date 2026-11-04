@@ -564,7 +564,9 @@ export function createSim(opts = {}) {
         // the swarm: three cruisers box you in (tail and both flanks) for a beat, then let you go
         S.swarmT = 2.2;
         S.cops = [{ off: -6.5, side: 0 }, { off: 0.8, side: -1 }, { off: 0.8, side: 1 }].map((c, i) => ({ ...c, z: S.z + c.off, x: S.x + c.side * 3.6, speed: S.speed, slot: i, target: 1 }));
-        emit({ type: 'busted', lives: S.lives });
+        const lost = Math.min(3, S.shards - S.files * 5); // the police confiscate progress toward the next file (opened files stay)
+        S.shards -= lost;
+        emit({ type: 'busted', lives: S.lives, lost });
         if (S.lives <= 0) { S.over = true; emit({ type: 'over', busted: true, score: Math.round(S.score), files: S.files, dist: S.dist, top: S.topSpeed, nearMisses: S.nearMisses, shards: S.shards }); }
       }
       // escape: every cruiser 240 m+ back for 4 s

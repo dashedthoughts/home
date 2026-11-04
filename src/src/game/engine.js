@@ -222,6 +222,7 @@ export function createRedline(canvas, opts = {}) {
       copGap: S.cops && S.cops.length ? Math.round(Math.min(...S.cops.map((k) => S.z - k.z))) : null,
       cops: S.cops ? S.cops.length : 0,
       bust: Math.min(1, S.bust || 0),
+      swarm: (S.swarmT || 0) > 0,
       pos: S.pos,
       rivalGap: Math.round(S.rival ? S.rival.z - S.z : 0),
     });

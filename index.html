@@ -1240,6 +1240,9 @@ h1, h2, h3 { font-family: var(--f-display); font-weight: 700; letter-spacing: 0.
 @keyframes tp-sheen { 60%, 100% { transform: translateX(100%); } }
 @media (prefers-reduced-motion: reduce) { .timepick .tp-outrun::after { animation: none; } }
 .panel--pause .seg { margin: var(--sp-3) 0 var(--sp-4); }
+.siren-full { position: absolute; inset: 0; pointer-events: none; z-index: 3; animation: siren-full .36s steps(2) infinite; mix-blend-mode: screen; }
+@keyframes siren-full { 0% { background: radial-gradient(70% 90% at 0% 50%, rgba(255,16,48,.55), transparent 70%), radial-gradient(70% 90% at 100% 50%, rgba(42,107,255,.15), transparent 70%); } 50% { background: radial-gradient(70% 90% at 0% 50%, rgba(255,16,48,.15), transparent 70%), radial-gradient(70% 90% at 100% 50%, rgba(42,107,255,.6), transparent 70%); } }
+@media (prefers-reduced-motion: reduce) { .siren-full { animation: none; background: rgba(255,16,48,.18); } }
 
 /* =========================================================
    Mixed media: printed collage. Torn paper, Ben-Day dots, hatching, SFX lettering, marker notes.
@@ -1443,5 +1446,5 @@ h1, h2, h3 { font-family: var(--f-display); font-weight: 700; letter-spacing: 0.
 </style>
 </head><body><div id="root"></div>
 <noscript><p style="padding:2rem;font-family:monospace;color:#f5f2ea;background:#0d0d0d">This page needs JavaScript. Contact: anur.dash@gmail.com</p></noscript>
-<script type="module" src="./assets/app-EXO6NMHS.js"></script>
+<script type="module" src="./assets/app-4IIGAASF.js"></script>
 </body></html>

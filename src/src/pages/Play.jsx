@@ -149,7 +149,7 @@ export default function Play() {
         case 'power': pop(e.kind === 'ghost' ? 'GHOST' : 'NITRO', e.kind === 'ghost' ? 'data' : 'signal', e.kind === 'ghost' ? '5 SECONDS · RIDE THROUGH ANYTHING' : 'INSTANT SLIPSTREAM · ENGINE COOLED'); break;
         case 'wheelie': pop('WHEELIE', 'signal', '+150'); break;
         case 'police': pop('POLICE', 'alert', `WANTED ${'★'.repeat(e.stars)} · OUTRUN THEM`); break;
-        case 'busted': pop('BUSTED', 'alert', e.lives > 0 ? `INTEGRITY −1 · ${e.lives} LEFT` : 'END OF THE LINE'); break;
+        case 'busted': pop('BUSTED', 'alert', `${e.lost ? `−${e.lost} SHARDS · ` : ''}${e.lives > 0 ? `INTEGRITY −1 · ${e.lives} LEFT` : 'END OF THE LINE'}`); break;
         case 'escaped': pop('LOST THEM', 'ok', `+${e.pts.toLocaleString('en-IN')}`); break;
         case 'overtake': pop('OVERTAKE', 'ok', 'P1 · HOLD IT TO THE LOOKOUT'); break;
         case 'overtaken': pop('KUROGANE PASSES', 'alert', 'P2 · TAKE IT BACK'); break;
@@ -314,6 +314,7 @@ export default function Play() {
             <button type="button" className="hud2__cam" onClick={() => eng()?.cycleCam()} aria-label="Change camera">{CAMS[hud.cam] || 'CHASE'}</button>
             <button type="button" className="hud2__pause" onClick={togglePause} aria-label="Pause">❚❚</button>
           </div>
+          {hud.swarm && <div className="siren-full" aria-hidden="true" />}
           {hud.copGap != null && (
             <>
               <div className={`siren ${hud.copGap < 45 ? 'near' : ''}`} />
