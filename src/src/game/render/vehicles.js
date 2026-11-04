@@ -175,11 +175,11 @@ function lights(g, glowHex, rearZ, under = 26) {
 export function buildVantaGT(livery, glowHex) {
   // proportions after the classic early-90s mid-engine coupé: 4.4 m long, 1.82 m wide, 1.17 m tall, 2.53 m wheelbase,
   // short front overhang, cab-forward canopy, long flat rear deck
-  const L = 4.4, W = 1.82, R = 0.33;
+  const L = 4.4, W = 1.82, R = 0.38; // bigger wheels
   const g = new THREE.Group();
   const M = materials(livery, glowHex);
   const FX = 3.53, RX = 1.0; // wheel centres along the profile (x from the rear)
-  const ARCH = 0.4, AY = 0.33;
+  const ARCH = 0.46, AY = 0.38;
   const ZF = L / 2 - FX, ZR = L / 2 - RX; // axle z
   const arch = (s, cx) => {
     const a0 = -Math.asin((AY - 0.22) / ARCH);
@@ -281,8 +281,10 @@ export function buildVantaGT(livery, glowHex) {
   bin.add('carbon', new THREE.BoxGeometry(W * 0.56, 0.06, 0.06), [0, 0.33, -L / 2 - 0.03]);
   // nose face: a black band carrying one bright full-width light bar, flanked by angled corner intakes
   // full-width black visor band across the nose with a single white light bar
-  bin.add('carbon', new THREE.BoxGeometry(W * 0.84, 0.16, 0.04), [0, 0.42, -L / 2 - 0.04]);
-  bin.add('head', new THREE.BoxGeometry(W * 0.8, 0.035, 0.02), [0, 0.46, -L / 2 - 0.065]);
+  // lamp bar on the nose face, below the knife edge: a black band with a bright white light strip and amber ends
+  bin.add('carbon', new THREE.BoxGeometry(W * 0.72, 0.12, 0.05), [0, 0.355, -L / 2 - 0.03]);
+  bin.add('head', new THREE.BoxGeometry(W * 0.66, 0.04, 0.03), [0, 0.365, -L / 2 - 0.06]);
+  for (const sx of [-1, 1]) bin.add('amber', new THREE.BoxGeometry(0.08, 0.04, 0.03), [sx * W * 0.35, 0.365, -L / 2 - 0.055]);
   for (const sx of [-1, 1]) bin.add('carbon', new THREE.BoxGeometry(0.22, 0.09, 0.04), [sx * W * 0.33, 0.3, -L / 2 + 0.02], [0, sx * 0.5, 0]);
   // brake calipers (static, behind the spokes)
   for (const [z, sx] of [[ZF, -1], [ZF, 1], [ZR, -1], [ZR, 1]]) bin.add('caliper', new RoundedBoxGeometry(0.06, 0.16, 0.1, 2, 0.02), [sx * (W / 2 - 0.17), 0.48, z - 0.06]);
@@ -296,7 +298,7 @@ export function buildVantaGT(livery, glowHex) {
   // wheels: front pair first (steering)
   const wheels = [];
   for (const z of [ZF, ZR]) for (const sx of [-1, 1]) {
-    const w = buildWheel({ R, width: 0.27, rimR: 0.25, spokes: 10, mats: M, disc: { r: 0.18, xs: [-0.06 * sx] }, glowRing: !!glowHex });
+    const w = buildWheel({ R, width: 0.29, rimR: 0.29, spokes: 10, mats: M, disc: { r: 0.18, xs: [-0.06 * sx] }, glowRing: !!glowHex });
     if (sx < 0) w.rotation.y = Math.PI;
     const holder = new THREE.Group();
     holder.add(w);
@@ -378,17 +380,33 @@ export function buildTsubame(livery, glowHex, style = 'monster') {
   // tank, seat, tail
   const tank = roadster
     ? (s) => { s.moveTo(0.0, 0.0); s.quadraticCurveTo(0.06, 0.16, 0.36, 0.19); s.quadraticCurveTo(0.62, 0.19, 0.72, 0.08); s.lineTo(0.7, -0.04); s.quadraticCurveTo(0.34, -0.06, 0.0, 0.0); }
-    : (s) => { s.moveTo(0.0, 0.0); s.quadraticCurveTo(0.02, 0.26, 0.26, 0.31); s.quadraticCurveTo(0.5, 0.33, 0.62, 0.14); s.lineTo(0.6, -0.05); s.quadraticCurveTo(0.3, -0.08, 0.0, 0.0); };
-  const TW = roadster ? 0.4 : 0.5;
-  bin.add('paint', profile(tank, 0.66, TW, 0.08), [0, 0.86, -0.2]);
-  bin.add('stripe', profile(tank, 0.66, roadster ? 0.06 : 0.12, 0), [0, 0.862, -0.2], null, [1, 1.03, 1.0]);
-  if (!roadster) for (const sx of [-1, 1]) bin.add('carbon', new RoundedBoxGeometry(0.03, 0.12, 0.26, 2, 0.012), [sx * (TW / 2 + 0.01), 0.9, -0.02]); // tank shrouds
+    : (s) => { s.moveTo(0.0, 0.0); s.quadraticCurveTo(0.06, 0.15, 0.3, 0.19); s.quadraticCurveTo(0.56, 0.2, 0.68, 0.1); s.lineTo(0.66, -0.04); s.quadraticCurveTo(0.33, -0.07, 0.0, 0.0); };
+  const TW = roadster ? 0.4 : 0.46;
+  // teardrop in plan: full width at the front (knee cut-outs), tapering hard into the seat
+  const tear = (geo) => {
+    geo.computeBoundingBox();
+    const bb = geo.boundingBox, pa = geo.attributes.position;
+    for (let i = 0; i < pa.count; i++) {
+      const t = (pa.getZ(i) - bb.min.z) / (bb.max.z - bb.min.z || 1); // 0 = one end, 1 = the other
+      const k = Math.min(1, Math.max(0, t));
+      pa.setX(i, pa.getX(i) * (0.42 + 0.58 * Math.sin(Math.min(1, (1 - k) * 1.25 + 0.05) * Math.PI / 2)));
+    }
+    pa.needsUpdate = true; geo.computeVertexNormals();
+    return geo;
+  };
+  bin.add('paint', tear(profile(tank, 0.66, TW, 0.08)), [0, 0.86, -0.2]);
+  bin.add('stripe', tear(profile(tank, 0.66, roadster ? 0.06 : 0.1, 0)), [0, 0.862, -0.2], null, [1, 1.03, 1.0]);
+  if (!roadster) for (const sx of [-1, 1]) bin.add('carbon', new RoundedBoxGeometry(0.025, 0.09, 0.2, 2, 0.01), [sx * (TW / 2 - 0.02), 0.89, -0.1]); // tank shrouds
   const seat = (s) => { s.moveTo(0, 0); s.lineTo(0.38, 0.02); s.quadraticCurveTo(0.46, 0.06, 0.48, 0.1); s.lineTo(0.02, 0.07); s.lineTo(0, 0); };
   bin.add('carbon', profile(seat, 0.48, 0.3, 0.03), [0, 0.92, 0.3]);
   const tail = (s) => { s.moveTo(0, 0); s.lineTo(0.5, 0.02); s.quadraticCurveTo(0.6, 0.06, 0.62, 0.16); s.lineTo(0.08, 0.1); s.quadraticCurveTo(0.0, 0.06, 0, 0); };
   bin.add('paint', profile(tail, 0.62, 0.26, 0.04), [0, 0.9, 0.62]);
   const TZ = 0.93;
-  bin.add('tail', new THREE.BoxGeometry(0.2, 0.03, 0.03), [0, 1.04, TZ]);
+  // a large, sharp, central tail lamp: a swept arrowhead set into the tail tip
+  {
+    const a = new THREE.Shape(); a.moveTo(-0.14, 0.0); a.lineTo(0, 0.07); a.lineTo(0.14, 0.0); a.lineTo(0.1, -0.02); a.lineTo(0, 0.03); a.lineTo(-0.1, -0.02); a.closePath();
+    bin.add('tail', new THREE.ExtrudeGeometry(a, { depth: 0.02, bevelEnabled: false }), [0, 1.02, TZ + 0.005]);
+  }
   bin.add('tailDim', new THREE.BoxGeometry(0.12, 0.012, 0.02), [0, 1.0, TZ - 0.01]);
   bin.rod('carbon', [0, 0.92, 0.88], [0, 0.62, 1.02], 0.012); // plate hanger
   for (const sx of [-1, 1]) bin.add('amber', new THREE.BoxGeometry(0.04, 0.02, 0.02), [sx * 0.1, 0.66, 1.02]);
@@ -446,7 +464,7 @@ export function buildTsubame(livery, glowHex, style = 'monster') {
     limb([sx * 0.14, 1.04, 0.3], [sx * 0.24, 0.9, -0.08], 0.075, 'suit');
     limb([sx * 0.24, 0.9, -0.08], [sx * 0.2, 0.58, 0.24], 0.06, 'suit');
     limb([sx * 0.2, 0.58, 0.24], [sx * 0.2, 0.55, 0.33], 0.045, 'carbon');
-    bin.add('suitAccent', new THREE.SphereGeometry(0.06, 10, 8), [sx * 0.2, 1.38, -0.02]);
+    bin.add('carbon', new THREE.SphereGeometry(0.06, 10, 8), [sx * 0.2, 1.38, -0.02]); // dark shoulder armour (no pale blobs under the helmet)
   }
   // full-face race helmet: shell, chin bar, wrap-around glowing visor, centre stripe, side vents, rear spoiler
   const HZ = -0.14, HY = 1.56;
@@ -465,7 +483,8 @@ export function buildTsubame(livery, glowHex, style = 'monster') {
   {
     const gloss = new THREE.MeshPhysicalMaterial({ color: '#07070c', metalness: 0.4, roughness: 0.18, clearcoat: 1, clearcoatRoughness: 0.04, flatShading: true });
     const shell = new THREE.Mesh(new THREE.IcosahedronGeometry(0.152, 1), gloss);
-    shell.position.set(0, HY, HZ); shell.scale.set(1, 0.96, 1.2); g.add(shell);
+    shell.position.set(0, HY, HZ); shell.scale.set(1.12, 1.06, 1.3); g.add(shell);
+    const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.075, 0.09, 0.12, 12), gloss); neck.position.set(0, HY - 0.15, HZ + 0.03); g.add(neck);
     const chin = new THREE.Mesh(new THREE.ConeGeometry(0.1, 0.18, 4), gloss);
     chin.position.set(0, HY - 0.085, HZ - 0.12); chin.rotation.set(-Math.PI / 2 - 0.45, Math.PI / 4, 0); chin.scale.set(1.25, 1, 0.65); g.add(chin);
     const visor = new THREE.Mesh(new THREE.CylinderGeometry(0.157, 0.157, 0.075, 24, 1, true, Math.PI * 0.64, Math.PI * 0.72), new THREE.MeshPhysicalMaterial({ color: '#020205', metalness: 0.95, roughness: 0.04, side: THREE.DoubleSide }));
@@ -488,12 +507,14 @@ export function buildTsubame(livery, glowHex, style = 'monster') {
     const holder = new THREE.Group();
     holder.add(w);
     holder.userData = { spin: w, sign: 1 };
-    holder.position.set(0, R, z);
+    const big = z > 0 ? 1.24 : 1.16; // bigger wheels, the rear a touch more
+    holder.scale.setScalar(big);
+    holder.position.set(0, R * big, z);
     g.add(holder);
     wheels.push(holder);
   }
   const flames = flamesAt(pipeEnds.map(([x, y, z]) => [x, y, z + 0.16]), 0.9);
   flames.forEach((f) => g.add(f));
   const { glowLight, tailLight } = lights(g, null, TZ); // rims and pool carry the glow; a point light this low mirrors as a hot spot on the wet road
-  return { group: g, wheels, flames, M, glowLight, tailLight, length: 2.2, width: 0.75, wheelR: R, rearZ: TZ, tailY: 1.04, tailHalfW: 0.08, bike: true };
+  return { group: g, wheels, flames, M, glowLight, tailLight, length: 2.2, width: 0.75, wheelR: R * 1.2, rearZ: TZ, tailY: 1.04, tailHalfW: 0.08, bike: true };
 }

@@ -39,7 +39,7 @@ export function createSim(opts = {}) {
   const emit = opts.onEvent || (() => {});
   let mode = opts.mode || 'attract';
   let cfg = { car: 'wedge', difficulty: 'street', weather: 'clear', assist: false, ...(opts.config || {}) };
-  const input = { left: false, right: false, boost: false, brake: false, axis: 0, strike: false };
+  const input = { left: false, right: false, boost: false, brake: false, axis: 0, strike: false, wheelie: false };
   const S = {};
   let prnd = Math.random;
   let rnd = Math.random;
@@ -151,7 +151,7 @@ export function createSim(opts = {}) {
       car, ai: { target: 0, think: 0 },
       route: 'expressway', routes: [{ z0: -1e9, route: 'expressway' }], nextJunction: SECTOR, sector: 1,
       finale: false, finaleT: 0, done: false,
-      rival: { z: -9, x: LANES[2], lane: 2, target: 2, speed: mode === 'attract' ? MAX * 0.8 : 0, swapT: -9, think: 0, stun: 0, cd: 0.8, hits: 0, fight: false, fightT: 0, fightCd: 1.5 }, pos: 1, raceWon: null, strikeCd: 0, swing: 0, wanted: 0, cop: null, cops: [], bust: 0, lost: 0, busts: 0, powers: [], nextPowerZ: 520, ghost: 0,
+      rival: { z: -9, x: LANES[2], lane: 2, target: 2, speed: mode === 'attract' ? MAX * 0.8 : 0, swapT: -9, think: 0, stun: 0, cd: 0.8, hits: 0, fight: false, fightT: 0, fightCd: 1.5 }, pos: 1, raceWon: null, strikeCd: 0, swing: 0, wheelie: 0, wanted: 0, cop: null, cops: [], bust: 0, lost: 0, busts: 0, powers: [], nextPowerZ: 520, ghost: 0,
     });
     sections = [];
     extendTrack(1200);
@@ -205,7 +205,7 @@ export function createSim(opts = {}) {
       const n = Math.ceil(S.count);
       if (n !== S.lastCount && n >= 1 && n <= 3) emit({ type: 'count', n });
       S.lastCount = n;
-      if (S.count <= 0) emit({ type: 'go' });
+      if (S.count <= 0) { emit({ type: 'go' }); if (S.car.bike) S.wheelie = 1.5; } // pop one off the line
     }
     const racing = S.count <= 0 && !S.over && !S.done;
 
@@ -585,6 +585,10 @@ export function createSim(opts = {}) {
       S.powers = S.powers.filter((p) => !p.taken && p.z > S.z - 20);
     }
     if (S.ghost > 0) S.ghost -= dt;
+    // wheelies (bike): E pulls one; held for 1.6 s, +150
+    if (S.wheelie > 0) S.wheelie = Math.max(0, S.wheelie - dt);
+    if (input.wheelie && S.car.bike && racing && S.wheelie <= 0 && S.speed > 12) { S.wheelie = 1.6; S.score += 150; emit({ type: 'wheelie' }); }
+    input.wheelie = false;
 
     // ---- shards ----
     for (const s of S.shardList) {

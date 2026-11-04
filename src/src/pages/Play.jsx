@@ -13,6 +13,7 @@ const KEYS = {
   ArrowUp: 'boost', KeyW: 'boost', Space: 'boost', ShiftLeft: 'boost',
   ArrowDown: 'brake', KeyS: 'brake',
   KeyX: 'strike', KeyF: 'strike',
+  KeyE: 'wheelie',
 };
 const STAT_MAX = { top: 1.1, accel: 1.3, grip: 1.3, cool: 1.35 };
 const pad2 = (n) => String(n).padStart(2, '0');
@@ -146,6 +147,7 @@ export default function Play() {
         case 'strike': pop('LASHED', 'ok', e.cop ? 'CRUISER DROPS BACK' : 'KUROGANE SPINS WIDE'); break;
         case 'struck': pop('HIT', 'alert', cfgRef.current.rash ? 'KUROGANE SWINGS' : 'KUROGANE LEANS ON YOU'); break;
         case 'power': pop(e.kind === 'ghost' ? 'GHOST' : 'NITRO', e.kind === 'ghost' ? 'data' : 'signal', e.kind === 'ghost' ? '5 SECONDS · RIDE THROUGH ANYTHING' : 'INSTANT SLIPSTREAM · ENGINE COOLED'); break;
+        case 'wheelie': pop('WHEELIE', 'signal', '+150'); break;
         case 'police': pop('POLICE', 'alert', `WANTED ${'★'.repeat(e.stars)} · OUTRUN THEM`); break;
         case 'busted': pop('BUSTED', 'alert', e.lives > 0 ? `INTEGRITY −1 · ${e.lives} LEFT` : 'END OF THE LINE'); break;
         case 'escaped': pop('LOST THEM', 'ok', `+${e.pts.toLocaleString('en-IN')}`); break;
@@ -390,6 +392,7 @@ export default function Play() {
             <button type="button" className="pad__brake" {...hold('brake')}>BRAKE</button>
             <button type="button" className="pad__oc" {...hold('boost')}>OVERCLOCK</button>
             {cfg.race !== false && <button type="button" className="pad__strike" {...hold('strike')}>WHIP</button>}
+            {cfg.car === 'bike' && <button type="button" className="pad__strike" {...hold('wheelie')}>WHEELIE</button>}
           </div>
         </div>
       )}
@@ -449,7 +452,7 @@ export default function Play() {
               <label className="slider"><span className="seg__label">DIM</span><input type="range" min="0" max="0.7" step="0.05" value={cfg.dim || 0} onChange={(e) => update({ dim: +e.target.value })} aria-label="Dim the screen" /></label>
               <label className="slider"><span className="seg__label">VOLUME</span><input type="range" min="0" max="1" step="0.05" value={cfg.volume} onChange={(e) => update({ volume: +e.target.value })} /></label>
             </details>
-            <p className="controls-line">◀ ▶ steer · ▲ overclock · ▼ brake · X whip · C camera · ESC pause</p>
+            <p className="controls-line">◀ ▶ steer · ▲ overclock · ▼ brake · X whip{cfg.car === 'bike' ? ' · E wheelie' : ''} · C camera · ESC pause</p>
           </div>
 
           <footer className="garage__foot">
@@ -465,7 +468,7 @@ export default function Play() {
         <>
         <nav className="timepick" aria-label="Time of day">
           <span className="hud-label">TIME</span>
-          {Object.entries(TIMES).map(([k, t]) => <button key={k} type="button" aria-pressed={cfg.time === k} className={cfg.time === k ? 'on' : ''} onClick={() => update({ time: k })}>{t.name}</button>)}
+          {Object.entries(TIMES).map(([k, t]) => <button key={k} type="button" aria-pressed={cfg.time === k} className={`${cfg.time === k ? 'on' : ''} ${k === 'outrun' ? 'tp-outrun' : ''}`} onClick={() => update({ time: k })}>{k === 'outrun' && <i className="tp-sun" aria-hidden="true" />}{t.name}{k === 'outrun' && <em>SUNSET RUN</em>}</button>)}
         </nav>
         <aside className="showroom-tag" aria-hidden="true">
           <span className="hud-label">IN THE BAY</span>

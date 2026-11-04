@@ -721,6 +721,7 @@ export function createWorld(renderer, initialCfg) {
     if (P.bike) {
       // skills on autopilot (hero + Night Shift): a wheelie, then a lean-slide, every few seconds
       let wheelie = 0, trickSlide = false;
+      if (S.wheelie > 0) wheelie = Math.sin(Math.min(1, (1.6 - S.wheelie) / 0.25) * Math.PI / 2) * Math.min(1, S.wheelie / 0.3) * 0.34;
       if (sim.mode === 'attract' && fx.view !== 'showroom') {
         const tc = S.time % 11;
         if (tc < 2.4) wheelie = Math.sin((tc / 2.4) * Math.PI) * 0.32;

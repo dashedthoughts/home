@@ -1226,6 +1226,18 @@ h1, h2, h3 { font-family: var(--f-display); font-weight: 700; letter-spacing: 0.
 @media (max-width: 760px) { .timepick { top: auto; bottom: 120px; right: var(--sp-3); transform: none; } .timepick button { padding: 6px 8px; } }
 .more .seg { gap: 4px; margin-top: 4px; }
 .play-dim { position: absolute; inset: 0; z-index: 1; background: #05020b; pointer-events: none; }
+.timepick { gap: 6px; }
+.timepick .hud-label { font-size: .8rem; }
+.timepick button { font-size: .82rem; padding: 12px 18px; min-width: 150px; text-align: right; }
+.timepick button:hover { color: #fff; border-color: var(--signal); }
+/* the Outrun callout: a sunset-gradient chip with a striped sun */
+.timepick .tp-outrun { position: relative; display: flex; align-items: center; gap: 10px; justify-content: flex-end; color: #fff; border: 0; background: linear-gradient(90deg, #2a0b3d, #ff2f7a 70%, #ffb347); box-shadow: 0 0 24px -4px #ff2f7a; overflow: hidden; }
+.timepick .tp-outrun em { font: 700 .55rem / 1 var(--f-mono); font-style: normal; letter-spacing: .18em; color: #12051f; background: #ffe14a; padding: 3px 5px; }
+.timepick .tp-outrun.on { outline: 2px solid #ffe14a; outline-offset: 2px; color: #fff; }
+.tp-sun { width: 22px; height: 22px; border-radius: 50%; background: repeating-linear-gradient(180deg, #ffe14a 0 3px, #ff8a3d 3px 4px, transparent 4px 6px) bottom / 100% 55% no-repeat, linear-gradient(180deg, #ffe36b, #ff6a3d); box-shadow: 0 0 10px #ff8a3d; flex: none; }
+.timepick .tp-outrun::after { content: ''; position: absolute; inset: 0; background: linear-gradient(110deg, transparent 35%, rgba(255,255,255,.35) 50%, transparent 65%); transform: translateX(-100%); animation: tp-sheen 3.2s ease-in-out infinite; }
+@keyframes tp-sheen { 60%, 100% { transform: translateX(100%); } }
+@media (prefers-reduced-motion: reduce) { .timepick .tp-outrun::after { animation: none; } }
 
 /* =========================================================
    Mixed media: printed collage. Torn paper, Ben-Day dots, hatching, SFX lettering, marker notes.
@@ -1429,5 +1441,5 @@ h1, h2, h3 { font-family: var(--f-display); font-weight: 700; letter-spacing: 0.
 </style>
 </head><body><div id="root"></div>
 <noscript><p style="padding:2rem;font-family:monospace;color:#f5f2ea;background:#0d0d0d">This page needs JavaScript. Contact: anur.dash@gmail.com</p></noscript>
-<script type="module" src="./assets/app-O34S4ORH.js"></script>
+<script type="module" src="./assets/app-25BIML6I.js"></script>
 </body></html>
