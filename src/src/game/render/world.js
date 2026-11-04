@@ -365,6 +365,7 @@ export function createWorld(renderer, initialCfg) {
     scene.add(player.group);
   }
   // the rival: always the other vehicle, in a contrasting livery (built with the same parts as the player's)
+  let roof = null;
   let rival = null; const cops = []; let ghostShell = null, punch = null;
   // power-ups: a spinning octahedron in a ring, cyan GHOST or amber NITRO
   const powerGeo = new THREE.OctahedronGeometry(0.42, 0), ringGeo = new THREE.TorusGeometry(0.75, 0.035, 8, 40);
@@ -861,11 +862,37 @@ export function createWorld(renderer, initialCfg) {
       camera.fov = fov;
       camera.updateProjectionMatrix();
       camera.position.set(S.x * (1 - e), 2.1 + e * 165, 6.2 + e * 60);
+      // you end on a megatower roof: helipad, glass parapet, aviation lights
+      if (!roof) {
+        roof = new THREE.Group();
+        const slab = new THREE.Mesh(new THREE.BoxGeometry(44, 3, 34), new THREE.MeshStandardMaterial({ color: '#0d0c14', roughness: 0.85, metalness: 0.2 }));
+        slab.position.set(0, 158.5, 59); roof.add(slab);
+        const glass = new THREE.Mesh(new THREE.BoxGeometry(44, 1.3, 0.08), new THREE.MeshBasicMaterial({ color: new THREE.Color('#5ff6ff').multiplyScalar(0.6), transparent: true, opacity: 0.18, depthWrite: false }));
+        glass.position.set(0, 160.65, 42.1); roof.add(glass);
+        const rail = new THREE.Mesh(new THREE.BoxGeometry(44, 0.06, 0.12), new THREE.MeshBasicMaterial({ color: new THREE.Color('#5ff6ff').multiplyScalar(3) }));
+        rail.position.set(0, 161.3, 42.1); roof.add(rail);
+        const red = new THREE.MeshBasicMaterial({ color: new THREE.Color('#ff1a2c').multiplyScalar(6) });
+        roof.reds = [];
+        for (let i = 0; i < 7; i++) { const l = new THREE.Mesh(new THREE.SphereGeometry(0.18, 8, 6), red); l.position.set(-21 + i * 7, 161.4, 42.1); roof.add(l); roof.reds.push(l); }
+        const pad = new THREE.Mesh(new THREE.RingGeometry(5.2, 5.6, 48).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: new THREE.Color('#ffb020').multiplyScalar(2.5) }));
+        pad.position.set(11, 160.03, 56); roof.add(pad);
+        const H = new THREE.Group();
+        for (const [w, d, x, z] of [[0.5, 4, -1.2, 0], [0.5, 4, 1.2, 0], [2.4, 0.5, 0, 0]]) { const b = new THREE.Mesh(new THREE.BoxGeometry(w, 0.02, d), pad.material); b.position.set(x, 0, z); H.add(b); }
+        H.position.set(11, 160.04, 56); roof.add(H);
+        const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.3, 18, 8), new THREE.MeshStandardMaterial({ color: '#1a1822', metalness: 0.6, roughness: 0.4 }));
+        mast.position.set(-16, 169, 50); roof.add(mast);
+        const tip = new THREE.Mesh(new THREE.SphereGeometry(0.35, 8, 6), red); tip.position.set(-16, 178.2, 50); roof.add(tip); roof.reds.push(tip);
+        scene.add(roof);
+      }
+      roof.visible = e > 0.9;
+      const blink = Math.floor(U.uTime.value * 1.2) % 2 === 0;
+      roof.reds.forEach((l) => (l.visible = blink));
       const lookAt = lookT.set(S.x * 0.9, 0.95, -16).lerp(tw.setY(tw.y + 150), e);
       camera.lookAt(lookAt);
       camPos.copy(camera.position);
       return;
     }
+    if (roof) roof.visible = false;
     // camera: chase, FOV breathes with speed, roll into the drift, shake on impact
     const targetFov = 58 + sp * 13 + (S.overclock ? 5 : 0) + (S.slip > 0 ? 4 : 0);
     fov += (targetFov - fov) * Math.min(1, dt * 3);

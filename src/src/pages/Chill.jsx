@@ -350,6 +350,7 @@ export default function Chill() {
         <div hidden={!shown.notes}><Notes /></div>
       </aside>
 
+      {vibe && <button type="button" className="ch-unvibe" onClick={() => setVibe(false)} aria-label="Show the controls">☾ SHOW <kbd>H</kbd></button>}
       <div className="ch-bottom">
         <Drive engine={engine} dim={dim} setDim={setDim} vibe={vibe} setVibe={setVibe} />
         <nav className="ch-dock" aria-label="Show or hide tools">
