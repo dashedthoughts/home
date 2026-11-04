@@ -184,8 +184,8 @@ export function createSim(opts = {}) {
     input.axis = clamp(d * 0.9, -1, 1);
     input.left = input.right = false;
     const cap = MAX * (cfg.cruise || 1.4); // ambient screens can set a cruising speed
-    input.boost = S.heat < 62 && Math.abs(curveAt(S.z + 30)) < 0.45 && S.speed < cap;
-    input.brake = S.speed > cap + 4;
+    input.boost = S.heat < 62 && Math.abs(curveAt(S.z + 30)) < 0.45 && S.speed < cap - 2;
+    input.brake = S.speed > cap + 18; // only a big overshoot brakes; otherwise drag eases it down
   }
 
   // ---------- step ----------
@@ -365,7 +365,7 @@ export function createSim(opts = {}) {
       if (mode !== 'play' && dz > 0 && dz < 16 && Math.abs(dx) < hitW + 0.3) S.speed = Math.min(S.speed, Math.max(c.speed - 0.5, 0));
       if (racing && Math.abs(dz) < hitL && Math.abs(dx) < hitW) {
         if (mode === 'play' && S.invuln <= 0) {
-          S.lives -= 1;
+          if (!cfg.zen) S.lives -= 1;
           S.invuln = 1.6;
           S.hitstop = 0.085;
           c.hit = 1;
@@ -377,7 +377,7 @@ export function createSim(opts = {}) {
           S.chain = 0;
           if (cfg.effects !== 'reduced') { S.shake = 0.45; S.flash = 0.35; }
           emit({ type: 'hit', lives: S.lives });
-          if (mode === 'play' && cfg.police !== false) S.wanted = Math.min(3, S.wanted + 1); // crashes draw the police
+          if (mode === 'play' && cfg.police !== false && !cfg.zen) S.wanted = Math.min(3, S.wanted + 1); // crashes draw the police
           if (S.lives <= 0) {
             S.over = true;
             emit({
@@ -415,11 +415,11 @@ export function createSim(opts = {}) {
       const R = S.rival;
       const gap = R.z - S.z; // + = rival ahead
       // pace follows the player (rubber band), with slow surges and fades so the lead changes hands
-      const wave = 1 + 0.08 * Math.sin(S.time * 0.21) + 0.04 * Math.sin(S.time * 0.67 + 1.3);
+      const wave = 1.03 + 0.08 * Math.sin(S.time * 0.21) + 0.04 * Math.sin(S.time * 0.67 + 1.3); // a touch quicker than you on average
       const ref = Math.max(MAX * 0.85, S.speed);
       const rash = cfg.rash && S.car.bike;
       let want = ref * wave * (diff.rival || 1) * (rash ? 1.04 : 1);
-      if (gap < -40) want = Math.max(want, ref * 1.12); else if (gap > 140) want = Math.min(want, ref * 0.88);
+      if (gap < -30) want = Math.max(want, ref * 1.16); else if (gap > 170) want = Math.min(want, ref * 0.92);
       want = Math.min(want, MAX * 1.4);
       if (S.finale) want = Math.max(0, R.speed - 14 * dt);
       const lead = S.cars.find((o) => o.z - R.z > 0 && o.z - R.z < 42 && Math.abs(o.x - R.x) < 2.2);
@@ -443,7 +443,7 @@ export function createSim(opts = {}) {
           const flank = pl === 0 ? 1 : pl === 2 ? 1 : (R.x >= S.x ? 2 : 0);
           if (!S.cars.some((o) => Math.abs(o.x - LANES[flank]) < 2.4 && o.z - R.z > -6 && o.z - R.z < 20)) R.target = flank;
           want = clamp(S.speed - gap * 0.9, 0, MAX * 1.45);
-          if (R.fightT > 7 || R.stun > 0.8) { R.fight = false; R.fightCd = 8 + rnd() * 4; }
+          if (R.fightT > 8 || R.stun > 0.8) { R.fight = false; R.fightCd = 5 + rnd() * 3; }
         }
       }
       R.speed += clamp(want - R.speed, -16 * dt, 11 * dt);
@@ -466,10 +466,10 @@ export function createSim(opts = {}) {
           } else emit({ type: 'whiff' });
         }
         if (beside && R.cd <= 0 && R.stun <= 0 && S.invuln <= 0) {
-          R.cd = 1.4 + rnd() * 1.2;
-          if (rnd() < 0.6) {
+          R.cd = 0.9 + rnd() * 0.9;
+          if (rnd() < 0.75) {
             const side = Math.sign(S.x - R.x) || 1;
-            S.speed *= 0.82; S.vx += side * 6; S.shake = 0.35; S.heat = Math.min(100, S.heat + 8);
+            S.speed *= 0.78; S.vx += side * 7.5; S.shake = 0.35; S.heat = Math.min(100, S.heat + 8);
             emit({ type: 'struck', x: (R.x + S.x) / 2 });
           }
         }
@@ -490,7 +490,7 @@ export function createSim(opts = {}) {
     }
 
     // ---- police: crashes and brawls raise the wanted level; outrun them, or they pull alongside and bust you ----
-    if (mode === 'play' && cfg.police !== false && racing && !S.finale) {
+    if (mode === 'play' && cfg.police !== false && !cfg.zen && racing && !S.finale) {
       const stars = Math.ceil(S.wanted);
       if (stars >= 1 && !S.cop) { S.cop = { z: S.z - 170, x: S.x, lane: 1, target: 1, speed: S.speed, along: 0, lost: 0 }; emit({ type: 'police', stars }); }
       const K = S.cop;

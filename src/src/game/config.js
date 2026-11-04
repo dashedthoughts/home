@@ -117,3 +117,6 @@ export const SLOGANS = [
   'AUT VIAM INVENIAM', 'SAID ≠ MEANT', 'BRAND IS A MEMORY', 'MEMELORE', 'FIND A WAY',
   'USER JOURNEYS', 'NO FREE LUNCH', 'SHIP IT', 'STAY CURIOUS', 'MAKE ONE', 'MATH-HEAD', 'KEEP DRIVING',
 ];
+
+// Night Shift's city: plain Tokyo street signage instead of the site's own lines
+export const TOKYO_SIGNS = ['ラーメン', '喫茶 夜', 'カラオケ', '居酒屋', '東京 24H', '夜行バス', 'ネオン', '銭湯', '深夜営業', '高速 出口'];

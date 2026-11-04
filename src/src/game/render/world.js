@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import { U, std, basic, buildingMaterial, glowMaterial, decalMaterial, skyMaterial, celestialMaterial, particleMaterial, underglowMaterial } from './materials.js';
 import { roadTextures, kerbTexture, gridTexture, billboardTexture, neonEnvironment } from './textures.js';
 import { buildPlayerCar, createTrafficKit } from './cars.js';
-import { TIMES, WEATHER, LIVERIES, GLOWS, SLOGANS } from '../config.js';
+import { TIMES, WEATHER, LIVERIES, GLOWS, SLOGANS, TOKYO_SIGNS } from '../config.js';
 import { LANES, MAX, mulberry, SECTOR, TUNNEL } from '../sim.js';
 import { createPlayerTrails, createTrafficTrails, createSearchlights, signTextures, createViaduct, createTower, createTunnel, createCityCarpet } from './megacity.js';
 
@@ -250,10 +250,12 @@ export function createWorld(renderer, initialCfg) {
   }
 
   // ---------------------------------------------------------------- billboards & gantries
-  const boardTex = SLOGANS.map((t, i) => billboardTexture(t, ['#fcee0a', '#00f0ff', '#ff2bd6', '#b8ff2e'][i % 4], i % 3 === 0 ? '// SAID BY THE CITY' : ''));
+  const LINES = initialCfg && initialCfg.signs === 'tokyo' ? TOKYO_SIGNS : SLOGANS;
+  const subOf = (i) => (LINES === TOKYO_SIGNS ? (i % 2 ? 'OPEN LATE' : '') : i % 3 === 0 ? '// SAID BY THE CITY' : '');
+  const boardTex = LINES.map((t, i) => billboardTexture(t, ['#fcee0a', '#00f0ff', '#ff2bd6', '#b8ff2e'][i % 4], subOf(i)));
   const boardMats = boardTex.map((t) => basic({ map: t, color: HDR('#ffffff', 1.7) }));
-  if (document.fonts?.ready) Promise.all([document.fonts.load('900 40px "Noto Sans JP"', '高速'), document.fonts.load('700 40px Rajdhani'), document.fonts.load('400 20px "Share Tech Mono"')]).catch(() => {}).then(() => SLOGANS.forEach((t, i) => {
-    const fresh = billboardTexture(t, ['#fcee0a', '#00f0ff', '#ff2bd6', '#b8ff2e'][i % 4], i % 3 === 0 ? '// SAID BY THE CITY' : '');
+  if (document.fonts?.ready) Promise.all([document.fonts.load('900 40px "Noto Sans JP"', '高速'), document.fonts.load('700 40px Rajdhani'), document.fonts.load('400 20px "Share Tech Mono"')]).catch(() => {}).then(() => LINES.forEach((t, i) => {
+    const fresh = billboardTexture(t, ['#fcee0a', '#00f0ff', '#ff2bd6', '#b8ff2e'][i % 4], subOf(i));
     boardTex[i].image = fresh.image;
     boardTex[i].needsUpdate = true;
   }));
@@ -700,7 +702,14 @@ export function createWorld(renderer, initialCfg) {
     pg.position.set(S.x, 0, 0);
     const pitch = -Math.min(0.03, Math.max(-0.03, (S.speed - (P.lastSpeed || 0)) * 0.01));
     if (P.bike) {
-      const sliding = sim.input.brake && S.speed > 22 && sim.mode === 'play';
+      // skills on autopilot (hero + Night Shift): a wheelie, then a lean-slide, every few seconds
+      let wheelie = 0, trickSlide = false;
+      if (sim.mode === 'attract' && fx.view !== 'showroom') {
+        const tc = S.time % 11;
+        if (tc < 2.4) wheelie = Math.sin((tc / 2.4) * Math.PI) * 0.32;
+        trickSlide = tc > 6 && tc < 7.1;
+      }
+      const sliding = (sim.input.brake && S.speed > 22 && sim.mode === 'play') || trickSlide;
       const dir = S.steer < -0.05 ? 1 : -1;
       P.slide = (P.slide || 0) + ((sliding ? dir * 0.95 : 0) - (P.slide || 0)) * Math.min(1, dt * (sliding ? 5 : 3));
       if (Math.abs(P.slide) > 0.3) {
@@ -709,7 +718,8 @@ export function createWorld(renderer, initialCfg) {
         emit(1, { x: S.x + side * 0.6, y: 0.1, z: 1.2 }, { color: '#fff4d0', gain: 4, speed: 2, life: 0.25, size: 0.05, vz: 7 });
       }
       const swing = S.swing > 0 && S.rival ? Math.sign(S.rival.x - S.x) * Math.sin((S.swing / 0.25) * Math.PI) * 0.35 : 0;
-      pg.rotation.set(pitch, -S.vx * 0.02 + P.slide, -S.steer * 0.42 - S.vx * 0.035 - P.slide * 0.55 - swing);
+      pg.rotation.set(pitch + wheelie, -S.vx * 0.02 + P.slide, -S.steer * 0.42 - S.vx * 0.035 - P.slide * 0.55 - swing);
+      pg.position.y = 0.72 * Math.sin(wheelie); // pivot on the rear contact patch
       glowPlane.rotation.z = -pg.rotation.z; // keep the pool flat on the road while the bike leans
     }
     else pg.rotation.set(pitch, -S.vx * 0.032 - S.steer * 0.04, S.vx * 0.012);

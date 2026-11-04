@@ -131,9 +131,8 @@ function Clockwork() {
     return () => { document.title = 'ANURAAG DASH · home'; };
   }, [left, on, mode]);
 
+  const [face, setFace] = useState(load('timerFace', 'digital'));
   const p = 1 - left / total;
-  const R = 92, C = 2 * Math.PI * R;
-  const ang = p * 360;
   return (
     <section className="ch-card ch-pomo" aria-label="Pomodoro and timer">
       <div className="ch-seg" role="tablist">
@@ -141,27 +140,33 @@ function Clockwork() {
           <button key={k} type="button" role="tab" aria-selected={mode === k} className={mode === k ? 'on' : ''} onClick={() => setMode(k)}>{m.label}</button>
         ))}
       </div>
-      <div className="ch-dial">
-        <svg viewBox="0 0 220 220" aria-hidden="true">
-          <defs>
-            <linearGradient id="chArc" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="#00e5ff" /><stop offset="0.55" stopColor="#ff2bd6" /><stop offset="1" stopColor="#ffb347" /></linearGradient>
-          </defs>
-          {Array.from({ length: 60 }, (_, i) => (
-            <line key={i} x1="110" y1={i % 5 ? 8 : 4} x2="110" y2={i % 5 ? 13 : 16} transform={`rotate(${i * 6} 110 110)`} className={i / 60 <= p ? 'tick on' : 'tick'} />
-          ))}
-          <circle cx="110" cy="110" r={R} className="ch-dial__base" />
-          <circle cx="110" cy="110" r={R} className="ch-dial__arc" stroke="url(#chArc)" strokeDasharray={C} strokeDashoffset={C * (1 - p)} transform="rotate(-90 110 110)" />
-          <line x1="110" y1="110" x2="110" y2="34" className="ch-dial__hand" transform={`rotate(${ang} 110 110)`} />
-          <circle cx="110" cy="110" r="4" className="ch-dial__hub" />
-        </svg>
-        <span className="ch-dial__runner" style={{ transform: `rotate(${ang}deg)` }}>
-          <span style={{ transform: `rotate(${-ang}deg)` }}><Runner mode={on && (mode === 'focus' || mode === 'timer') ? 'run' : 'sit'} /></span>
-        </span>
-        <div className="ch-dial__read">
-          <b className="ch-time">{mmss(left)}</b>
-          <span className="ch-k">{MODES[mode].label}</span>
-        </div>
+      <div className="ch-face" role="group" aria-label="Timer face">
+        {['digital', 'analog'].map((k) => <button key={k} type="button" aria-pressed={face === k} className={face === k ? 'on' : ''} onClick={() => { setFace(k); save('timerFace', k); }}>{k}</button>)}
       </div>
+      {face === 'analog' ? (
+        <div className="ch-dial">
+          <svg viewBox="0 0 220 220" aria-hidden="true">
+            {Array.from({ length: 60 }, (_, i) => <line key={i} x1="110" y1={i % 5 ? 8 : 4} x2="110" y2={i % 5 ? 13 : 16} transform={`rotate(${i * 6} 110 110)`} className={i / 60 <= p ? 'tick on' : 'tick'} />)}
+            <circle cx="110" cy="110" r="92" className="ch-dial__base" />
+            <circle cx="110" cy="110" r="92" className="ch-dial__arc" strokeDasharray={578} strokeDashoffset={578 * (1 - p)} transform="rotate(-90 110 110)" />
+            <line x1="110" y1="110" x2="110" y2="34" className="ch-dial__hand" transform={`rotate(${p * 360} 110 110)`} />
+            <circle cx="110" cy="110" r="4" className="ch-dial__hub" />
+          </svg>
+          <span className="ch-dial__runner" style={{ transform: `rotate(${p * 360}deg)` }}>
+            <span style={{ transform: `rotate(${-p * 360}deg)` }}><Runner mode={on && (mode === 'focus' || mode === 'timer') ? 'run' : 'sit'} /></span>
+          </span>
+          <div className="ch-dial__read"><b className="ch-time">{mmss(left)}</b><span className="ch-k">{on ? MODES[mode].label : left < total ? 'PAUSED' : 'READY'}</span></div>
+        </div>
+      ) : (<>
+      <div className="ch-digital">
+        <b className="ch-time">{mmss(left)}</b>
+        <span className="ch-k">{on ? MODES[mode].label : left < total ? 'PAUSED' : `${MODES[mode].label} · READY`}</span>
+      </div>
+      <div className="ch-track" style={{ '--p': p }}>
+        <span className="ch-track__fill" />
+        <span className="ch-track__runner"><Runner mode={on && (mode === 'focus' || mode === 'timer') ? 'run' : 'sit'} /></span>
+      </div>
+      </>)}
       <div className="ch-row">
         <button type="button" className="ch-btn ch-btn--go" onClick={() => setOn((o) => !o)}>{on ? 'PAUSE' : left < total ? 'RESUME' : 'START'}</button>
         <button type="button" className="ch-btn" onClick={() => { setOn(false); setLeft(total); }}>RESET</button>
@@ -177,22 +182,46 @@ function Clockwork() {
   );
 }
 
+// ---------------------------------------------------------------- analog wall clock
+function Analog({ t }) {
+  const h = (t.getHours() % 12) * 30 + t.getMinutes() * 0.5, m = t.getMinutes() * 6 + t.getSeconds() * 0.1, sec = t.getSeconds() * 6;
+  return (
+    <svg className="ch-analog" viewBox="0 0 120 120" aria-hidden="true">
+      <circle cx="60" cy="60" r="56" className="face" />
+      {Array.from({ length: 12 }, (_, i) => <line key={i} x1="60" y1="8" x2="60" y2={i % 3 ? 14 : 19} transform={`rotate(${i * 30} 60 60)`} className={i % 3 ? 'tk' : 'tk tk--q'} />)}
+      <line x1="60" y1="64" x2="60" y2="32" className="h" transform={`rotate(${h} 60 60)`} />
+      <line x1="60" y1="66" x2="60" y2="16" className="m" transform={`rotate(${m} 60 60)`} />
+      <line x1="60" y1="70" x2="60" y2="12" className="s" transform={`rotate(${sec} 60 60)`} />
+      <circle cx="60" cy="60" r="3" className="hub" />
+    </svg>
+  );
+}
+
 // ---------------------------------------------------------------- drive controls: scene + speed
 const SCENES = [['outrun', 'Outrun'], ['tokyo', 'Midnight Tokyo'], ['dusk', 'Dusk'], ['midnight', 'Neon Blue'], ['dawn', 'Dawn']];
-function Drive({ engine }) {
+function Drive({ engine, dim, setDim, vibe, setVibe }) {
   const [scene, setScene] = useState(load('chillScene', 'outrun'));
   const [speed, setSpeed] = useState(load('chillSpeed', 0.8));
   useEffect(() => { engine()?.configure({ time: scene }); save('chillScene', scene); }, [scene, engine]);
   useEffect(() => { engine()?.configure({ cruise: speed }); save('chillSpeed', speed); }, [speed, engine]);
+  const [ride, setRide] = useState(load('chillRide', 'wedge'));
+  useEffect(() => { engine()?.configure({ car: ride }); save('chillRide', ride); }, [ride, engine]);
   return (
     <div className="ch-drive" role="group" aria-label="Drive">
       <div className="ch-drive__scenes">
+        {[['wedge', 'Car'], ['bike', 'Bike · skills']].map(([k, n]) => <button key={k} type="button" aria-pressed={ride === k} className={`ride ${ride === k ? 'on' : ''}`} onClick={() => setRide(k)}>{n}</button>)}
+        <i className="ch-drive__sep" aria-hidden="true" />
         {SCENES.map(([k, n]) => <button key={k} type="button" aria-pressed={scene === k} className={scene === k ? 'on' : ''} onClick={() => setScene(k)}>{n}</button>)}
       </div>
       <label className="ch-drive__speed">
         <span>Cruise</span>
         <input type="range" min="0.25" max="1.3" step="0.05" value={speed} onChange={(e) => setSpeed(+e.target.value)} aria-label="Cruising speed" />
         <b>{Math.round(speed * 252)} km/h</b>
+      </label>
+      <label className="ch-drive__speed">
+        <span>Dim</span>
+        <input type="range" min="0" max="0.75" step="0.05" value={dim} onChange={(e) => { setDim(+e.target.value); save('chillDim', +e.target.value); }} aria-label="Dim the screen" />
+        <button type="button" className="ch-vibe" aria-pressed={vibe} onClick={() => setVibe((v) => !v)}>{vibe ? 'SHOW UI' : 'VIBE'} <kbd>H</kbd></button>
       </label>
     </div>
   );
@@ -212,40 +241,57 @@ function Notes() {
 }
 
 // ---------------------------------------------------------------- music: any YouTube link; Nightcall by default (official upload)
-const DEFAULT_SONG = { id: 'MV_3Dpw-BRY', title: 'Nightcall', by: 'Kavinsky' };
-const ytId = (s) => { const m = String(s).match(/(?:v=|youtu\.be\/|embed\/|shorts\/)([\w-]{11})/) || String(s).match(/^([\w-]{11})$/); return m ? m[1] : null; };
+const DEFAULT_SONG = { v: 'MV_3Dpw-BRY', list: 'RDMV_3Dpw-BRY', title: 'Nightcall Mix', by: 'YouTube Mix · Kavinsky' };
+const parseYT = (str) => {
+  const list = String(str).match(/[?&]list=([\w-]+)/);
+  const v = String(str).match(/(?:v=|youtu\.be\/|embed\/|shorts\/)([\w-]{11})/) || String(str).match(/^([\w-]{11})$/);
+  return list ? { list: list[1], v: v ? v[1] : undefined } : v ? { v: v[1] } : null;
+};
+const ytSrc = (s) => (s.list
+  ? `https://www.youtube-nocookie.com/embed/${s.v ? `${s.v}?list=${s.list}&` : `videoseries?list=${s.list}&`}autoplay=1&rel=0`
+  : `https://www.youtube-nocookie.com/embed/${s.v}?autoplay=1&loop=1&playlist=${s.v}&rel=0`);
 
 function Music() {
-  const [song, setSong] = useState(load('song', DEFAULT_SONG));
-  const [live, setLive] = useState(false);
+  const [song, setSong] = useState(() => { const x = load('song2', null); return x && (x.v || x.list) ? x : DEFAULT_SONG; });
   const [draft, setDraft] = useState('');
   const pick = (e) => {
     e.preventDefault();
-    const id = ytId(draft.trim());
-    if (!id) return;
-    const next = { id, title: 'Your track', by: 'YouTube' };
-    setSong(next); save('song', next); setDraft(''); setLive(true);
-    fetch(`https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${id}&format=json`).then((r) => r.json()).then((j) => { const n = { id, title: j.title, by: j.author_name }; setSong(n); save('song', n); }).catch(() => {});
+    const r = parseYT(draft.trim());
+    if (!r) return;
+    const next = { ...r, title: r.list ? 'Your mix' : 'Your track', by: 'YouTube' };
+    setSong(next); save('song2', next); setDraft('');
+    if (r.v) fetch(`https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${r.v}&format=json`).then((x) => x.json()).then((j) => { const n = { ...next, title: j.title, by: j.author_name }; setSong(n); save('song2', n); }).catch(() => {});
   };
   return (
     <section className="ch-card ch-music" aria-label="Music">
-      <span className="ch-k">NOW PLAYING</span>
-      {live ? (
-        <iframe className="ch-yt" src={`https://www.youtube-nocookie.com/embed/${song.id}?autoplay=1&loop=1&playlist=${song.id}&modestbranding=1&rel=0`} title={`${song.title} · ${song.by}`} allow="autoplay; encrypted-media" />
-      ) : (
-        <button type="button" className="ch-cover" onClick={() => setLive(true)} style={{ backgroundImage: `url(https://i.ytimg.com/vi/${song.id}/hqdefault.jpg)` }}>
-          <span className="ch-cover__play" aria-hidden="true">▶</span>
-          <span className="ch-cover__t"><b>{song.title}</b><i>{song.by}</i></span>
-          <span className="sr-only">Play {song.title}</span>
-        </button>
-      )}
+      <span className="ch-k">NOW PLAYING <i>{song.title}</i></span>
+      <iframe className="ch-yt" src={ytSrc(song)} title={`${song.title} · ${song.by}`} allow="autoplay; encrypted-media" />
       <form className="ch-pick" onSubmit={pick}>
-        <input value={draft} onChange={(e) => setDraft(e.target.value)} placeholder="Paste a YouTube link" aria-label="YouTube link" />
+        <input value={draft} onChange={(e) => setDraft(e.target.value)} placeholder="Paste a YouTube video, playlist or Mix" aria-label="YouTube link" />
         <button type="submit" className="ch-btn">LOAD</button>
-        {song.id !== DEFAULT_SONG.id && <button type="button" className="ch-btn" onClick={() => { setSong(DEFAULT_SONG); save('song', DEFAULT_SONG); }}>NIGHTCALL</button>}
+        {song.list !== DEFAULT_SONG.list && <button type="button" className="ch-btn" onClick={() => { setSong(DEFAULT_SONG); save('song2', DEFAULT_SONG); }}>NIGHTCALL</button>}
       </form>
     </section>
   );
+}
+
+// ---------------------------------------------------------------- street lines: original, rotating
+const LINES = [
+  'The city never sleeps. It just dims the lights and waits for you.',
+  'Every neon sign is somebody else\'s dream, rented by the hour.',
+  'Drive like the rent is due and the road is free.',
+  'Chrome fades. Good work ships.',
+  'At 3 a.m. the highway is the only honest thing in town.',
+  'Keep your engine warm and your plans warmer.',
+  'Somewhere up there a sign is spelling your name wrong. Make it right.',
+  'Rain on the windshield, a deadline in the rear-view. Keep going.',
+  'Find a way, or make one. Then make it look good.',
+  'The skyline is just the city showing off. Show off back.',
+];
+function StreetLine() {
+  const [i, setI] = useState(() => Math.floor(Math.random() * LINES.length));
+  useEffect(() => { const t = setInterval(() => setI((x) => (x + 1) % LINES.length), 18000); return () => clearInterval(t); }, []);
+  return <p className="ch-line" key={i} aria-live="off">“{LINES[i]}”</p>;
 }
 
 // ---------------------------------------------------------------- page
@@ -253,54 +299,69 @@ export default function Chill() {
   const canvas = useRef(null);
   const [now, setNow] = useState(new Date());
   const [rain, setRain] = useState(false);
-  useEffect(() => { const t = setInterval(() => setNow(new Date()), 1000 * 15); return () => clearInterval(t); }, []);
+  const [dim, setDim] = useState(load('chillDim', 0.2));
+  const [vibe, setVibe] = useState(false);
+  const [open, setOpen] = useState(null);
+  useEffect(() => {
+    const k = (e) => { if (e.key.toLowerCase() === 'h' && !(e.target instanceof HTMLInputElement) && !(e.target instanceof HTMLTextAreaElement)) setVibe((v) => !v); };
+    addEventListener('keydown', k);
+    return () => removeEventListener('keydown', k);
+  }, []);
+  useEffect(() => { const t = setInterval(() => setNow(new Date()), 1000); return () => clearInterval(t); }, []);
   const onWet = useCallback((wet) => setRain(wet), []);
   const engine = useCallback(() => canvas.current?.engine, []);
-  // this page's type: a wide display face for numerals, a quiet grotesk for text (loaded here only)
-  useEffect(() => {
-    if (document.getElementById('ch-fonts')) return;
-    const l = document.createElement('link');
-    l.id = 'ch-fonts'; l.rel = 'stylesheet';
-    l.href = 'https://fonts.googleapis.com/css2?family=Unbounded:wght@300;500;700&family=Manrope:wght@400;500;700&display=swap';
-    document.head.appendChild(l);
-  }, []);
   const [w, locate] = useWeather(onWet);
   useEffect(() => { canvas.current?.engine?.configure({ weather: rain ? 'rain' : 'clear' }); }, [rain]);
 
   return (
-    <main className="chill">
+    <main className={`chill ${vibe ? 'chill--vibe' : ''}`}>
       <Nav />
       <GameCanvas
         ref={canvas}
         mode="attract"
-        lite
         lockTime
+        autoPause
         className="chill__bg"
-        config={{ time: load('chillScene', 'outrun'), cruise: load('chillSpeed', 0.8), weather: rain ? 'rain' : 'clear' }}
+        config={{ time: load('chillScene', 'outrun'), cruise: load('chillSpeed', 0.8), weather: rain ? 'rain' : 'clear', difficulty: 'chill', effects: 'full', signs: 'tokyo', car: load('chillRide', 'wedge') }}
         label="Ambient backdrop: a car on autopilot down a sunset highway"
       />
       <div className="chill__shade" aria-hidden="true" />
-      <div className="chill__grid">
-        <div className="chill__left">
-          <section className="ch-card ch-now" aria-label="Time and weather">
-            <span className="ch-k">Night shift · {w.place.toLowerCase()}</span>
-            <b className="ch-clock">{now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</b>
-            <span className="ch-date">{now.toLocaleDateString([], { weekday: 'long', day: 'numeric', month: 'long' })}</span>
-            {w.temp != null ? (
-              <div className="ch-wx">
-                <span className="ch-wx__g" aria-hidden="true">{w.glyph}</span>
-                <span><b>{w.temp}°</b> {w.label.toLowerCase()}<br /><i>feels {w.feels}° · wind {w.wind} km/h · {w.hum}% humid</i></span>
-              </div>
-            ) : <span className="ch-date">{w.note}</span>}
-            <button type="button" className="ch-link" onClick={locate}>{w.place === 'TOKYO' ? '◎ Use my weather' : '◎ Refresh'}</button>
-          </section>
-          <Clockwork />
+      <div className="chill__dim" aria-hidden="true" style={{ opacity: dim }} />
+      {/* ambient readout: no card, just light type over the drive */}
+      <div className="ch-ambient" aria-label="Time and weather">
+        <Analog t={now} />
+        <div>
+          <b className="ch-clock">{now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</b>
+          <span className="ch-amb__wx">
+            {w.temp != null ? <>{w.glyph} {w.temp}° {w.label.toLowerCase()} · {w.place.toLowerCase()}</> : w.note}
+            {' '}<button type="button" className="ch-link" onClick={locate}>◎</button>
+          </span>
         </div>
-        <Drive engine={engine} />
-        <div className="chill__side">
-          <Music />
-          <Notes />
+      </div>
+
+      {/* one panel at a time, opened from the dock; music stays mounted so it keeps playing */}
+      <div className={`ch-pop ${open ? 'is-open' : ''}`}>
+        <div hidden={open !== 'timer'}><Clockwork /></div>
+        <div className={open === 'music' ? '' : 'ch-keep'}><Music /></div>
+        <div hidden={open !== 'notes'}><Notes /></div>
+        <div hidden={open !== 'search'}>
+          <form className="ch-card ch-search" action="https://www.google.com/search" method="get" target="_blank">
+            <span className="ch-k">SEARCH THE NET</span>
+            <div className="ch-pick"><input name="q" placeholder="Search Google" aria-label="Search Google" autoComplete="off" /><button type="submit" className="ch-btn">GO ↗</button></div>
+          </form>
         </div>
+        <div hidden={open !== 'drive'}><Drive engine={engine} dim={dim} setDim={setDim} vibe={vibe} setVibe={setVibe} /></div>
+      </div>
+
+      <div className="ch-bottom">
+        <StreetLine />
+        <nav className="ch-dock" aria-label="Night Shift tools">
+          {[['timer', '◷', 'Timer'], ['music', '♪', 'Music'], ['notes', '✎', 'Notes'], ['search', '⌕', 'Search'], ['drive', '⚙', 'Drive']].map(([k, g, n]) => (
+            <button key={k} type="button" aria-pressed={open === k} className={open === k ? 'on' : ''} onClick={() => setOpen((o) => (o === k ? null : k))} title={n}>
+              <span aria-hidden="true">{g}</span><i>{n}</i>
+            </button>
+          ))}
+        </nav>
       </div>
     </main>
   );

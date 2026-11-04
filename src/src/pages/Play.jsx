@@ -18,17 +18,19 @@ const STAT_MAX = { top: 1.1, accel: 1.3, grip: 1.3, cool: 1.35 };
 const pad2 = (n) => String(n).padStart(2, '0');
 
 // radio: the built-in synth, two picks, or any YouTube video / playlist link
-const STATIONS = { nightcall: { v: 'MV_3Dpw-BRY', name: 'Nightcall · Kavinsky' }, dracula: { v: 'xnP7qKxwzjg', name: 'Dracula · Tame Impala' } };
+// YouTube Mixes (list=RD + video id): an endless radio seeded by the track
+const STATIONS = { nightcall: { v: 'MV_3Dpw-BRY', list: 'RDMV_3Dpw-BRY', name: 'Nightcall Mix' }, dracula: { v: 'xnP7qKxwzjg', list: 'RDxnP7qKxwzjg', name: 'Dracula Mix' } };
 const parseYT = (s) => {
   const list = String(s).match(/[?&]list=([\w-]+)/);
   const v = String(s).match(/(?:v=|youtu\.be\/|embed\/|shorts\/)([\w-]{11})/) || String(s).match(/^([\w-]{11})$/);
-  return list ? { list: list[1] } : v ? { v: v[1] } : null;
+  return list ? { list: list[1], v: v ? v[1] : undefined } : v ? { v: v[1] } : null; // a Mix needs its seed video to embed
 };
 const ytSrc = (r) => (r.list
-  ? `https://www.youtube-nocookie.com/embed/videoseries?list=${r.list}&autoplay=1`
+  ? `https://www.youtube-nocookie.com/embed/${r.v ? `${r.v}?list=${r.list}&` : `videoseries?list=${r.list}&`}autoplay=1&rel=0`
   : `https://www.youtube-nocookie.com/embed/${r.v}?autoplay=1&loop=1&playlist=${r.v}&rel=0`);
 function radioOf(cfg) {
-  if (!cfg.radio || cfg.radio === 'synth') return null;
+  if (cfg.radio === 'synth') return null;
+  if (!cfg.radio) return { ...STATIONS.dracula };
   if (STATIONS[cfg.radio]) return { ...STATIONS[cfg.radio] };
   return cfg.radioLink ? { ...parseYT(cfg.radioLink), name: 'Your pick' } : null;
 }
@@ -81,6 +83,7 @@ export default function Play() {
   const [pops, setPops] = useState([]);
   const [runFiles, setRunFiles] = useState([]);
   const [final, setFinal] = useState(null);
+  const [radioOn, setRadioOn] = useState(false); // starts on the first JACK IN (a user gesture) and keeps playing
   const [best, setBestState] = useState(() => getBestBy(getRaceConfig().difficulty));
   const [newBest, setNewBest] = useState(false);
   const phaseRef = useRef(phase);
@@ -162,7 +165,7 @@ export default function Play() {
           const p = projects[(e.n - 1) % projects.length];
           addDecrypted(p.slug);
           setRunFiles((f) => (f.some((x) => x.slug === p.slug) ? f : [...f, p]));
-          pop(`FILE ${pad2(e.n)} OPEN`, 'ok', p.title.toUpperCase());
+          pop(`FILE ${pad2(e.n)} OPEN`, 'ok', `${10 - e.n} TO THE LOOKOUT`);
           break;
         }
         case 'over': {
@@ -184,6 +187,7 @@ export default function Play() {
 
   // ---------- flow ----------
   const start = useCallback(() => {
+    setRadioOn(true);
     const g = eng();
     if (!g) return;
     setRunFiles([]);
@@ -360,7 +364,7 @@ export default function Play() {
         </div>
       )}
 
-      {(phase === 'run' || phase === 'paused') && radioOf(cfg) && (radioOf(cfg).v || radioOf(cfg).list) && (
+      {radioOn && radioOf(cfg) && (radioOf(cfg).v || radioOf(cfg).list) && (
         <div className="radio">
           <span>♪ {radioOf(cfg).name}</span>
           <iframe src={ytSrc(radioOf(cfg))} title={radioOf(cfg).name} allow="autoplay; encrypted-media" />
@@ -395,109 +399,56 @@ export default function Play() {
           <header className="garage__head">
             <p className="hud-label">// SIDE JOB · NIGHT COURIER</p>
             <h1 id="rl-title" className="rl-logo">REDLINE</h1>
-            <nav className="garage__tabs" role="tablist" aria-label="Menu">
-              {[['run', 'RUN'], ['garage', 'GARAGE'], ['world', 'WORLD & SETTINGS']].map(([k, t]) => (
-                <button key={k} role="tab" type="button" aria-selected={tab === k} className={tab === k ? 'on' : ''} onClick={() => { setTab(k); eng()?.uiSound('ui'); }}>
-                  {t}
-                </button>
-              ))}
-            </nav>
           </header>
 
-          <div className="garage__body">
-            {tab === 'run' && (
-              <div className="tabpane">
-                <p className="garage__lede">
-                  Ten of my case files are loose on the ring road as data shards. Every five you grab opens one; open all
-                  ten and the road ends at the lookout. Race KUROGANE there, or cruise it alone. Hold a lane under the
-                  junction signs to pick your route and tuck in behind traffic to cool the engine.
-                </p>
-                <Seg
-                  label="MODE"
-                  value={cfg.race === false ? 'free' : cfg.rash && cfg.car === 'bike' ? 'rash' : 'race'}
-                  options={[['race', 'RACE KUROGANE'], ...(cfg.car === 'bike' ? [['rash', 'RASH · BIKE BRAWL']] : []), ['free', 'FREE RUN']]}
-                  onChange={(v) => update({ race: v !== 'free', rash: v === 'rash' })}
-                />
-                <Seg
-                  label="RADIO"
-                  value={cfg.radio || 'synth'}
-                  options={[['synth', 'SYNTH LOOP'], ['nightcall', 'NIGHTCALL'], ['dracula', 'DRACULA'], ['link', 'YOUR LINK']]}
-                  onChange={(v) => update({ radio: v })}
-                />
-                {cfg.radio === 'link' && (
-                  <input className="radio-link" defaultValue={cfg.radioLink || ''} placeholder="Paste a YouTube video or playlist link" aria-label="YouTube link"
-                    onChange={(e) => { if (parseYT(e.target.value.trim())) update({ radioLink: e.target.value.trim() }); }} />
-                )}
-                <Seg label="POLICE" value={cfg.police === false ? 'off' : 'on'} options={[['on', 'ON · CRASHES DRAW HEAT'], ['off', 'OFF']]} onChange={(v) => update({ police: v === 'on' })} />
-                {cfg.car === 'bike' && cfg.rash && <p className="garage__warn">Rash: ride up beside KUROGANE and hit X (or STRIKE) to knock him wide. He hits back.</p>}
-                <Seg
-                  label="TRAFFIC"
-                  value={cfg.difficulty}
-                  options={Object.entries(DIFFICULTY).map(([k, d]) => [k, d.name])}
-                  onChange={(v) => update({ difficulty: v })}
-                />
-                <p className="garage__note">{DIFFICULTY[cfg.difficulty].blurb} Best on {DIFFICULTY[cfg.difficulty].name}: <b>{best.toLocaleString('en-IN')}</b></p>
-                <dl className="controls">
-                  <div><dt>◀ ▶ · A D</dt><dd>steer</dd></div>
-                  <div><dt>▲ · W · SPACE</dt><dd>overclock: double points, heat builds</dd></div>
-                  <div><dt>▼ · S</dt><dd>brake</dd></div>
-                  <div><dt>ESC · P</dt><dd>pause</dd></div>
-                  <div><dt>GAMEPAD</dt><dd>stick · A/RT boost · B/LT brake</dd></div>
-                </dl>
-                <p className="garage__warn">Run the heat to the top and the signal glitches: steering flips until you cool off.</p>
-              </div>
+          <div className="garage__body garage__body--one">
+            <div className="pick2" role="radiogroup" aria-label="Vehicle">
+              {Object.entries(CARS).map(([k, c]) => (
+                <button key={k} type="button" role="radio" aria-checked={cfg.car === k} className={`pick2__v ${cfg.car === k ? 'on' : ''}`} onClick={() => update({ car: k, ...(k !== 'bike' && cfg.rash ? { rash: false } : {}) })}>
+                  <b>{c.name}</b><span>{k === 'bike' ? 'Superbike · quick, twitchy, can brawl' : 'Wedge coupé · planted, fast, honest'}</span>
+                </button>
+              ))}
+            </div>
+            <Seg
+              label="MODE"
+              value={cfg.zen ? 'zen' : cfg.race === false ? 'free' : cfg.rash && cfg.car === 'bike' ? 'rash' : 'race'}
+              options={[['race', 'RACE'], ...(cfg.car === 'bike' ? [['rash', 'ROAD BRAWL']] : []), ['zen', 'ZEN RACE'], ['free', 'FREE RUN']]}
+              onChange={(v) => update({ race: v !== 'free', rash: v === 'rash', zen: v === 'zen' })}
+            />
+            <p className="garage__note">{cfg.zen ? 'Race KUROGANE with no damage and no police. Crashes only cost speed.' : cfg.race === false ? 'Just you, the traffic and the road.' : cfg.rash && cfg.car === 'bike' ? 'Ride up beside KUROGANE and hit X to knock him wide. He hits back.' : 'First to the lookout wins. Crashes cost integrity and draw the police.'}</p>
+            <Seg label="RADIO" value={cfg.radio || 'dracula'} options={[['dracula', 'DRACULA MIX'], ['nightcall', 'NIGHTCALL MIX'], ['synth', 'SYNTH LOOP'], ['link', 'YOUR MIX']]} onChange={(v) => update({ radio: v })} />
+            {cfg.radio === 'link' && (
+              <input className="radio-link" defaultValue={cfg.radioLink || ''} placeholder="Paste a YouTube video, playlist or Mix link" aria-label="YouTube link"
+                onChange={(e) => { if (parseYT(e.target.value.trim())) update({ radioLink: e.target.value.trim() }); }} />
             )}
-
-            {tab === 'garage' && (
-              <div className="tabpane">
-                <div className="cars" role="radiogroup" aria-label="Car">
-                  {Object.entries(CARS).map(([k, c]) => (
-                    <button key={k} type="button" role="radio" aria-checked={cfg.car === k} className={`carcard ${cfg.car === k ? 'on' : ''}`} onClick={() => update({ car: k })}>
-                      <b>{c.name}</b>
-                      <StatBar k="TOP" v={c.top} />
-                      <StatBar k="ACCEL" v={c.accel} />
-                      <StatBar k="GRIP" v={c.grip} />
-                      <StatBar k="COOL" v={c.cool} />
-                    </button>
-                  ))}
-                </div>
-                <p className="garage__note">{car.blurb}</p>
-                <div className="swatches-row" role="radiogroup" aria-label="Livery">
-                  <span className="seg__label">LIVERY · {LIVERIES[cfg.livery].name}</span>
-                  <div>
-                    {LIVERIES.map((l, i) => (
-                      <button key={l.name} type="button" role="radio" aria-checked={cfg.livery === i} aria-label={l.name} className={`liv ${cfg.livery === i ? 'on' : ''}`} onClick={() => update({ livery: i })} style={{ '--a': l.body, '--b': l.stripe }} />
-                    ))}
-                  </div>
-                </div>
-                <div className="swatches-row" role="radiogroup" aria-label="Underglow">
-                  <span className="seg__label">UNDERGLOW · {GLOWS[cfg.glow].name}</span>
-                  <div>
-                    {GLOWS.map((g, i) => (
-                      <button key={g.name} type="button" role="radio" aria-checked={cfg.glow === i} aria-label={g.name} className={`glw ${cfg.glow === i ? 'on' : ''} ${g.color ? '' : 'off'}`} onClick={() => update({ glow: i })} style={{ '--a': g.color || 'transparent' }} />
-                    ))}
-                  </div>
-                </div>
+            <div className="swatches-row swatches-row--inline" role="radiogroup" aria-label="Livery">
+              <span className="seg__label">PAINT</span>
+              <div>
+                {LIVERIES.map((l, i) => (
+                  <button key={l.name} type="button" role="radio" aria-checked={cfg.livery === i} aria-label={l.name} className={`liv ${cfg.livery === i ? 'on' : ''}`} onClick={() => update({ livery: i })} style={{ '--a': l.body, '--b': l.stripe }} />
+                ))}
               </div>
-            )}
-
-            {tab === 'world' && (
-              <div className="tabpane">
-                <Seg label="TIME" value={cfg.time} options={Object.entries(TIMES).map(([k, t]) => [k, t.name])} onChange={(v) => update({ time: v })} />
-                <Seg label="WEATHER" value={cfg.weather} options={Object.entries(WEATHER).map(([k, t]) => [k, t.name])} onChange={(v) => update({ weather: v })} />
-                {cfg.weather === 'rain' && <p className="garage__note">Wet road: less grip, longer reflections. Brake earlier.</p>}
-                <Seg label="GRAPHICS" value={cfg.quality} options={Object.entries(QUALITY).map(([k, t]) => [k, t.name])} onChange={(v) => update({ quality: v })} />
-                <p className="garage__note">{cfg.quality === 'auto' ? `AUTO picked ${QUALITY[resolveQuality('auto')].name} for this device and drops to LOW by itself if it struggles.` : cfg.quality === 'high' ? 'HIGH: full resolution and 4× anti-aliasing. For strong GPUs.' : cfg.quality === 'low' ? 'LOW: fewer pixels, lighter bloom, no searchlights or light pools.' : 'BALANCED: the full look at a sane pixel budget.'}</p>
-                <Toggle label="Steering assist" hint="Gently settles you into the nearest lane." checked={cfg.assist} onChange={(v) => update({ assist: v })} />
-                <Toggle label="Reduced effects" hint="No shake, flashes, tearing or speed blur." checked={cfg.effects === 'reduced'} onChange={(v) => update({ effects: v ? 'reduced' : 'full' })} />
-                <Toggle label="Sound effects" checked={cfg.sound} onChange={(v) => update({ sound: v })} />
-                <Toggle label="Music" hint="An original synth loop." checked={cfg.music} onChange={(v) => update({ music: v })} />
-                <label className="slider">
-                  <span className="seg__label">VOLUME</span>
-                  <input type="range" min="0" max="1" step="0.05" value={cfg.volume} onChange={(e) => update({ volume: +e.target.value })} />
-                </label>
+              <span className="seg__label">GLOW</span>
+              <div>
+                {GLOWS.map((g, i) => (
+                  <button key={g.name} type="button" role="radio" aria-checked={cfg.glow === i} aria-label={g.name} className={`glw ${cfg.glow === i ? 'on' : ''} ${g.color ? '' : 'off'}`} onClick={() => update({ glow: i })} style={{ '--a': g.color || 'transparent' }} />
+                ))}
               </div>
-            )}
+            </div>
+            <details className="more">
+              <summary>MORE · traffic, police, world, graphics, sound</summary>
+              <Seg label="TRAFFIC" value={cfg.difficulty} options={Object.entries(DIFFICULTY).map(([k, d]) => [k, d.name])} onChange={(v) => update({ difficulty: v })} />
+              <p className="garage__note">{DIFFICULTY[cfg.difficulty].blurb} Best: <b>{best.toLocaleString('en-IN')}</b></p>
+              {!cfg.zen && <Seg label="POLICE" value={cfg.police === false ? 'off' : 'on'} options={[['on', 'ON'], ['off', 'OFF']]} onChange={(v) => update({ police: v === 'on' })} />}
+              <Seg label="TIME" value={cfg.time} options={Object.entries(TIMES).map(([k, t]) => [k, t.name])} onChange={(v) => update({ time: v })} />
+              <Seg label="WEATHER" value={cfg.weather} options={Object.entries(WEATHER).map(([k, t]) => [k, t.name])} onChange={(v) => update({ weather: v })} />
+              <Seg label="GRAPHICS" value={cfg.quality} options={Object.entries(QUALITY).map(([k, t]) => [k, t.name])} onChange={(v) => update({ quality: v })} />
+              <Toggle label="Steering assist" checked={cfg.assist} onChange={(v) => update({ assist: v })} />
+              <Toggle label="Reduced effects" checked={cfg.effects === 'reduced'} onChange={(v) => update({ effects: v ? 'reduced' : 'full' })} />
+              <Toggle label="Sound effects" checked={cfg.sound} onChange={(v) => update({ sound: v })} />
+              <label className="slider"><span className="seg__label">VOLUME</span><input type="range" min="0" max="1" step="0.05" value={cfg.volume} onChange={(e) => update({ volume: +e.target.value })} /></label>
+            </details>
+            <p className="controls-line">◀ ▶ steer · ▲ overclock · ▼ brake · C camera{cfg.rash && cfg.car === 'bike' ? ' · X strike' : ''} · ESC pause</p>
           </div>
 
           <footer className="garage__foot">
@@ -545,7 +496,7 @@ export default function Play() {
             <>
               <p className="hud-label">// LAST EXIT · THE LOOKOUT · {DIFFICULTY[cfg.difficulty].name}</p>
               <h2 id="rl-over" className="panel__h panel__h--win">THE CITY IS YOURS</h2>
-              <p className="garage__lede">All ten files, decrypted. Thanks for the drive. The work is waiting below.</p>
+              <p className="garage__lede">Ten files, one lookout. Thanks for the drive.</p>
             </>
           ) : (
             <>
@@ -568,24 +519,11 @@ export default function Play() {
             {final.won !== undefined && final.won !== null && <div><span>RACE</span><b style={{ color: final.won ? 'var(--success)' : 'var(--alert-text)' }}>{final.won ? 'WON' : 'LOST'}</b></div>}
             {final.sectors && <div><span>SECTORS</span><b>{final.sectors}</b></div>}
           </div>
-          {runFiles.length > 0 ? (
-            <>
-              <p className="hud-label">{final.complete ? 'EVERY FILE · READ THEM' : 'DECRYPTED THIS RUN · READ THEM'}</p>
-              <ul className="loot">
-                {runFiles.map((p) => (
-                  <li key={p.slug}><Link to={`/p/${p.slug}`}>{p.title} ›</Link></li>
-                ))}
-              </ul>
-            </>
-          ) : (
-            <p className="garage__note">No files cracked this time. Five shards open one.</p>
-          )}
           <div className="btn-row">
             <button type="button" className="btn btn--signal" onClick={start} autoFocus>
               RUN IT BACK <span className="btn__k">ENTER</span>
             </button>
             <button type="button" className="btn btn--ghost" onClick={toGarage}>GARAGE</button>
-            <Link to="/#work" className="btn btn--ghost">ALL CASE FILES</Link>
           </div>
         </section>
       )}

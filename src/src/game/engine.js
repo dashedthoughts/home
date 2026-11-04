@@ -95,10 +95,10 @@ export function createRedline(canvas, opts = {}) {
       case 'glitch': audio?.sfx('glitch'); break;
       case 'count': audio?.sfx('count'); break;
       case 'go': audio?.sfx('go'); break;
-      case 'over': audio?.sfx('over'); audio?.musicStop(); break;
+      case 'over': audio?.sfx('over'); break; // the music plays on through the results
       case 'junction': audio?.sfx('slip'); break;
       case 'finale': audio?.sfx('file'); break;
-      case 'complete': audio?.engine(false, 0, false); audio?.musicStop(); break;
+      case 'complete': audio?.engine(false, 0, false); break;
       default:
     }
     onEvent(e);
@@ -153,9 +153,10 @@ export function createRedline(canvas, opts = {}) {
     const L = post.lens;
     const sp = S.speed / MAX;
     L.uTime.value += dt;
-    L.uSpeed.value = fx.full ? sp : 0;
-    L.uGlitch.value = S.glitch > 0 ? (fx.full ? 0.6 + 0.4 * Math.random() : 0) : 0;
-    L.uFlash.value = fx.full && S.flash > 0 ? S.flash * 2 : 0;
+    // effects stay in the background: lighter speed blur, softer glitch and flash
+    L.uSpeed.value = fx.full ? sp * 0.6 : 0;
+    L.uGlitch.value = S.glitch > 0 ? (fx.full ? 0.3 + 0.2 * Math.random() : 0) : 0;
+    L.uFlash.value = fx.full && S.flash > 0 ? S.flash * 0.9 : 0;
     L.uBoost.value = S.slip > 0 ? Math.min(1, S.slip) : 0;
     const linesT = !lite && fx.full && fx.view !== 'showroom' && (S.overclock || S.slip > 0) ? Math.min(1, (sp - 0.7) * 2.5) : 0;
     if (lite) L.uSpeed.value *= 0.55;
@@ -272,10 +273,10 @@ export function createRedline(canvas, opts = {}) {
       sim.setMode(m);
       if (m === 'play' && audio) {
         audio.unlock();
-        audio.configure({ sound: cfg.sound, music: (cfg.music && (!cfg.radio || cfg.radio === 'synth')), volume: cfg.volume });
-        if ((cfg.music && (!cfg.radio || cfg.radio === 'synth'))) audio.musicStart();
+        audio.configure({ sound: cfg.sound, music: (cfg.music && cfg.radio === 'synth'), volume: cfg.volume });
+        if ((cfg.music && cfg.radio === 'synth')) audio.musicStart();
       }
-      if (m !== 'play') { audio?.engine(false, 0, false); audio?.musicStop(); }
+      if (m !== 'play') audio?.engine(false, 0, false); // engine note off; music keeps going in the menus
     },
     configure(next) {
       const prevQ = cfg.quality;
@@ -284,8 +285,8 @@ export function createRedline(canvas, opts = {}) {
       sim.configure(cfg);
       world.applyConfig(cfg);
       if (audio) {
-        audio.configure({ sound: cfg.sound, music: (cfg.music && (!cfg.radio || cfg.radio === 'synth')), volume: cfg.volume });
-        if (sim.mode === 'play' && !sim.S.over) (cfg.music && (!cfg.radio || cfg.radio === 'synth')) ? audio.musicStart() : audio.musicStop();
+        audio.configure({ sound: cfg.sound, music: (cfg.music && cfg.radio === 'synth'), volume: cfg.volume });
+        if (sim.mode === 'play' && !sim.S.over) (cfg.music && cfg.radio === 'synth') ? audio.musicStart() : audio.musicStop();
       }
       if (prevQ !== cfg.quality) {
         effective = resolveQuality(cfg.quality);

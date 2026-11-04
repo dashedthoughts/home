@@ -38,7 +38,7 @@ const LensShader = {
       // speed: radial blur toward the vanishing point, only at the edges
       float sp = max(0.0, uSpeed - 0.55);
       float blur = sp * sp * 0.05 * smoothstep(0.35, 1.0, r);
-      float ca = 0.0015 + uSpeed * 0.0035 + uGlitch * 0.012;
+      float ca = 0.001 + uSpeed * 0.0025 + uGlitch * 0.008;
       vec3 col = vec3(0.0);
       vec2 dir = normalize(c + 1e-5) * ca * r;
       if (blur < 0.0005) {
@@ -60,7 +60,7 @@ const LensShader = {
         float t = floor(uTime * 24.0);
         float on = step(0.86, h(vec2(id, t)));
         float w = smoothstep(0.5, 0.0, abs(fract(ang * 90.0) - 0.5) - 0.38);
-        col += vec3(1.0, 0.96, 0.9) * on * w * smoothstep(0.42, 1.0, r) * uLines * 0.55;
+        col += vec3(1.0, 0.96, 0.9) * on * w * smoothstep(0.42, 1.0, r) * uLines * 0.28;
       }
       // film grade: crush blacks, warm the highlights, red halation around hot spots
       float lum = dot(col, vec3(0.299, 0.587, 0.114));

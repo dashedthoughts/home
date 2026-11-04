@@ -265,3 +265,26 @@
 .radio iframe { width: 200px; height: 113px; border: 0; border-radius: 4px; box-shadow: 0 8px 24px rgba(0,0,0,.6); }
 .radio-link { width: 100%; font: 400 0.85rem / 1 var(--f-body); color: var(--ink); background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.18); padding: 9px 10px; }
 @media (max-width: 760px) { .radio { left: auto; right: var(--sp-3); top: 64px; bottom: auto; width: 140px; } .radio iframe { width: 140px; height: 79px; } }
+
+/* ---------- one-screen intro ---------- */
+.garage__body--one { display: grid; gap: var(--sp-3); align-content: start; }
+.pick2 { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-2); }
+.pick2__v { display: grid; gap: 4px; text-align: left; padding: 12px 14px; background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.1); clip-path: var(--shape-sm); cursor: pointer; color: var(--ink); }
+.pick2__v b { font: 700 1.05rem / 1 var(--f-display); letter-spacing: .08em; }
+.pick2__v span { font-size: .78rem; color: var(--ink-muted); }
+.pick2__v.on { background: color-mix(in srgb, var(--signal) 16%, transparent); border-color: var(--signal); }
+.pick2__v.on b { color: var(--signal); }
+.swatches-row--inline { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.swatches-row--inline > div { display: flex; gap: 6px; }
+.more { border-top: 1px solid rgba(255,255,255,.08); padding-top: var(--sp-2); }
+.more > summary { cursor: pointer; font: 700 var(--fs-hud) / 1 var(--f-mono); letter-spacing: var(--track-hud); color: var(--ink-muted); padding: 6px 0; list-style: none; }
+.more > summary::before { content: '+ '; color: var(--data); }
+.more[open] > summary::before { content: '− '; }
+.more[open] { display: grid; gap: var(--sp-3); }
+.controls-line { margin: 0; font: 400 var(--fs-hud) / 1.6 var(--f-mono); letter-spacing: .08em; color: var(--ink-dim); }
+/* calmer call-outs */
+.pop { padding: 8px 20px 10px; border-left-width: 5px; box-shadow: 6px 6px 0 color-mix(in srgb, currentColor 35%, #000); }
+.pop b { font-size: clamp(1.5rem, 3.6vw, 2.6rem) !important; }
+.pop span { font-size: .72rem; }
+.pops { top: 24%; }
+.strike-ready { font-size: clamp(1.1rem, 2.6vw, 1.6rem); padding: 7px 16px; box-shadow: 5px 5px 0 #000; }
