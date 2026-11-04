@@ -465,22 +465,31 @@ export function createSim(opts = {}) {
           emit({ type: 'struck', x: (R.x + S.x) / 2 });
         }
       }
-      // ---- rash: strikes when side by side (bike vs bike) ----
-      if (rash && racing) {
-        S.strikeCd -= dt; S.swing = Math.max(0, S.swing - dt); R.cd -= dt;
-        const beside = Math.abs(R.z - S.z) < 3.4 && Math.abs(R.x - S.x) < 3.95;
+      // ---- your whip (X): works in every race. Lash KUROGANE and he spins wide; lash a cruiser and it drops back ----
+      if (racing && !S.finale) {
+        S.strikeCd -= dt; S.swing = Math.max(0, S.swing - dt);
         if (input.strike && S.strikeCd <= 0) {
-          S.strikeCd = 0.7; S.swing = 0.25; input.strike = false;
-          if (beside) {
-            R.stun = 1.3; R.speed *= 0.72; R.hits++;
+          S.strikeCd = 0.6; S.swing = 0.25; input.strike = false;
+          const reach = (o) => Math.abs(o.z - S.z) < 6 && Math.abs(o.x - S.x) < 4.4;
+          const K = (S.cops || []).find(reach);
+          if (reach(R)) {
+            R.stun = 1.8; R.speed *= 0.62; R.hits++; R.fight = false; R.fightCd = 3;
             const side = Math.sign(R.x - S.x) || 1;
-            R.x = clamp(R.x + side * 1.3, -RAIL + 1, RAIL - 1);
+            R.x = clamp(R.x + side * 1.6, -RAIL + 1, RAIL - 1);
             R.target = clamp(R.lane + side, 0, 2);
-            S.score += 250;
+            S.score += 400; S.shake = 0.2;
             emit({ type: 'strike', x: (R.x + S.x) / 2 });
-            if (cfg.police !== false) S.wanted = Math.min(3, S.wanted + 0.5);
+            if (cfg.police !== false && !cfg.zen) S.wanted = Math.min(3, S.wanted + 0.3);
+          } else if (K) {
+            K.speed *= 0.5; K.z -= 8; S.bust = Math.max(0, (S.bust || 0) - 0.6); S.score += 300;
+            emit({ type: 'strike', cop: true, x: (K.x + S.x) / 2 });
           } else emit({ type: 'whiff' });
         }
+      }
+      // ---- rash: KUROGANE swings back when side by side ----
+      if (rash && racing) {
+        R.cd -= dt;
+        const beside = Math.abs(R.z - S.z) < 3.4 && Math.abs(R.x - S.x) < 3.95;
         if (beside && R.cd <= 0 && R.stun <= 0 && S.invuln <= 0) {
           R.cd = 0.7 + rnd() * 0.7;
           if (rnd() < 0.85) {

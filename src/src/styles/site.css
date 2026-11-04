@@ -772,3 +772,9 @@ h1, h2, h3 { font-family: var(--f-display); font-weight: 700; letter-spacing: 0.
 .ch-side--r .ch-notes-wrap[hidden] { display: none; }
 .ch-side--r .ch-notes-wrap > .ch-card { flex: 1; }
 .ch-side--r .ch-notes textarea { height: 100%; }
+/* vibe: only the drive bar (scene, cruise, dim, show) stays; everything else goes */
+.chill--vibe .ch-bottom { opacity: 1 !important; }
+.chill--vibe .ch-dock, .chill--vibe .ch-line, .chill--vibe .ch-ambient, .chill--vibe .ch-side { opacity: 0 !important; visibility: hidden; pointer-events: none; }
+.chill--vibe .nav { opacity: 0; visibility: hidden; }
+.chill--vibe .ch-drive, .chill--vibe .ch-drive--line { opacity: .55; }
+.chill--vibe .ch-drive--line:hover, .chill--vibe .ch-drive--line:focus-within { opacity: 1; }

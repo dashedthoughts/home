@@ -143,7 +143,7 @@ export default function Play() {
           pop(e.route === 'backstreets' ? 'BACKSTREETS' : 'EXPRESSWAY', e.route === 'backstreets' ? 'route' : 'routex', e.route === 'backstreets' ? 'SHARDS ×1.5 · TIGHTER STREETS · SLOWER TRAFFIC' : 'OPEN ROAD · FAST TRAFFIC');
           break;
         case 'finale': pop(e.won === null ? 'ALL TEN FILES' : e.won ? 'YOU WIN' : 'KUROGANE WINS', e.won === false ? 'alert' : 'ok', 'LAST EXIT: THE LOOKOUT'); break;
-        case 'strike': pop('HIT', 'ok', 'KUROGANE GOES WIDE'); break;
+        case 'strike': pop('LASHED', 'ok', e.cop ? 'CRUISER DROPS BACK' : 'KUROGANE SPINS WIDE'); break;
         case 'struck': pop('HIT', 'alert', cfgRef.current.rash ? 'KUROGANE SWINGS' : 'KUROGANE LEANS ON YOU'); break;
         case 'power': pop(e.kind === 'ghost' ? 'GHOST' : 'NITRO', e.kind === 'ghost' ? 'data' : 'signal', e.kind === 'ghost' ? '5 SECONDS · RIDE THROUGH ANYTHING' : 'INSTANT SLIPSTREAM · ENGINE COOLED'); break;
         case 'police': pop('POLICE', 'alert', `WANTED ${'★'.repeat(e.stars)} · OUTRUN THEM`); break;
@@ -370,6 +370,7 @@ export default function Play() {
           <iframe src={ytSrc(radioOf(cfg))} title={radioOf(cfg).name} allow="autoplay; encrypted-media" />
         </div>
       )}
+      {(cfg.dim || 0) > 0 && <div className="play-dim" aria-hidden="true" style={{ opacity: cfg.dim }} />}
       <div className="pops" aria-live="polite">
         {pops.map((p) => (
           <p key={p.id} className={`pop pop--${p.tone}`}>
@@ -388,7 +389,7 @@ export default function Play() {
           <div className="pad__act">
             <button type="button" className="pad__brake" {...hold('brake')}>BRAKE</button>
             <button type="button" className="pad__oc" {...hold('boost')}>OVERCLOCK</button>
-            {cfg.rash && cfg.car === 'bike' && cfg.race !== false && <button type="button" className="pad__strike" {...hold('strike')}>STRIKE</button>}
+            {cfg.race !== false && <button type="button" className="pad__strike" {...hold('strike')}>WHIP</button>}
           </div>
         </div>
       )}
@@ -445,9 +446,10 @@ export default function Play() {
               <Toggle label="Steering assist" checked={cfg.assist} onChange={(v) => update({ assist: v })} />
               <Toggle label="Reduced effects" checked={cfg.effects === 'reduced'} onChange={(v) => update({ effects: v ? 'reduced' : 'full' })} />
               <Toggle label="Sound effects" checked={cfg.sound} onChange={(v) => update({ sound: v })} />
+              <label className="slider"><span className="seg__label">DIM</span><input type="range" min="0" max="0.7" step="0.05" value={cfg.dim || 0} onChange={(e) => update({ dim: +e.target.value })} aria-label="Dim the screen" /></label>
               <label className="slider"><span className="seg__label">VOLUME</span><input type="range" min="0" max="1" step="0.05" value={cfg.volume} onChange={(e) => update({ volume: +e.target.value })} /></label>
             </details>
-            <p className="controls-line">◀ ▶ steer · ▲ overclock · ▼ brake · C camera{cfg.rash && cfg.car === 'bike' ? ' · X strike' : ''} · ESC pause</p>
+            <p className="controls-line">◀ ▶ steer · ▲ overclock · ▼ brake · X whip · C camera · ESC pause</p>
           </div>
 
           <footer className="garage__foot">
@@ -483,6 +485,7 @@ export default function Play() {
             <Toggle label="Music" checked={cfg.music} onChange={(v) => update({ music: v })} />
             <Toggle label="Reduced effects" checked={cfg.effects === 'reduced'} onChange={(v) => update({ effects: v ? 'reduced' : 'full' })} />
             <Toggle label="Steering assist" checked={cfg.assist} onChange={(v) => update({ assist: v })} />
+            <label className="slider"><span className="seg__label">DIM</span><input type="range" min="0" max="0.7" step="0.05" value={cfg.dim || 0} onChange={(e) => update({ dim: +e.target.value })} aria-label="Dim the screen" /></label>
           </div>
           <div className="btn-row">
             <button type="button" className="btn btn--signal" onClick={togglePause} autoFocus>

@@ -471,7 +471,7 @@ export function createWorld(renderer, initialCfg) {
   for (let i = 0; i < RAIN_N; i++) { rainSeed[i * 3] = (Math.random() - 0.5) * 50; rainSeed[i * 3 + 1] = Math.random() * 22; rainSeed[i * 3 + 2] = -Math.random() * 70 + 6; }
   const rainGeo = new THREE.BufferGeometry();
   rainGeo.setAttribute('position', new THREE.BufferAttribute(rainPos, 3));
-  const rain = new THREE.LineSegments(rainGeo, new THREE.LineBasicMaterial({ color: HDR('#bcd6ff', 0.9), transparent: true, opacity: 0.45, blending: THREE.AdditiveBlending, depthWrite: false }));
+  const rain = new THREE.LineSegments(rainGeo, new THREE.LineBasicMaterial({ color: HDR('#bcd6ff', 0.7), transparent: true, opacity: 0.28, blending: THREE.AdditiveBlending, depthWrite: false }));
   rain.frustumCulled = false;
   scene.add(rain);
 
@@ -769,8 +769,8 @@ export function createWorld(renderer, initialCfg) {
         const rg = rival.group;
         const lean = (LANES[R.target] - R.x) * 0.06;
         rg.position.set(R.x, 0, zw);
-        const wob = R.stun > 0 ? Math.sin(R.stun * 22) * 0.18 * R.stun : 0;
-        rg.rotation.set(0, -lean * 0.4, rival.bike ? -lean * 2.2 + wob : wob * 0.3);
+        const wob = R.stun > 0 ? Math.sin(R.stun * 18) * 0.22 * Math.min(1, R.stun) : 0; // spins out wide after a lash
+        rg.rotation.set(0, -lean * 0.4 + wob * 1.6, rival.bike ? -lean * 2.2 + wob : wob * 0.3);
         const rs = (R.speed * dt) / rival.wheelR;
         rival.wheels.forEach((w) => { const sp = w.userData.spin; if (sp) sp.rotation.x -= rs * w.userData.sign; else w.rotation.x -= rs; });
         for (const f of rival.flames) f.visible = R.speed > S.speed + 4;
@@ -790,8 +790,8 @@ export function createWorld(renderer, initialCfg) {
     // the punch: an arm that snaps out toward the rival on a strike
     if (punch) {
       const sw = S.swing > 0 && S.rival ? Math.sin((S.swing / 0.25) * Math.PI) : 0;
-      punch.visible = sw > 0.05 && P.bike;
-      if (punch.visible) { const side = Math.sign(S.rival.x - S.x) || 1; punch.position.set(side * 0.25, 1.4, -0.1); punch.rotation.set(0.2 * sw, 0, -side * (Math.PI * 0.62) * sw); }
+      punch.visible = sw > 0.05;
+      if (punch.visible) { const side = Math.sign(S.rival.x - S.x) || 1; punch.position.set(side * (P.bike ? 0.25 : 0.75), P.bike ? 1.4 : 1.15, P.bike ? -0.1 : 0.2); punch.rotation.set(0.2 * sw, 0, -side * (Math.PI * 0.62) * sw); }
     }
 
     // police: a dark cruiser with a red/blue bar, shown once it draws level (or wide of the camera)
@@ -827,15 +827,16 @@ export function createWorld(renderer, initialCfg) {
 
     // rain streaks move with the camera
     if (rain.visible) {
-      const fall = 30 * dt, slide = S.speed * dt * 0.75;
-      const tilt = Math.min(1.2, S.speed * 0.016);
+      // streaks fall fast, lean with the wind, and stretch toward you with speed
+      const fall = 42 * dt, slide = S.speed * dt * 0.85;
+      const tilt = 0.25 + Math.min(2.4, S.speed * 0.03), drift = 0.12;
       for (let i = 0; i < RAIN_N; i++) {
         let y = rainSeed[i * 3 + 1] - fall, z = rainSeed[i * 3 + 2] + slide;
         if (y < 0) y += 22;
         if (z > 8) z -= 76;
         rainSeed[i * 3 + 1] = y; rainSeed[i * 3 + 2] = z;
         const x = rainSeed[i * 3] + camera.position.x;
-        rainPos.set([x, y, z, x, y + 0.55, z - tilt], i * 6);
+        rainPos.set([x, y, z, x + drift, y + 0.7, z - tilt], i * 6);
       }
       rainGeo.attributes.position.needsUpdate = true;
     }

@@ -272,15 +272,17 @@ function Music() {
 // ---------------------------------------------------------------- street lines: original, rotating
 const LINES = [
   ['Find a way, or make one.', 'attributed to Hannibal'],
-  ['The night is darkest just before the dawn.', 'Thomas Fuller, 1650'],
+  ['The best way out is always through.', 'Robert Frost'],
+  ['Stay hungry. Stay foolish.', 'Whole Earth Catalog, 1974'],
+  ['Simplicity is the ultimate sophistication.', 'attributed to Leonardo da Vinci'],
+  ['Make it work, make it right, make it fast.', 'Kent Beck'],
+  ['It always seems impossible until it is done.', 'attributed to Nelson Mandela'],
+  ['Act as if what you do makes a difference. It does.', 'William James'],
   ['Fortune favours the bold.', 'Virgil'],
-  ['The city never sleeps. It just dims the lights and waits for you.', 'Night Shift'],
+  ['The night is darkest just before the dawn.', 'Thomas Fuller, 1650'],
   ['Chrome fades. Good work ships.', 'Night Shift'],
   ['At 3 a.m. the highway is the only honest thing in town.', 'Night Shift'],
-  ['Every neon sign is somebody\'s dream, rented by the hour.', 'Night Shift'],
-  ['Rain on the glass, a deadline in the mirror. Keep driving.', 'Night Shift'],
-  ['Make the thing you wish someone else had made.', 'Night Shift'],
-  ['The skyline is the city showing off. Show off back.', 'Night Shift'],
+  ['The city never sleeps. It just dims the lights and waits for you.', 'Night Shift'],
 ];
 function StreetLine() {
   const [i, setI] = useState(() => Math.floor(Math.random() * LINES.length));
@@ -369,7 +371,6 @@ export default function Chill() {
         <div hidden={!shown.notes} className="ch-notes-wrap"><Notes /></div>
       </aside>
 
-      {vibe && <button type="button" className="ch-unvibe" onClick={() => setVibe(false)} aria-label="Show the controls">☾ SHOW <kbd>H</kbd></button>}
       <div className="ch-bottom">
         <Drive engine={engine} dim={dim} setDim={setDim} vibe={vibe} setVibe={setVibe} />
         <nav className="ch-dock" aria-label="Show or hide tools">

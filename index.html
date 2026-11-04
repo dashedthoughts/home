@@ -909,6 +909,12 @@ h1, h2, h3 { font-family: var(--f-display); font-weight: 700; letter-spacing: 0.
 .ch-side--r .ch-notes-wrap[hidden] { display: none; }
 .ch-side--r .ch-notes-wrap > .ch-card { flex: 1; }
 .ch-side--r .ch-notes textarea { height: 100%; }
+/* vibe: only the drive bar (scene, cruise, dim, show) stays; everything else goes */
+.chill--vibe .ch-bottom { opacity: 1 !important; }
+.chill--vibe .ch-dock, .chill--vibe .ch-line, .chill--vibe .ch-ambient, .chill--vibe .ch-side { opacity: 0 !important; visibility: hidden; pointer-events: none; }
+.chill--vibe .nav { opacity: 0; visibility: hidden; }
+.chill--vibe .ch-drive, .chill--vibe .ch-drive--line { opacity: .55; }
+.chill--vibe .ch-drive--line:hover, .chill--vibe .ch-drive--line:focus-within { opacity: 1; }
 
 /* =========================================================
    REDLINE · play page: garage, HUD, callouts, panels
@@ -1219,6 +1225,7 @@ h1, h2, h3 { font-family: var(--f-display); font-weight: 700; letter-spacing: 0.
 .more .toggle__text small { display: none; }
 @media (max-width: 760px) { .timepick { top: auto; bottom: 120px; right: var(--sp-3); transform: none; } .timepick button { padding: 6px 8px; } }
 .more .seg { gap: 4px; margin-top: 4px; }
+.play-dim { position: absolute; inset: 0; z-index: 1; background: #05020b; pointer-events: none; }
 
 /* =========================================================
    Mixed media: printed collage. Torn paper, Ben-Day dots, hatching, SFX lettering, marker notes.
@@ -1422,5 +1429,5 @@ h1, h2, h3 { font-family: var(--f-display); font-weight: 700; letter-spacing: 0.
 </style>
 </head><body><div id="root"></div>
 <noscript><p style="padding:2rem;font-family:monospace;color:#f5f2ea;background:#0d0d0d">This page needs JavaScript. Contact: anur.dash@gmail.com</p></noscript>
-<script type="module" src="./assets/app-K6RTW7OJ.js"></script>
+<script type="module" src="./assets/app-6XS3EVOP.js"></script>
 </body></html>
