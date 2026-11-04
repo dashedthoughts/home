@@ -136,10 +136,10 @@ export default function System() {
             </span>
           ))}
         </span>
-        <p className="hud-label">CASE FILE · SEALED / DECRYPTED</p>
+        <p className="hud-label">CASE TILE</p>
         <div className="grid grid--2">
-          <CaseCard p={projects[0]} fileNo={1} decrypted={false} />
-          <CaseCard p={projects[3]} fileNo={4} decrypted />
+          <CaseCard p={projects[0]} fileNo={1} />
+          <CaseCard p={projects[3]} fileNo={4} />
         </div>
         <p className="hud-label">TICKER</p>
         <Ticker items={['ONE LOUD COLOUR', 'HARD EDGES', 'MOTION AS PUNCTUATION', 'DONE IS NOT GOOD']} label="Principles ticker" />

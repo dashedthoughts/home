@@ -4,7 +4,6 @@ import Nav from '../components/Nav.jsx';
 import GlitchText from '../components/GlitchText.jsx';
 import { Caption, Scribble, Strip, SFX, Halftone } from '../components/Comic.jsx';
 import { projects, caseStudies, ROOT } from '../data/content.js';
-import { getDecrypted } from '../lib/store.js';
 
 const pad = (n) => String(n).padStart(2, '0');
 const host = (u) => u.replace(/^https?:\/\//, '').replace(/\/$/, '');
@@ -143,7 +142,6 @@ export default function Project() {
       </main>
     );
 
-  const decrypted = getDecrypted().has(slug);
   const next = projects[(idx + 1) % projects.length];
   const prev = projects[(idx - 1 + projects.length) % projects.length];
   const item = items[tab];
@@ -166,7 +164,6 @@ export default function Project() {
             <Scribble>
               <span className="tags">{p.tags.map((t) => <span className="tag" key={t}>{t}</span>)}</span>
             </Scribble>
-            <p className="cf__status">{decrypted ? '● Decrypted in REDLINE' : '○ Sealed in REDLINE, open to read'}</p>
           </div>
           <nav className="cf__pager" aria-label="More case files">
             <Link to={`/p/${prev.slug}`}><span>‹ PREV</span><b>{prev.title}</b></Link>

@@ -4,7 +4,7 @@
 export const CARS = {
   wedge: {
     name: 'VANTA GT',
-    blurb: 'Low, wide concept two-seater on staggered wheels. Honest grip, no surprises.',
+    blurb: 'Wide, low wedge with a louvred tail. Honest grip, no surprises.',
     top: 1.0, accel: 1.0, grip: 1.0, cool: 1.0,
   },
   bike: {

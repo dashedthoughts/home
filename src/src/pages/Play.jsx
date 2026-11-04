@@ -379,11 +379,6 @@ export default function Play() {
                   ))}
                 </div>
                 <p className="garage__note">{car.blurb}</p>
-                {cfg.car === 'wedge' && (
-                  <p className="garage__credit">
-                    Model: <a href="https://github.com/KhronosGroup/glTF-Sample-Assets/tree/main/Models/CarConcept" target="_blank" rel="noreferrer">Car Concept</a> © 2024 Darmstadt Graphics Group (Eric Chadwick), from a CC0 model by Unity Fan · <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noreferrer">CC BY 4.0</a> · logos removed, simplified, recoloured.
-                  </p>
-                )}
                 <div className="swatches-row" role="radiogroup" aria-label="Livery">
                   <span className="seg__label">LIVERY · {LIVERIES[cfg.livery].name}</span>
                   <div>

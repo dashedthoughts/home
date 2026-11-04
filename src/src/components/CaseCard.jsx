@@ -1,58 +1,41 @@
 import { Link } from 'react-router-dom';
 import { caseStudies, ROOT } from '../data/content.js';
 
-// What's inside a case file, from its imported body.
+// Each file gets its own colour field (a swatch, not a brand colour), like a record sleeve.
+const SWATCH = {
+  reelationships: '#ff5a36', 'makemytrip-maps': '#2f6bff', 'tathya-dpi': '#13a46e', 'netflix-remixed': '#b3122a',
+  'spotify-remixed': '#1f9d55', 'nothing-frame': '#6b7280', 'zepto-teardown': '#7b2ff7', 'zerodha-teardown': '#ff7a1a',
+  ferrari: '#e8b100', 'finance-chatbot': '#0aa5a0',
+};
+
 function inside(slug) {
   const body = caseStudies[slug] || [];
   const decks = body.filter((b) => b[0] === 'deck').map((b) => b[1]);
   const pages = decks.reduce((n, d) => n + d.pages, 0);
   const live = body.some((b) => b[0] === 'embed');
   const video = body.some((b) => b[0] === 'video');
-  const thumbs = [];
-  for (const d of decks) for (const f of d.files) if (thumbs.length < 8) thumbs.push({ src: `${ROOT}${d.dir}/${f}-800.jpg`, ratio: d.ratio });
+  const d = decks[0];
+  const cover = d ? { src: `${ROOT}${d.dir}/${d.files[0]}-800.jpg`, tall: d.ratio < 0.95 } : null;
   const parts = [pages ? `${pages}-page deck${decks.length > 1 ? 's' : ''}` : null, live ? 'live prototype' : null, video ? 'demo' : null].filter(Boolean);
-  return { thumbs, label: parts.join(' · ') };
+  return { cover, label: parts.join(' · ') };
 }
 
-// Case-file card: cut corners, HUD header row, a filmstrip of the actual deck, price-tag tags.
-export default function CaseCard({ p, fileNo, decrypted }) {
-  const { thumbs, label } = inside(p.slug);
-  const loop = thumbs.length ? [...thumbs, ...thumbs] : [];
+// Case card: a colour field, the deck's own cover set at an angle, and big editorial type.
+export default function CaseCard({ p, fileNo }) {
+  const { cover, label } = inside(p.slug);
   return (
-    <Link to={`/p/${p.slug}`} className={`case reveal ${decrypted ? 'is-decrypted' : ''}`} style={{ '--i': fileNo % 4 }}>
-      <span className="case__frame">
-        <span className="case__hud">
-          <span>FILE {String(fileNo).padStart(2, '0')}</span>
-          <span>{p.sticker}</span>
-          <span className={decrypted ? 'case__state ok' : 'case__state'}>{decrypted ? '● DECRYPTED' : '○ SEALED'}</span>
-        </span>
+    <Link to={`/p/${p.slug}`} className="tile reveal" style={{ '--c': SWATCH[p.slug] || '#ff5a36' }}>
+      <span className="tile__field" aria-hidden="true">
+        <span className="tile__no">{String(fileNo).padStart(2, '0')}</span>
+        {cover && <img className={`tile__cover ${cover.tall ? 'is-tall' : ''}`} src={cover.src} alt="" loading="lazy" decoding="async" />}
         {(p.brand || p.brandUrl) && (
-          <img
-            className="case__brand"
-            src={p.brandUrl || `https://cdn.simpleicons.org/${p.brand}`}
-            alt=""
-            loading="lazy"
-            onError={(e) => (e.currentTarget.style.display = 'none')}
-          />
+          <img className="tile__brand" src={p.brandUrl || `https://cdn.simpleicons.org/${p.brand}/ffffff`} alt="" loading="lazy" onError={(e) => (e.currentTarget.style.display = 'none')} />
         )}
-        <h3 className="case__title">{p.title}</h3>
-        <p className="case__tagline">{p.tagline}</p>
-        {loop.length > 0 && (
-          <span className="case__strip" aria-hidden="true">
-            <span className="case__strip-track" style={{ '--n': thumbs.length }}>
-              {loop.map((t, i) => (
-                <img key={i} src={t.src} alt="" loading="lazy" decoding="async" style={{ aspectRatio: String(Math.max(0.7, t.ratio)) }} />
-              ))}
-            </span>
-          </span>
-        )}
-        {label && <span className="case__inside">INSIDE · {label}</span>}
-        <span className="tags">
-          {p.tags.map((t) => (
-            <span className="tag" key={t}>{t}</span>
-          ))}
-        </span>
-        <span className="case__open" aria-hidden="true">OPEN ›</span>
+      </span>
+      <span className="tile__body">
+        <h3 className="tile__title">{p.title}</h3>
+        <span className="tile__tagline">{p.tagline}</span>
+        {label && <span className="tile__meta">{label}<i aria-hidden="true">→</i></span>}
       </span>
     </Link>
   );

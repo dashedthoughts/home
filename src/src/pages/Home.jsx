@@ -7,6 +7,7 @@ import Ticker from '../components/Ticker.jsx';
 import HudHeader from '../components/HudHeader.jsx';
 import CaseCard from '../components/CaseCard.jsx';
 import PhotoStrip from '../components/PhotoStrip.jsx';
+import SideRails from '../components/SideRails.jsx';
 import useReveal from '../lib/useReveal.js';
 import { getDecrypted } from '../lib/store.js';
 import {
@@ -33,6 +34,7 @@ export default function Home() {
   return (
     <main className="home">
       <Nav />
+      <SideRails />
 
       <header className="hero">
         <GameCanvas
@@ -125,7 +127,7 @@ export default function Home() {
         <HudHeader
           index={1}
           title="CASE FILES"
-          meta={`${decrypted.size}/${projects.length} DECRYPTED IN REDLINE · ALL OPEN TO READ`}
+          meta={`${projects.length} PROJECTS · DECKS, PROTOTYPES AND DEMOS`}
         />
         {categories.map((cat) => {
           const list = projects.filter((p) => p.category === cat);
@@ -138,7 +140,7 @@ export default function Home() {
               </p>
               <div className="grid">
                 {list.map((p) => (
-                  <CaseCard key={p.slug} p={p} fileNo={fileNo(p.slug)} decrypted={decrypted.has(p.slug)} />
+                  <CaseCard key={p.slug} p={p} fileNo={fileNo(p.slug)} />
                 ))}
               </div>
             </div>

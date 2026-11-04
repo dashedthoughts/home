@@ -146,7 +146,7 @@ export function billboardTexture(text, color, sub = '') {
   return t;
 }
 
-export function plateTexture(text = 'AD·0417') {
+export function plateTexture(text = '2FAST4U') {
   const [c, g] = canvas(256, 64);
   g.fillStyle = '#e9e4d8';
   g.fillRect(0, 0, 256, 64);

@@ -3,7 +3,6 @@ import * as THREE from 'three';
 import { U, std, basic, buildingMaterial, glowMaterial, decalMaterial, skyMaterial, celestialMaterial, particleMaterial, underglowMaterial } from './materials.js';
 import { roadTextures, kerbTexture, gridTexture, billboardTexture, neonEnvironment } from './textures.js';
 import { buildPlayerCar, createTrafficKit } from './cars.js';
-import { loadConceptCar, buildConceptCar } from './vehicles.js';
 import { TIMES, WEATHER, LIVERIES, GLOWS, SLOGANS } from '../config.js';
 import { LANES, MAX, mulberry, SECTOR, TUNNEL } from '../sim.js';
 import { createPlayerTrails, createTrafficTrails, createSearchlights, signTextures, createViaduct, createTower, createTunnel, createCityCarpet } from './megacity.js';
@@ -366,16 +365,6 @@ export function createWorld(renderer, initialCfg) {
     const glow = (GLOWS[cfg.glow] || GLOWS[0]).color;
     const token = ++playerToken;
     installPlayer(buildPlayerCar(cfg.car, liv, glow));
-    // the car's full-detail model streams in; the procedural body stands in until it lands
-    if (cfg.car === 'wedge' && !disposed) {
-      loadConceptCar()
-        .then((proto) => {
-          if (token !== playerToken || disposed) return;
-          installPlayer(buildConceptCar(proto, liv, glow));
-          if (rendererRef) precompile(rendererRef); // light count is unchanged, so only the car's new programs compile
-        })
-        .catch(() => {}); // network or decode failure: keep the procedural car
-    }
   }
 
   // ---------------------------------------------------------------- particles
@@ -736,7 +725,7 @@ export function createWorld(renderer, initialCfg) {
     if (fx.view === 'showroom') {
       // slow orbit around the parked car
       const a = U.uTime.value * 0.16 + 0.6;
-      const r = (6.4 + Math.sin(U.uTime.value * 0.1) * 0.6) * (camera.aspect < 1 ? 1.9 : 1) * (player.bike ? 0.6 : 1);
+      const r = (6.4 + Math.sin(U.uTime.value * 0.1) * 0.6) * (camera.aspect < 1 ? 1.9 : 1) * (player.bike ? 0.85 : 1);
       fov += (42 - fov) * Math.min(1, dt * 2);
       camera.fov = fov;
       camera.updateProjectionMatrix();
