@@ -46,10 +46,10 @@ export const TIMES = {
   },
   dusk: {
     name: 'DUSK',
-    zenith: '#120828', horizon: '#ff3f8e', glow: '#ff7a59', fog: '#5a1650',
+    zenith: '#0a0726', horizon: '#ff5a4e', glow: '#ffb347', fog: '#2b1140',
     body: { kind: 'moon', color: '#ffe9d6', size: 120, y: 190 },
-    hemi: ['#ff5aa0', '#120a1e', 0.55], key: ['#ff9a7a', 0.35],
-    windows: ['#fcee0a', '#00f0ff', '#ff2bd6', '#ffb36b'], stars: 0.15, fogDensity: 0.0042,
+    hemi: ['#ff9a6a', '#0b0720', 0.65], key: ['#ffc58a', 0.5],
+    windows: ['#00e5ff', '#ffb347', '#ffe36b', '#7ff3ff'], stars: 0.8, fogDensity: 0.0024,
   },
   midnight: {
     name: 'NEON BLUE',
@@ -67,10 +67,10 @@ export const TIMES = {
   },
   outrun: {
     name: 'OUTRUN',
-    zenith: '#0a0726', horizon: '#ff5a4e', glow: '#ffb347', fog: '#2b1140',
+    zenith: '#120828', horizon: '#ff3f8e', glow: '#ff7a59', fog: '#5a1650',
     body: { kind: 'sun', color: '#ffe36b', size: 270, y: 150 },
-    hemi: ['#ff9a6a', '#0b0720', 0.65], key: ['#ffc58a', 0.5],
-    windows: ['#00e5ff', '#ffb347', '#ffe36b', '#7ff3ff'], stars: 0.8, fogDensity: 0.0024,
+    hemi: ['#ff5aa0', '#120a1e', 0.55], key: ['#ff9a7a', 0.35],
+    windows: ['#fcee0a', '#00f0ff', '#ff2bd6', '#ffb36b'], stars: 0.15, fogDensity: 0.0042,
   },
 };
 
