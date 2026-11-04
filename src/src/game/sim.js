@@ -528,7 +528,7 @@ export function createSim(opts = {}) {
       S.speed = Math.max(0, S.speed - 30 * dt);
       if (S.swarmT <= 0) { S.cops = []; S.cop = null; }
     } else if (mode === 'play' && cfg.police !== false && !cfg.zen && racing && !S.finale) {
-      if (S.speed > MAX * 0.95) S.wanted = Math.min(3, S.wanted + dt * 0.035 * (S.speed / MAX));
+      if (S.speed > MAX * 0.95) S.wanted = Math.min(3, S.wanted + dt * 0.022 * (S.speed / MAX));
       const stars = Math.ceil(S.wanted - 0.001);
       S.cops = S.cops || [];
       while (S.cops.length < stars) {
@@ -544,7 +544,7 @@ export function createSim(opts = {}) {
         const side = K.slot === 0 ? 0 : (K.slot === 1 ? -1 : 1);
         const lane = Math.max(0, Math.min(2, pl + side));
         K.target = gap < 30 ? lane : pl;
-        const want = Math.min(MAX * (1.18 + 0.08 * stars), Math.max(S.speed * 1.1, MAX * 0.95));
+        const want = Math.min(MAX * (1.08 + 0.06 * stars), Math.max(S.speed * 1.05, MAX * 0.9));
         const hold = K.slot === 0 ? 7 : 0; // tail sits 7 m back; flankers come alongside
         const desired = gap > hold + 2 ? want : S.speed + (gap - hold) * 1.5;
         K.speed += clamp(desired - K.speed, -18 * dt, 14 * dt);
@@ -558,21 +558,21 @@ export function createSim(opts = {}) {
         const tailing = gap > 0 && gap < 12 && Math.abs(K.x - S.x) < 2.6;
         if (alongside) pressure += 1; else if (tailing) pressure += 0.6;
       }
-      S.bust = S.invuln > 0 ? 0 : Math.max(0, (S.bust || 0) + (pressure > 0 ? dt * pressure * 0.75 : -dt * 0.8));
+      S.bust = S.invuln > 0 ? 0 : Math.max(0, (S.bust || 0) + (pressure > 0 ? dt * pressure * 0.5 : -dt * 1.0));
       if (S.bust >= 1) {
         S.lives -= 1; S.busts += 1; S.invuln = 2.5; S.speed *= 0.4; S.wanted = 0; S.bust = 0; S.chain = 0;
         // the swarm: three cruisers box you in (tail and both flanks) for a beat, then let you go
         S.swarmT = 2.2;
         S.cops = [{ off: -6.5, side: 0 }, { off: 0.8, side: -1 }, { off: 0.8, side: 1 }].map((c, i) => ({ ...c, z: S.z + c.off, x: S.x + c.side * 3.6, speed: S.speed, slot: i, target: 1 }));
-        const lost = Math.min(3, S.shards - S.files * 5); // the police confiscate progress toward the next file (opened files stay)
+        const lost = Math.min(1, S.shards - S.files * 5); // the police confiscate progress toward the next file (opened files stay)
         S.shards -= lost;
         emit({ type: 'busted', lives: S.lives, lost });
         if (S.lives <= 0) { S.over = true; emit({ type: 'over', busted: true, score: Math.round(S.score), files: S.files, dist: S.dist, top: S.topSpeed, nearMisses: S.nearMisses, shards: S.shards }); }
       }
       // escape: every cruiser 240 m+ back for 4 s
-      if (S.cops.length && nearest > 240) {
+      if (S.cops.length && nearest > 190) {
         S.lost = (S.lost || 0) + dt;
-        if (S.lost > 4) { const pts = 1000 * stars; S.score += pts; S.cops = []; S.wanted = 0; S.lost = 0; emit({ type: 'escaped', pts }); }
+        if (S.lost > 3) { const pts = 1000 * stars; S.score += pts; S.cops = []; S.wanted = 0; S.lost = 0; emit({ type: 'escaped', pts }); }
       } else S.lost = 0;
       S.cop = S.cops[0] || null;
     } else if (S.cops && S.cops.length && (S.finale || cfg.zen || cfg.police === false)) { S.cops = []; S.cop = null; }
