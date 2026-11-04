@@ -1,0 +1,15 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Lost in the city · Anuraag Dash</title>
+<meta name="robots" content="noindex"/>
+<style>html,body{margin:0;height:100%;background:#0d0d0d;color:#f5f2ea;font:16px/1.5 system-ui,sans-serif}main{height:100%;display:grid;place-content:center;gap:12px;text-align:center;padding:24px}b{font:700 clamp(2rem,8vw,4rem)/1 Impact,system-ui;color:#fcee0a;text-shadow:4px 4px 0 #ff003c}a{color:#00f0ff}</style>
+<script>
+  // GitHub Pages serves this for unknown paths: send old deep links to the hash router, everything else home.
+  (function () {
+    var base = '/home/';
+    var rest = location.pathname.indexOf(base) === 0 ? location.pathname.slice(base.length) : '';
+    var m = rest.match(/^p\/([a-z0-9-]+)\/?$/);
+    location.replace(base + (m ? '#/p/' + m[1] : ''));
+  })();
+</script></head>
+<body><main><b>WRONG EXIT</b><p>This road doesn't exist. <a href="/home/">Back to the city</a>.</p></main></body></html>
