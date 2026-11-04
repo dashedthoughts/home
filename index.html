@@ -875,6 +875,34 @@ h1, h2, h3 { font-family: var(--f-display); font-weight: 700; letter-spacing: 0.
 .chill--vibe .ch-pop { opacity: 0; pointer-events: none; }
 @media (max-width: 700px) { .ch-dock button i { display: none; } .ch-ambient { top: calc(var(--sp-9) + var(--sp-6)); } }
 
+/* ---------- NIGHT SHIFT · tools on the sides, settings on one line ---------- */
+.ch-side { position: fixed; z-index: 3; top: calc(var(--sp-9) + 92px); bottom: 130px; width: min(320px, 26vw); display: flex; flex-direction: column; gap: var(--sp-3); overflow: auto; scrollbar-width: none; }
+.ch-side--l { left: var(--gutter); } .ch-side--r { right: var(--gutter); top: calc(var(--sp-9) - 4px); }
+.ch-side .ch-card { background: rgba(10,5,20,.62); }
+.ch-side .ch-digital .ch-time { font-size: clamp(2.6rem, 3.6vw, 3.4rem); }
+.ch-side .ch-dial { width: min(100%, 190px); }
+.ch-side .ch-notes textarea { min-height: 120px; }
+.ch-side--r .ch-notes { flex: 1; }
+.ch-keep { position: absolute; left: -9999px; width: 320px; }
+.ch-bottom { gap: 10px; bottom: var(--sp-4); }
+.ch-drive--line { display: flex; flex-wrap: nowrap; align-items: center; gap: 14px; padding: 7px 14px; opacity: .78; transition: opacity var(--t-move); }
+.ch-drive--line:hover, .ch-drive--line:focus-within { opacity: 1; }
+.ch-seg2 { display: flex; gap: 2px; }
+.ch-seg2 button { font: 700 .62rem / 1 var(--f-mono); letter-spacing: .14em; text-transform: uppercase; color: var(--ink-muted); background: none; border: 0; padding: 6px 8px; cursor: pointer; }
+.ch-seg2 button.on { background: var(--signal); color: var(--on-signal); }
+.ch-sel, .ch-rng { display: flex; align-items: center; gap: 6px; font: 400 .6rem / 1 var(--f-mono); letter-spacing: .14em; text-transform: uppercase; color: var(--ink-muted); white-space: nowrap; }
+.ch-sel select { font: 700 .68rem / 1 var(--f-mono); letter-spacing: .08em; text-transform: uppercase; color: #fff; background: rgba(0,0,0,.4); border: 1px solid rgba(0,229,255,.3); padding: 5px 6px; }
+.ch-rng input { width: 90px; accent-color: var(--data); }
+.ch-rng b { font: 700 .8rem / 1 var(--f-display); color: #fff; min-width: 30px; }
+.ch-drive--line .ch-vibe { margin: 0; }
+.ch-dock { opacity: .6; }
+@media (max-width: 1100px) {
+  .ch-side { position: static; width: auto; padding: 0 var(--gutter); overflow: visible; }
+  .chill { overflow: auto; } .ch-bottom { position: sticky; } .ch-drive--line { flex-wrap: wrap; justify-content: center; }
+}
+.ch-side .ch-line { margin: 4px 2px 0; padding-left: 12px; border-left: 3px solid var(--signal); text-align: left; font: 600 italic 1rem / 1.45 var(--f-display); letter-spacing: .02em; color: #fff; opacity: .9; }
+.ch-line cite { display: block; margin-top: 6px; font: 400 var(--fs-hud) / 1 var(--f-mono); font-style: normal; letter-spacing: var(--track-hud); color: var(--ink-muted); text-transform: uppercase; }
+
 /* =========================================================
    REDLINE · play page: garage, HUD, callouts, panels
    ========================================================= */
@@ -1165,6 +1193,9 @@ h1, h2, h3 { font-family: var(--f-display); font-weight: 700; letter-spacing: 0.
 .pop span { font-size: .72rem; }
 .pops { top: 24%; }
 .strike-ready { font-size: clamp(1.1rem, 2.6vw, 1.6rem); padding: 7px 16px; box-shadow: 5px 5px 0 #000; }
+.bustbar { position: relative; display: inline-block; width: 110px; padding: 3px 6px; font: 700 .6rem / 1 var(--f-mono); letter-spacing: .16em; color: #fff; font-style: normal; background: rgba(255,51,85,.2); overflow: hidden; }
+.bustbar i { position: absolute; inset: 0 auto 0 0; background: #ff3355; z-index: -1; }
+.bustbar { isolation: isolate; }
 
 /* =========================================================
    Mixed media: printed collage. Torn paper, Ben-Day dots, hatching, SFX lettering, marker notes.
@@ -1368,5 +1399,5 @@ h1, h2, h3 { font-family: var(--f-display); font-weight: 700; letter-spacing: 0.
 </style>
 </head><body><div id="root"></div>
 <noscript><p style="padding:2rem;font-family:monospace;color:#f5f2ea;background:#0d0d0d">This page needs JavaScript. Contact: anur.dash@gmail.com</p></noscript>
-<script type="module" src="./assets/app-3AGDKKST.js"></script>
+<script type="module" src="./assets/app-JHQDQAVQ.js"></script>
 </body></html>
