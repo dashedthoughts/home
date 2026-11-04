@@ -405,9 +405,8 @@ export function buildTsubame(livery, glowHex, style = 'monster') {
   // a large, sharp, central tail lamp: a swept arrowhead set into the tail tip
   {
     const a = new THREE.Shape(); a.moveTo(-0.14, 0.0); a.lineTo(0, 0.07); a.lineTo(0.14, 0.0); a.lineTo(0.1, -0.02); a.lineTo(0, 0.03); a.lineTo(-0.1, -0.02); a.closePath();
-    bin.add('tail', new THREE.ExtrudeGeometry(a, { depth: 0.02, bevelEnabled: false }), [0, 1.02, TZ + 0.005]);
+    bin.add('tail', new THREE.ShapeGeometry(a).scale(0.75, 0.75, 1), [0, 1.0, TZ + 0.012], [-0.25, 0, 0]); // flat, flush on the tail
   }
-  bin.add('tailDim', new THREE.BoxGeometry(0.12, 0.012, 0.02), [0, 1.0, TZ - 0.01]);
   bin.rod('carbon', [0, 0.92, 0.88], [0, 0.62, 1.02], 0.012); // plate hanger
   for (const sx of [-1, 1]) bin.add('amber', new THREE.BoxGeometry(0.04, 0.02, 0.02), [sx * 0.1, 0.66, 1.02]);
 
@@ -470,9 +469,7 @@ export function buildTsubame(livery, glowHex, style = 'monster') {
   const HZ = -0.14, HY = 1.56;
   // shell is built after the bin: faceted, gloss black (see below)
   // light-line accents: a chevron over the crown, a stripe down each cheek
-  bin.add('glow', new THREE.BoxGeometry(0.012, 0.012, 0.2), [0.045, HY + 0.14, HZ - 0.02], [0.35, 0.3, 0]);
-  bin.add('glow', new THREE.BoxGeometry(0.012, 0.012, 0.16), [0.075, HY + 0.11, HZ + 0.09], [-0.4, -0.25, 0]);
-  for (const sx of [-1, 1]) bin.add('glow', new THREE.BoxGeometry(0.012, 0.15, 0.012), [sx * 0.148, HY - 0.06, HZ - 0.08], [0.5, 0, 0]);
+      for (const sx of [-1, 1]) bin.add('glow', new THREE.BoxGeometry(0.006, 0.09, 0.006), [sx * 0.165, HY - 0.03, HZ - 0.1], [0.5, 0, 0]); // thin cheek lines
   bin.add('glow', new THREE.CylinderGeometry(0.158, 0.158, 0.03, 32, 1, true, Math.PI * 0.6, Math.PI * 0.8), [0, HY + 0.005, HZ], null, [1, 1, 1.16]); // thin visor light line
   bin.add('stripe', new THREE.BoxGeometry(0.035, 0.012, 0.32), [0, HY + 0.148, HZ + 0.01], [0.08, 0, 0]);
   for (const sx of [-1, 1]) bin.add('carbon', new RoundedBoxGeometry(0.02, 0.05, 0.08, 2, 0.008), [sx * 0.145, HY + 0.01, HZ + 0.03]); // side vents
@@ -482,7 +479,7 @@ export function buildTsubame(livery, glowHex, style = 'monster') {
   // sharp full-face helmet: faceted gloss shell, pointed chin, dark wrap visor, tall rear fin
   {
     const gloss = new THREE.MeshPhysicalMaterial({ color: '#07070c', metalness: 0.4, roughness: 0.18, clearcoat: 1, clearcoatRoughness: 0.04, flatShading: true });
-    const shell = new THREE.Mesh(new THREE.IcosahedronGeometry(0.152, 1), gloss);
+    const shell = new THREE.Mesh(new THREE.SphereGeometry(0.152, 28, 20), new THREE.MeshPhysicalMaterial({ color: '#08080d', metalness: 0.5, roughness: 0.15, clearcoat: 1, clearcoatRoughness: 0.03 }));
     shell.position.set(0, HY, HZ); shell.scale.set(1.12, 1.06, 1.3); g.add(shell);
     const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.075, 0.09, 0.12, 12), gloss); neck.position.set(0, HY - 0.15, HZ + 0.03); g.add(neck);
     const chin = new THREE.Mesh(new THREE.ConeGeometry(0.1, 0.18, 4), gloss);
