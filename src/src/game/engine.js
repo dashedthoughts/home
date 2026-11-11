@@ -272,6 +272,8 @@ export function createRedline(canvas, opts = {}) {
       emitTick();
       return fx.cam;
     },
+    orbit(a) { fx.orbit = a; },
+    get scene() { return world.scene; }, // test hook // test hook: freeze the showroom camera at an angle (null = orbit)
     setView(v) {
       fx.view = v;
       if (v === 'showroom') {

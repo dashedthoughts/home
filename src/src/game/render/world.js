@@ -38,6 +38,16 @@ export function createWorld(renderer, initialCfg) {
   const key = new THREE.DirectionalLight('#ff9a7a', 0.35);
   key.position.set(-60, 90, -120);
   scene.add(key);
+  // showroom rig: a soft warm key, a cool rim from behind, a low fill. Always in the scene (constant light count,
+  // no shader recompiles); faded up only while the car is parked in the bay.
+  const showKey = new THREE.DirectionalLight('#fff0e0', 0);
+  showKey.position.set(-4, 7, -5);
+  const showRim = new THREE.DirectionalLight('#7fe8ff', 0);
+  showRim.position.set(4, 10, 7);   // high: a low light mirrors off the glossy road straight into the lens
+  const showFill = new THREE.DirectionalLight('#ff8ad8', 0);
+  showFill.position.set(6, 7, -3);
+  scene.add(showKey, showRim, showFill);
+  let showMix = 0;
   const head = new THREE.SpotLight('#fff1dc', 140, 75, 0.42, 0.6, 1.4);
   const headTarget = new THREE.Object3D();
   scene.add(head, headTarget);
@@ -784,7 +794,14 @@ export function createWorld(renderer, initialCfg) {
     }
     pg.visible = !(S.invuln > 0 && S.ghost <= 0 && !S.over && Math.floor(S.time * 16) % 2 === 0 && sim.mode === 'play'); // no flicker during the final spin
     if (ghostShell) { ghostShell.visible = S.ghost > 0; ghostShell.scale.setScalar(1 + Math.sin(U.uTime.value * 12) * 0.04); ghostShell.material.uniforms.opacity.value = Math.min(1, S.ghost) * 0.35; }
-    if (P.glowLight) P.glowLight.intensity = (P.glowBase || 26) * (0.85 + 0.15 * Math.sin(U.uTime.value * 9));
+    // the bay: studio light on, the underglow light pulled back so it doesn't wash the body, the headlamp beam off
+    showMix = fx.view === 'showroom' ? 1 : 0;
+    showKey.intensity = 2.4 * showMix; showRim.intensity = 1.8 * showMix; showFill.intensity = 0.7 * showMix;
+    head.intensity = showMix ? 0 : 140;
+    // in the bay the underglow is a soft pool, not a floodlight: no hot spot on the road, no bloom over the body
+    if (P.glowLight) P.glowLight.intensity = (P.glowBase || 26) * (showMix ? 0.12 : 1) * (0.85 + 0.15 * Math.sin(U.uTime.value * 9));
+    glowPlane.material.uniforms.uGain.value = (P.bike ? 0.75 : 1.6) * (showMix ? 0.4 : 1);
+    if (P.M && P.M.glow) { P.M.glow.userData.base ||= P.M.glow.color.clone(); P.M.glow.color.copy(P.M.glow.userData.base).multiplyScalar(showMix ? 0.45 : 1); }
     trails.update(S, P.rearZ, P.tailHalfW, P.tailY, fx.view === 'showroom' ? 0 : 0.38, pg.rotation.z);
     head.position.set(S.x, 0.75, -2.3);
     headTarget.position.set(S.x - S.vx * 0.3, 0, -26);
@@ -878,7 +895,7 @@ export function createWorld(renderer, initialCfg) {
 
     if (fx.view === 'showroom') {
       // slow orbit around the parked car
-      const a = U.uTime.value * 0.16 + 0.6;
+      const a = fx.orbit != null ? fx.orbit : U.uTime.value * 0.16 + 0.6;
       const r = (6.4 + Math.sin(U.uTime.value * 0.1) * 0.6) * (camera.aspect < 1 ? 1.9 : 1) * (player.bike ? 0.85 : 1);
       fov += (42 - fov) * Math.min(1, dt * 2);
       camera.fov = fov;
