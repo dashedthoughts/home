@@ -309,7 +309,7 @@ export function buildVantaGT(livery, glowHex) {
   }
   const flames = flamesAt([[-0.35, 0.33, RZ + 0.3], [0.35, 0.33, RZ + 0.3]]);
   flames.forEach((f) => g.add(f));
-  const { glowLight, tailLight } = lights(g, glowHex, RZ);
+  const { glowLight, tailLight } = lights(g, null, RZ); // no point light under the car: so close to the road it burns a square hotspot into it; the glow pool and rims carry the underglow
   return { group: g, wheels, flames, M, glowLight, tailLight, length: L, width: W, wheelR: R, rearZ: RZ, tailY: 0.74, tailHalfW: W * 0.42 };
 }
 
