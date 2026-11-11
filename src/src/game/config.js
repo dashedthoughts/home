@@ -76,12 +76,13 @@ export const TIMES = {
 
 export const WEATHER = {
   clear: { name: 'CLEAR', grip: 1.0, rain: 0, wet: 0.55 },
-  rain: { name: 'RAIN', grip: 0.82, rain: 1, wet: 1.0 },
+  // rain: less grip, longer braking, slower traffic, a cooler engine. Tunnels stay dry.
+  rain: { name: 'RAIN', grip: 0.82, brake: 0.8, cool: 1.2, traffic: 0.93, rain: 1, wet: 1.0 },
 };
 
 export const DIFFICULTY = {
   chill: { name: 'CHILL', density: 0.6, trafficSpeed: 0.9, lives: 5, blurb: 'Light traffic, five hits.' },
-  street: { name: 'STREET', density: 1.0, trafficSpeed: 1.0, lives: 3, blurb: 'The intended ride.' },
+  street: { name: 'STREET', density: 1.0, trafficSpeed: 1.0, lives: 4, blurb: 'The intended ride. Four hits; every file repairs one.' },
   redline: { name: 'REDLINE', density: 1.45, trafficSpeed: 1.12, lives: 2, blurb: 'Rush hour. Two hits.' },
 };
 

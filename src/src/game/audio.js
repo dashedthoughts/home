@@ -10,7 +10,7 @@ const ARP = [69, 72, 76, 72, 67, 71, 74, 71, 65, 69, 72, 69, 67, 71, 74, 79];
 
 export function createAudio() {
   let ac = null;
-  let master, sfxBus, musicBus, engineGain, engOsc1, engOsc2, engFilter, noiseBuf;
+  let master, sfxBus, musicBus, engineGain, engOsc1, engOsc2, engFilter, noiseBuf, echoSend, inTunnel = false;
   let cfg = { sound: true, music: true, volume: 0.7 };
   let musicOn = false, nextNote = 0, step = 0, timer = 0;
 
@@ -27,6 +27,17 @@ export function createAudio() {
     comp.connect(master);
     sfxBus = ac.createGain();
     sfxBus.connect(comp);
+    // tunnel echo: a short slap-back with feedback, opened only between the walls
+    echoSend = ac.createGain();
+    echoSend.gain.value = 0;
+    const delay = ac.createDelay(0.5);
+    delay.delayTime.value = 0.095;
+    const fb = ac.createGain();
+    fb.gain.value = 0.42;
+    const tone = ac.createBiquadFilter();
+    tone.type = 'lowpass';
+    tone.frequency.value = 1800;
+    sfxBus.connect(echoSend); echoSend.connect(delay); delay.connect(tone); tone.connect(fb); fb.connect(delay); tone.connect(comp);
     musicBus = ac.createGain();
     musicBus.gain.value = 0.32;
     musicBus.connect(comp);
@@ -178,6 +189,12 @@ export function createAudio() {
       musicOn = false;
       clearInterval(timer);
     },
+    tunnel(on) {
+      if (!ac || on === inTunnel) return;
+      inTunnel = on;
+      echoSend.gain.setTargetAtTime(on ? 0.55 : 0, ac.currentTime, 0.12);
+      engFilter.Q.setTargetAtTime(on ? 10 : 6, ac.currentTime, 0.15);
+    },
     engine(on, speedPct, overclock) {
       if (!ac) return;
       const t = ac.currentTime;
@@ -185,7 +202,7 @@ export function createAudio() {
       engOsc1.frequency.setTargetAtTime(f, t, 0.05);
       engOsc2.frequency.setTargetAtTime(f * 0.5, t, 0.05);
       engFilter.frequency.setTargetAtTime(260 + speedPct * 1500 + (overclock ? 900 : 0), t, 0.06);
-      engineGain.gain.setTargetAtTime(on ? 0.05 + speedPct * 0.05 : 0, t, 0.08);
+      engineGain.gain.setTargetAtTime(on ? (0.05 + speedPct * 0.05) * (inTunnel ? 1.35 : 1) : 0, t, 0.08);
     },
     sfx(name, p = 0) {
       if (!ac || !cfg.sound) return;
@@ -210,6 +227,13 @@ export function createAudio() {
           tone('sine', 140, 38, 0.35, 0.6);
           noise(0.3, 0.45, 2400, 200, 'lowpass');
           break;
+        case 'crash': { // weight scales with the hit: a thud, a crunch of noise, and glass on the big ones
+          const k = Math.max(0.25, Math.min(1, p || 0.5));
+          tone('sine', 150, 34, 0.3 + 0.25 * k, 0.45 + 0.3 * k);
+          noise(0.25 + 0.3 * k, 0.3 + 0.3 * k, 2600, 180, 'lowpass');
+          if (k > 0.55) { noise(0.35, 0.16, 5200, 7600, 'highpass', 0.06); tone('square', 90, 40, 0.18, 0.2, 0.03); }
+          break;
+        }
         case 'scrape':
           noise(0.12, 0.12, 3500, 2500, 'bandpass');
           break;

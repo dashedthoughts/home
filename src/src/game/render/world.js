@@ -567,7 +567,15 @@ export function createWorld(renderer, initialCfg) {
   let lastZ = 0;
   let blinkClock = 0;
 
+  let wetNow = 0, frameNo = 0;
   function update(sim, dt, fx) {
+    frameNo++;
+    {
+      const raining = !!(WEATHER[cfg.weather] || WEATHER.clear).rain;
+      const target = raining && !sim.tunnelAt(sim.S.z) ? 1 : 0;
+      wetNow += (target - wetNow) * Math.min(1, (dt || 0.016) * 4);
+      if (raining) { roadMat.roughness = 0.85 - 0.3 * wetNow; roadMat.envMapIntensity = 0.45 + 0.45 * wetNow; }
+    }
     const S = sim.S;
     const dz = S.z - lastZ;
     lastZ = S.z;
@@ -677,12 +685,16 @@ export function createWorld(renderer, initialCfg) {
       const prevX = v.group.position.x;
       v.group.position.set(c.x, 0, zw);
       const lat = dt > 0 ? (c.x - prevX) / dt : 0;
-      v.group.rotation.y = -lat * 0.035;
+      const struck = c.hit > 0 ? Math.min(1, c.hit) : 0;
+      v.group.rotation.set(0, -lat * 0.035 + (struck ? Math.sin(c.hit * 13) * 0.14 * struck : 0), struck ? Math.sin(c.hit * 17) * 0.05 * struck : 0);
       const blinkOn = c.blink > 0 && Math.floor(blinkClock * 3.2) % 2 === 0;
+      const hazard = struck > 0 && Math.floor(blinkClock * 5) % 2 === 0;
       const dir = Math.sign(LANES[c.target] - c.x);
-      v.blinkers[0].visible = blinkOn && dir < 0;
-      v.blinkers[1].visible = blinkOn && dir > 0;
-      v.tail.color.setRGB(1, 0.1, 0.23).multiplyScalar(c.brake ? 9 : 3.2);
+      v.blinkers[0].visible = hazard || (blinkOn && dir < 0);
+      v.blinkers[1].visible = hazard || (blinkOn && dir > 0);
+      v.tail.color.setRGB(1, 0.1, 0.23).multiplyScalar(c.brake || struck ? 9 : 3.2);
+      // rain: every car close to you drags a plume of spray
+      if (wetNow > 0.5 && vis && zw > -70 && zw < 12 && c.speed > 10 && (frameNo + c.id) % 3 === 0) emit(1, { x: c.x, y: 0.2, z: zw + v.len / 2 + 0.3 }, { color: '#9fb6d9', gain: 0.35, speed: 2.4, life: 0.55, size: 0.3, spread: 1.5, vz: 5, vy: 1.1, gravity: 5 });
       {
         const rz = zw + v.len / 2;
         const tw = c.kind === 'hauler' ? 1.05 : c.kind === 'hatch' ? 0.76 : 0.6;
@@ -741,6 +753,23 @@ export function createWorld(renderer, initialCfg) {
       glowPlane.rotation.z = -pg.rotation.z; // keep the pool flat on the road while the bike leans
     }
     else pg.rotation.set(pitch, -S.vx * 0.032 - S.steer * 0.04, S.vx * 0.012);
+    // crash: a hit snaps the tail out and it catches again; the last hit is a full spin-out to a sideways stop (a bike goes down)
+    if (S.crash && sim.mode === 'play') {
+      const C = S.crash, u = Math.min(1, C.t / C.dur);
+      if (C.final) {
+        const e = 1 - (1 - u) ** 3;
+        pg.rotation.y += C.dir * Math.PI * 2.5 * e;
+        if (P.bike) { pg.rotation.z = C.dir * 1.32 * Math.min(1, u * 2.2); pg.position.y = -0.18 * Math.min(1, u * 2.2); }
+        else pg.rotation.z += Math.sin(u * Math.PI) * 0.1 * C.dir;
+      } else {
+        pg.rotation.y += C.dir * (0.3 + 0.6 * C.sev) * Math.sin(Math.PI * u) * (1 - u * 0.35);
+        pg.rotation.z += C.dir * (P.bike ? 0.25 : 0.06) * C.sev * Math.sin(Math.PI * u);
+      }
+      if (S.speed > 5 && (C.final || u < 0.8)) { // tyre smoke while it slides
+        emit(C.final ? 4 : 2, { x: S.x, y: 0.2, z: 0.9 }, { color: '#cfc9dc', gain: 0.45, speed: 2.2, life: 0.9, size: 0.5, spread: 1.3, vz: 4 + S.speed * 0.08, vy: 1.4, gravity: -0.6 });
+        if (C.final) emit(2, { x: S.x + (Math.random() - 0.5) * 1.4, y: 0.08, z: 0.4 }, { color: '#ffd27a', gain: 6, speed: 4, life: 0.35, size: 0.07, gravity: 12, vz: 5 });
+      }
+    }
     P.lastSpeed = S.speed;
     const spin = (S.speed * dt) / P.wheelR;
     P.wheels.forEach((w, i) => {
@@ -753,7 +782,7 @@ export function createWorld(renderer, initialCfg) {
       f.visible = S.overclock || S.slip > 0;
       f.scale.set(1, 0.7 + Math.random() * 0.8 + (S.slip > 0 ? 0.6 : 0), 1);
     }
-    pg.visible = !(S.invuln > 0 && S.ghost <= 0 && Math.floor(S.time * 16) % 2 === 0 && sim.mode === 'play');
+    pg.visible = !(S.invuln > 0 && S.ghost <= 0 && !S.over && Math.floor(S.time * 16) % 2 === 0 && sim.mode === 'play'); // no flicker during the final spin
     if (ghostShell) { ghostShell.visible = S.ghost > 0; ghostShell.scale.setScalar(1 + Math.sin(U.uTime.value * 12) * 0.04); ghostShell.material.uniforms.opacity.value = Math.min(1, S.ghost) * 0.35; }
     if (P.glowLight) P.glowLight.intensity = (P.glowBase || 26) * (0.85 + 0.15 * Math.sin(U.uTime.value * 9));
     trails.update(S, P.rearZ, P.tailHalfW, P.tailY, fx.view === 'showroom' ? 0 : 0.38, pg.rotation.z);
@@ -823,11 +852,16 @@ export function createWorld(renderer, initialCfg) {
     // particles: sparks while scraping, embers on overclock, spray in rain
     if (S.scrape > 0) emit(5, { x: S.x + Math.sign(S.x) * 1.0, y: 0.4, z: 0.6 }, { color: '#ffd27a', gain: 6, speed: 5, life: 0.45, size: 0.09, gravity: 14, vz: 6, vx: -Math.sign(S.x) * 2 });
     if (S.overclock && fx.full) emit(1, { x: S.x + (Math.random() < 0.5 ? -0.34 : 0.34), y: 0.3, z: P.length / 2 + 0.6 }, { color: '#4fd8ff', gain: 4, speed: 1.5, life: 0.35, size: 0.06, vz: 4 });
-    if (rain.visible && S.speed > 12) emit(2, { x: S.x, y: 0.15, z: P.length / 2 + 0.4 }, { color: '#9fb6d9', gain: 0.5, speed: 3, life: 0.5, size: 0.22, spread: 1.6, vz: 6, vy: 1, gravity: 6 });
+    if (wetNow > 0.5 && S.speed > 12) {
+      emit(2, { x: S.x, y: 0.15, z: P.length / 2 + 0.4 }, { color: '#9fb6d9', gain: 0.5, speed: 3, life: 0.5, size: 0.22, spread: 1.6, vz: 6, vy: 1, gravity: 6 });
+      // aquaplaning: the fronts ride up on the water and throw it wide
+      if (S.aqua > 0.25) for (const sx of [-1, 1]) emit(1 + (S.aqua > 0.7 ? 1 : 0), { x: S.x + sx * P.width * 0.45, y: 0.12, z: -P.length / 2 + 0.5 }, { color: '#cfe0ff', gain: 0.9, speed: 3.5, life: 0.45, size: 0.26, spread: 0.8, vx: sx * 5, vz: 7, vy: 2.2, gravity: 9 });
+    }
     updateParticles(dt, 0);
 
-    // rain streaks move with the camera
-    if (rain.visible) {
+    // rain streaks move with the camera, and stop at the tunnel mouth
+    rain.material.opacity = 0.28 * wetNow;
+    if (rain.visible && wetNow > 0.02) {
       // streaks fall fast, lean with the wind, and stretch toward you with speed
       const fall = 42 * dt, slide = S.speed * dt * 0.85;
       const tilt = 0.25 + Math.min(2.4, S.speed * 0.03), drift = 0.12;
@@ -909,6 +943,7 @@ export function createWorld(renderer, initialCfg) {
     camPos.x += (S.x * (bumper ? 1 : 0.84) - camPos.x) * Math.min(1, dt * (bumper ? 12 : 5));
     camPos.y = bumper ? (P.bike ? 1.25 : 0.72) : (wideCam ? (P.bike ? 3.0 : 3.6) : (P.bike ? 1.55 : 2.05)) + sp * 0.12;
     camPos.z = bumper ? -P.length / 2 - 0.25 : (wideCam ? (P.bike ? 8.4 : 10.8) : (P.bike ? 4.4 : 6.2)) - sp * 0.5;
+    if (S.crash && S.crash.final && sim.mode === 'play') { const e = Math.min(1, S.crash.t / 1.7); const k = e * e * (3 - 2 * e); camPos.y += 1.5 * k; camPos.z += 3.2 * k; }
     camera.position.copy(camPos);
     if (fx.full && S.shake > 0) {
       const k = S.shake * 0.5;
@@ -919,12 +954,23 @@ export function createWorld(renderer, initialCfg) {
     look.x += U.uCurve.value * 16 * 16 * 0.6;
     look.y += U.uHill.value * 16 * 16;
     camera.lookAt(look);
-    const targetRoll = fx.full ? -S.vx * 0.009 + sim.curveAt(S.z) * sp * 0.035 : 0;
+    const kick = fx.full && S.crash && !S.crash.final ? S.crash.dir * S.crash.sev * 0.07 * Math.sin(Math.PI * Math.min(1, S.crash.t / S.crash.dur)) : 0;
+    const targetRoll = fx.full ? -S.vx * 0.009 + sim.curveAt(S.z) * sp * 0.035 + kick : 0;
     camRoll += (targetRoll - camRoll) * Math.min(1, dt * 4);
     camera.rotateZ(camRoll);
   }
 
-  function burst(kind, x) {
+  function burst(kind, x, o = {}) {
+    if (kind === 'crash') { // sparks, torn trim and glass, scaled by how hard it was
+      const k = o.sev || 0.5, z = -(o.z || 0) - 1;
+      emit(Math.round(30 + 70 * k), { x, y: 0.6, z }, { color: '#ffd27a', gain: 7, speed: 7 + 6 * k, life: 0.7, size: 0.1, gravity: 12, vz: 4 });
+      emit(Math.round(10 + 22 * k), { x, y: 0.7, z }, { color: '#3a3644', gain: 1, speed: 5 + 5 * k, life: 1.1, size: 0.22, gravity: 14, vz: 6, vy: 3 });
+      emit(Math.round(8 + 14 * k), { x, y: 0.9, z }, { color: '#e8f4ff', gain: 5, speed: 6, life: 0.5, size: 0.06, gravity: 10, vz: 5 });
+      emit(Math.round(6 + 10 * k), { x, y: 0.4, z: z + 1 }, { color: '#cfc9dc', gain: 0.4, speed: 2, life: 1.0, size: 0.6, spread: 1.2, vz: 5, vy: 1.5, gravity: -0.5 });
+      return;
+    }
+    if (kind === 'slam') { emit(46, { x: x + Math.sign(x) * 0.9, y: 0.5, z: 0 }, { color: '#ffd27a', gain: 7, speed: 8, life: 0.55, size: 0.09, gravity: 13, vz: 9, vx: -Math.sign(x) * 3 }); return; }
+    if (kind === 'bump') { emit(14, { x, y: 0.5, z: -2.4 }, { color: '#fff1b0', gain: 6, speed: 5, life: 0.3, size: 0.07, gravity: 9, vz: 3 }); return; }
     if (kind === 'shard') emit(26, { x, y: 1.1, z: -0.5 }, { color: '#b8ff2e', gain: 5, speed: 7, life: 0.55, size: 0.12, vz: 8 });
     if (kind === 'ghost' || kind === 'nitro') emit(46, { x, y: 1.0, z: -1 }, { color: kind === 'ghost' ? '#5ff6ff' : '#ffb020', gain: 6, speed: 8, life: 0.6, size: 0.12, vz: 6 });
     if (kind === 'strike') emit(34, { x, y: 1.0, z: 0 }, { color: '#fff1b0', gain: 8, speed: 7, life: 0.4, size: 0.09, gravity: 8, vz: 3 });

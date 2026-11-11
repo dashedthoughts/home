@@ -36,11 +36,16 @@ Everything below goes live about a minute after you commit it (GitHub web: open 
 Routes: `#/` home · `#/p/<slug>` case study · `#/play` REDLINE · `#/chill` Night Shift · `#/system` design system.
 
 ## REDLINE
-A night drive through an original Midnight-Tokyo-style megacity. Five data shards decrypt one case file; ten files end the run at the lookout above the city. Junctions every 1.5 km let you hold a lane to pick Expressway or Backstreets (tighter, shards ×1.5); a tunnel follows each one. Garage: the Vanta GT (louvred tail, plate 2FAST4U) and the Tsubame bike (lean, power-slide on hard braking), liveries, underglow, four times of day, rain, three difficulties, steering assist, reduced effects, synthesized sound and music. Keyboard, touch and gamepad.
+A night drive through an original Midnight-Tokyo-style megacity. Five data shards open one case file; ten files end the run at the lookout, and whoever is in front at that moment wins.
+
+- **Modes:** Race (against KUROGANE), Road Brawl (bike), Zen Race (no damage, no police), Free Run.
+- **The rival:** launches past you off the line, makes attack runs, blocks your lane, sprints over the last two files. Whip him with X; he parries for a few seconds after a hit.
+- **Crashes:** severity follows closing speed; a truck barely moves. Four hits on STREET, and every file you open repairs one. The last hit is a spin-out.
+- **Police:** sustained top speed and crashes build a wanted level; each full star brings a cruiser. Outrun them, outlast them or whip them back.
+- **Road:** junctions every 1.5 km (Expressway or Backstreets), a tunnel after each, and traffic that thickens every sector.
+- **Rain:** less grip, longer braking, aquaplaning flat out. Tunnels are dry.
+- **Garage:** the Vanta GT and the Tsubame bike, liveries, underglow, five times of day, weather, three difficulties, radio (YouTube Mix or the built-in synth). Keyboard, touch and gamepad.
 
 Art direction borrows the language of 80s cel-anime cities and light-cycle films; no vehicles, logos, characters or places from any film or game are used.
 
 Graphics: AUTO by default (Balanced on desktop, Low on phones, steps down by itself if frames drop); High adds 2.1 MP and 4× MSAA.
-
-`window.__redline` exposes `pause()`, `advance(sec)`, `state()` for screenshots and debugging.
-

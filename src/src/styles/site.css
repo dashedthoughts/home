@@ -788,3 +788,25 @@ h1, h2, h3 { font-family: var(--f-display); font-weight: 700; letter-spacing: 0.
 .ch-music .ch-pick input { flex: 1 1 0; min-width: 0; }
 .ch-music .ch-pick .ch-btn { flex: none; padding: 10px 12px; }
 .ch-k i { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: inline-block; max-width: 60%; vertical-align: bottom; }
+
+/* ================= NIGHT SHIFT on phones and tablets: a plain scrolling column =================
+   nav · clock + weather · timer · search · quote · music · notes, with the drive bar and dock pinned at the bottom */
+@media (max-width: 1100px) {
+  .chill { overflow: visible; min-height: 100dvh; padding: 104px 0 190px; }
+  .chill__grid { display: none; }
+  .ch-ambient { position: relative; left: auto; top: auto; margin: 0 var(--gutter) 14px; z-index: 3; }
+  .ch-ambient .ch-clock { font-size: 2.2rem; }
+  .ch-side { position: relative !important; left: auto !important; right: auto !important; top: auto !important; bottom: auto !important; width: auto !important; height: auto !important; min-height: 0 !important;
+    padding: 0 var(--gutter); margin: 0 0 12px; overflow: visible; z-index: 3; }
+  .ch-side--r .ch-notes-wrap { display: block; } .ch-side--r .ch-notes-wrap[hidden] { display: none; }
+  .ch-side .ch-notes textarea { min-height: 150px; height: 150px; }
+  .ch-side .ch-digital .ch-time { font-size: 3rem; }
+  .ch-bottom { position: fixed; left: 0; right: 0; bottom: 8px; gap: 6px; padding: 0 8px; z-index: 5; }
+  .ch-drive--line { flex-wrap: wrap; justify-content: center; gap: 6px 10px; padding: 7px 10px; opacity: 1; background: rgba(10,5,20,.9); width: 100%; box-sizing: border-box; }
+  .ch-rng input { width: 70px; }
+  .ch-dock { opacity: 1; background: rgba(10,5,20,.9); }
+  .ch-keep { position: absolute !important; left: -9999px !important; }
+  .chill--vibe .ch-side, .chill--vibe .ch-ambient { display: none; }
+}
+@media (max-width: 760px) { .ch-dock button { padding: 9px 12px; } .ch-sel span, .ch-rng span { display: none; } .ch-sel::before { content: none; } }
+@media (max-width: 760px) { .ch-rng span { display: inline; font-size: .54rem; } .ch-rng input { width: 62px; } }

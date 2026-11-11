@@ -134,12 +134,17 @@ export default function Play() {
       if (phaseRef.current !== 'run') return;
       switch (e.type) {
         case 'go': pop('GO', 'signal'); break;
-        case 'nearmiss': pop('NEAR MISS', 'data', `+${e.pts}`); break;
+        case 'nearmiss': pop(e.chain > 1 ? `CLOSE CALL ×${e.chain}` : 'NEAR MISS', e.chain > 2 ? 'signal' : 'data', `+${e.pts.toLocaleString('en-IN')}`); break;
         case 'slipstream': pop('SLIPSTREAM', 'data', 'BOOST · HEAT VENTED'); break;
         case 'chain-break': pop('CHAIN LOST', 'dim'); break;
         case 'glitch': pop('SIGNAL GLITCH', 'alert', 'STEERING INVERTED'); break;
         case 'glitch-end': pop('SIGNAL RESTORED', 'data'); break;
-        case 'hit': pop('IMPACT', 'alert', `INTEGRITY ${Math.max(0, e.lives)}`); break;
+        case 'hit': pop(e.swipe ? 'SIDE SWIPE' : e.sev > 0.7 ? 'HEAVY IMPACT' : 'IMPACT', 'alert', cfgRef.current.zen ? 'NO DAMAGE · SPEED LOST' : `INTEGRITY ${Math.max(0, e.lives)}`); break;
+        case 'slam': pop('RAIL SLAM', 'alert', 'SPEED LOST'); break;
+        case 'bump': pop('TRADING PAINT', 'data', 'SWITCH LANES TO PASS'); break;
+        case 'blocked': pop('KUROGANE BLOCKS', 'alert', 'FAKE HIM OUT'); break;
+        case 'parried': pop('PARRIED', 'dim', 'HE SAW IT COMING'); break;
+        case 'sprint': pop('FINAL STRETCH', 'signal', '2 FILES LEFT · BE IN FRONT AT THE LAST ONE'); break;
         case 'junction':
           pop(e.route === 'backstreets' ? 'BACKSTREETS' : 'EXPRESSWAY', e.route === 'backstreets' ? 'route' : 'routex', e.route === 'backstreets' ? 'SHARDS ×1.5 · TIGHTER STREETS · SLOWER TRAFFIC' : 'OPEN ROAD · FAST TRAFFIC');
           break;
@@ -150,7 +155,7 @@ export default function Play() {
         case 'wheelie': pop('WHEELIE', 'signal', '+150'); break;
         case 'police': pop('POLICE', 'alert', `WANTED ${'★'.repeat(e.stars)} · OUTRUN THEM`); break;
         case 'busted': pop('BUSTED', 'alert', `${e.lost ? `−${e.lost} SHARDS · ` : ''}${e.lives > 0 ? `INTEGRITY −1 · ${e.lives} LEFT` : 'END OF THE LINE'}`); break;
-        case 'escaped': pop('LOST THEM', 'ok', `+${e.pts.toLocaleString('en-IN')}`); break;
+        case 'escaped': pop(e.outlasted ? 'THEY GAVE UP' : 'LOST THEM', 'ok', `+${e.pts.toLocaleString('en-IN')}`); break;
         case 'overtake': pop('OVERTAKE', 'ok', 'P1 · HOLD IT TO THE LOOKOUT'); break;
         case 'overtaken': pop('KUROGANE PASSES', 'alert', 'P2 · TAKE IT BACK'); break;
         case 'complete': {
@@ -167,7 +172,7 @@ export default function Play() {
           const p = projects[(e.n - 1) % projects.length];
           addDecrypted(p.slug);
           setRunFiles((f) => (f.some((x) => x.slug === p.slug) ? f : [...f, p]));
-          pop(`FILE ${pad2(e.n)} OPEN`, 'ok', `${10 - e.n} TO THE LOOKOUT`);
+          pop(`FILE ${pad2(e.n)} OPEN`, 'ok', `${e.repaired ? 'INTEGRITY +1 · ' : ''}${10 - e.n} TO THE LOOKOUT`);
           break;
         }
         case 'over': {
@@ -177,7 +182,7 @@ export default function Play() {
           if (e.score > prev) setBestBy(d, e.score);
           setBestState(Math.max(prev, e.score));
           setFinal(e);
-          setTimeout(() => setPhase('over'), 1400);
+          setTimeout(() => setPhase('over'), 1900);
           break;
         }
         default:
@@ -262,7 +267,7 @@ export default function Play() {
 
   const car = CARS[cfg.car];
   const counting = phase === 'run' && hud.count > 0;
-  const status = hud.glitch ? ['GLITCH', 'alert'] : hud.slip ? ['SLIPSTREAM', 'data'] : hud.overclock ? ['OVERCLOCK', 'signal'] : hud.heat > 70 ? ['RUNNING HOT', 'signal'] : ['CRUISE', 'dim'];
+  const status = hud.glitch ? ['GLITCH', 'alert'] : hud.aqua ? ['AQUAPLANING', 'alert'] : hud.slip ? ['SLIPSTREAM', 'data'] : hud.overclock ? ['OVERCLOCK', 'signal'] : hud.heat > 70 ? ['RUNNING HOT', 'signal'] : hud.tunnel ? ['TUNNEL · DRY ROAD', 'dim'] : hud.wet ? ['WET ROAD', 'data'] : ['CRUISE', 'dim'];
 
   return (
     <main className={`play play--${phase}`}>
@@ -321,12 +326,15 @@ export default function Play() {
               <div className="hud2__cop"><b>{'★'.repeat(hud.wanted)}<i>{'★'.repeat(Math.max(0, 3 - hud.wanted))}</i></b><span>{hud.cops > 1 ? `${hud.cops} CRUISERS` : 'POLICE'} {hud.copGap > 0 ? `${hud.copGap} M BEHIND` : 'ON YOU'}</span>{hud.bust > 0.05 && <em className="bustbar"><i style={{ width: `${Math.round(hud.bust * 100)}%` }} />BUSTING</em>}</div>
             </>
           )}
+          {hud.copGap == null && hud.heatOnYou > 0.2 && !hud.zen && (
+            <div className="hud2__cop hud2__cop--build"><span>POLICE ATTENTION</span><em className="bustbar"><i style={{ width: `${Math.round(hud.heatOnYou * 100)}%` }} />{hud.heatOnYou > 0.75 ? 'EASE OFF' : 'BUILDING'}</em></div>
+          )}
           {hud.beside && <div className="strike-ready">WHIP <kbd>X</kbd></div>}
           {hud.ghost > 0 && <div className="ghost-chip">GHOST {hud.ghost}</div>}
           {hud.race && (
-            <div className={`hud2__race ${hud.pos === 1 ? 'lead' : 'trail'}`}>
+            <div className={`hud2__race ${hud.pos === 1 ? 'lead' : 'trail'} ${hud.sprint ? 'sprint' : ''}`}>
               <b>P{hud.pos || 1}<small>/2</small></b>
-              <span>KUROGANE {hud.rivalGap > 0 ? '+' : ''}{hud.rivalGap} M</span>
+              <span>{hud.sprint ? 'FINAL STRETCH · ' : ''}KUROGANE {hud.rivalGap > 0 ? '+' : ''}{hud.rivalGap} M</span>
             </div>
           )}
           <div className="hud2__route">
@@ -347,11 +355,11 @@ export default function Play() {
             <b className="dash-speed">{hud.kmh}</b>
             <span className="hud-k">KM/H</span>
             <div className="dash-bars">
-              <label>
+              <label className={hud.heat < 3 ? 'is-idle' : ''}>
                 <span>HEAT</span>
                 <span className={`heatbar ${hud.heat > 70 ? 'hot' : ''}`}><i style={{ width: `${hud.heat}%` }} /></span>
               </label>
-              <label>
+              <label className={(hud.draft || 0) * 100 < 3 ? 'is-idle' : ''}>
                 <span>DRAFT</span>
                 <span className="draftbar"><i style={{ width: `${Math.round((hud.draft || 0) * 100)}%` }} /></span>
               </label>
@@ -363,7 +371,7 @@ export default function Play() {
       {counting && (
         <div className="countdown" aria-live="assertive">
           <b key={Math.ceil(hud.count)}>{Math.ceil(hud.count)}</b>
-          <p className="countdown__brief">GRAB <em>5 SHARDS</em> TO OPEN A CASE FILE · OPEN <em>10</em> TO REACH THE LOOKOUT<br /><small>C · CHANGE CAMERA{cfg.rash && cfg.car === 'bike' && cfg.race !== false ? ' · X · STRIKE' : ''}</small></p>
+          <p className="countdown__brief"><em>5 SHARDS</em> = 1 FILE · <em>10 FILES</em> = THE LOOKOUT{cfg.zen ? '' : <> · <em>{hud.maxLives} HITS</em> = OUT</>}<br /><small>C · CHANGE CAMERA{cfg.rash && cfg.car === 'bike' && cfg.race !== false ? ' · X · STRIKE' : ''}</small></p>
         </div>
       )}
 
@@ -392,8 +400,8 @@ export default function Play() {
           <div className="pad__act">
             <button type="button" className="pad__brake" {...hold('brake')}>BRAKE</button>
             <button type="button" className="pad__oc" {...hold('boost')}>OVERCLOCK</button>
-            {cfg.race !== false && <button type="button" className="pad__strike" {...hold('strike')}>WHIP</button>}
-            {cfg.car === 'bike' && <button type="button" className="pad__strike" {...hold('wheelie')}>WHEELIE</button>}
+            {cfg.race !== false && <button type="button" className={`pad__strike ${hud.beside ? 'is-ready' : ''}`} {...hold('strike')}>WHIP</button>}
+            {cfg.car === 'bike' && <button type="button" className="pad__strike pad__wheelie" {...hold('wheelie')}>WHEELIE</button>}
           </div>
         </div>
       )}
@@ -420,7 +428,7 @@ export default function Play() {
               options={[['race', 'RACE'], ...(cfg.car === 'bike' ? [['rash', 'ROAD BRAWL']] : []), ['zen', 'ZEN RACE'], ['free', 'FREE RUN']]}
               onChange={(v) => update({ race: v !== 'free', rash: v === 'rash', zen: v === 'zen' })}
             />
-            <p className="garage__note">{cfg.zen ? 'Race KUROGANE with no damage and no police. Crashes only cost speed.' : cfg.race === false ? 'Just you, the traffic and the road.' : cfg.rash && cfg.car === 'bike' ? 'Ride up beside KUROGANE and crack the whip (X) to knock him wide. He hits back.' : 'First to the lookout wins. Crashes cost integrity and draw the police.'}</p>
+            <p className="garage__note">{cfg.zen ? 'Race KUROGANE with no damage and no police. Crashes only cost speed.' : cfg.race === false ? 'Just you, the traffic and the road.' : cfg.rash && cfg.car === 'bike' ? 'Ride up beside KUROGANE and crack the whip (X) to knock him wide. He hits back.' : 'First to the lookout wins. Crashes cost integrity and draw the police; every file you open repairs one.'}</p>
             <Seg label="RADIO" value={cfg.radio || 'dracula'} options={[['dracula', 'DRACULA MIX'], ['nightcall', 'NIGHTCALL MIX'], ['synth', 'SYNTH LOOP'], ['link', 'YOUR MIX']]} onChange={(v) => update({ radio: v })} />
             {cfg.radio === 'link' && (
               <input className="radio-link" defaultValue={cfg.radioLink || ''} placeholder="Paste a YouTube video, playlist or Mix link" aria-label="YouTube link"
@@ -440,12 +448,15 @@ export default function Play() {
                 ))}
               </div>
             </div>
+            <div className="only-phone">
+              <Seg label="TIME" value={cfg.time} options={Object.entries(TIMES).map(([k, t]) => [k, t.name])} onChange={(v) => update({ time: v })} />
+              <Seg label="WEATHER" value={cfg.weather} options={Object.entries(WEATHER).map(([k, t]) => [k, t.name])} onChange={(v) => update({ weather: v })} />
+            </div>
             <details className="more">
               <summary>MORE · traffic, police, world, graphics, sound</summary>
               <Seg label="TRAFFIC" value={cfg.difficulty} options={Object.entries(DIFFICULTY).map(([k, d]) => [k, d.name])} onChange={(v) => update({ difficulty: v })} />
               <p className="garage__note">{DIFFICULTY[cfg.difficulty].blurb} Best: <b>{best.toLocaleString('en-IN')}</b></p>
               {!cfg.zen && <Seg label="POLICE" value={cfg.police === false ? 'off' : 'on'} options={[['on', 'ON'], ['off', 'OFF']]} onChange={(v) => update({ police: v === 'on' })} />}
-              <Seg label="WEATHER" value={cfg.weather} options={Object.entries(WEATHER).map(([k, t]) => [k, t.name])} onChange={(v) => update({ weather: v })} />
               <Seg label="GRAPHICS" value={cfg.quality} options={Object.entries(QUALITY).map(([k, t]) => [k, t.name])} onChange={(v) => update({ quality: v })} />
               <Toggle label="Steering assist" checked={cfg.assist} onChange={(v) => update({ assist: v })} />
               <Toggle label="Reduced effects" checked={cfg.effects === 'reduced'} onChange={(v) => update({ effects: v ? 'reduced' : 'full' })} />
@@ -470,6 +481,11 @@ export default function Play() {
         <nav className="timepick" aria-label="Time of day">
           <span className="hud-label">TIME</span>
           {Object.entries(TIMES).map(([k, t]) => <button key={k} type="button" aria-pressed={cfg.time === k} className={`${cfg.time === k ? 'on' : ''} ${k === 'outrun' ? 'tp-outrun' : ''}`} onClick={() => update({ time: k })}>{k === 'outrun' && <i className="tp-sun" aria-hidden="true" />}{t.name}{k === 'outrun' && <em>SUNSET RUN</em>}</button>)}
+          <span className="hud-label tp-gap">WEATHER</span>
+          <span className="tp-row" role="group" aria-label="Weather">
+            {Object.entries(WEATHER).map(([k, t]) => <button key={k} type="button" aria-pressed={cfg.weather === k} className={`${cfg.weather === k ? 'on' : ''} tp-wx tp-wx--${k}`} onClick={() => update({ weather: k })}><i aria-hidden="true">{k === 'rain' ? '☔' : '☾'}</i>{t.name}</button>)}
+          </span>
+          <span className="tp-note">{cfg.weather === 'rain' ? 'Less grip · longer braking · tunnels stay dry' : 'Dry road · full grip'}</span>
         </nav>
         <aside className="showroom-tag" aria-hidden="true">
           <span className="hud-label">IN THE BAY</span>
@@ -497,6 +513,7 @@ export default function Play() {
             options={[['race', 'RACE'], ...(cfg.car === 'bike' ? [['rash', 'ROAD BRAWL']] : []), ['zen', 'ZEN RACE'], ['free', 'FREE RUN']]}
             onChange={(v) => update({ race: v !== 'free', rash: v === 'rash', zen: v === 'zen' })}
           />
+          <Seg label="WEATHER" value={cfg.weather} options={Object.entries(WEATHER).map(([k, t]) => [k, t.name])} onChange={(v) => update({ weather: v })} />
           <Seg label="BACKDROP" value={cfg.time} options={Object.entries(TIMES).map(([k, t]) => [k, t.name])} onChange={(v) => update({ time: v })} />
           <div className="btn-row">
             <button type="button" className="btn btn--signal" onClick={togglePause} autoFocus>
@@ -543,6 +560,7 @@ export default function Play() {
               RUN IT BACK <span className="btn__k">ENTER</span>
             </button>
             <button type="button" className="btn btn--ghost" onClick={toGarage}>GARAGE</button>
+            {!final.complete && !cfg.zen && final.files < 4 && <button type="button" className="btn btn--ghost" onClick={() => { update({ zen: true, race: true, rash: false }); setTimeout(start, 60); }}>TRY ZEN · NO DAMAGE</button>}
             <Link to="/chill" className="btn btn--ghost" onClick={() => { const r = radioOf(cfg); if (r && (r.v || r.list)) { try { localStorage.setItem('nc2:song2', JSON.stringify({ v: r.v, list: r.list, title: r.name, by: 'Carried over from the race' })); } catch { /* ignore */ } } }}>NIGHT SHIFT ☾</Link>
           </div>
         </section>

@@ -84,7 +84,12 @@ export function createRedline(canvas, opts = {}) {
       case 'casefile': world.burst('file', S.x); audio?.sfx('file'); break;
       case 'nearmiss': audio?.sfx('nearmiss'); break;
       case 'slipstream': world.burst('slip', S.x); audio?.sfx('slip'); break;
-      case 'hit': world.burst('hit', S.x); audio?.sfx('hit'); break;
+      case 'hit': world.burst('crash', e.x, e); audio?.sfx('crash', e.sev); break;
+      case 'slam': world.burst('slam', e.x); audio?.sfx('crash', 0.4); break;
+      case 'bump': world.burst('bump', e.x); audio?.sfx('scrape'); break;
+      case 'parried': audio?.sfx('ui'); break;
+      case 'blocked': audio?.sfx('count'); break;
+      case 'sprint': audio?.sfx('go'); break;
       case 'scrape': audio?.sfx('scrape'); break;
       case 'strike': world.burst('strike', e.x); audio?.sfx('hit'); break;
       case 'struck': world.burst('strike', e.x); audio?.sfx('scrape'); break;
@@ -163,13 +168,14 @@ export function createRedline(canvas, opts = {}) {
     L.uFlash.value = fx.full && S.flash > 0 ? S.flash * 0.9 : 0;
     L.uBoost.value = S.slip > 0 ? Math.min(1, S.slip) : 0;
     const linesT = !lite && fx.full && fx.view !== 'showroom' && (S.overclock || S.slip > 0) ? Math.min(1, (sp - 0.7) * 2.5) : 0;
+    if (S.inTunnel && fx.full) L.uSpeed.value *= 1.35; // walls close in: the tunnel reads faster
     if (lite) L.uSpeed.value *= 0.55;
     L.uLines.value += (Math.max(0, linesT) - L.uLines.value) * Math.min(1, dt * 6);
     if (fx.view === 'showroom') L.uSpeed.value = 0;
     // the hero backdrop only needs 30fps: render every other frame, keep the sim at full rate
     if (!lite || tick % 2 === 0) post.render(dt);
 
-    if (audio && sim.mode === 'play') audio.engine(S.count <= 0 && !S.over, sp, S.overclock);
+    if (audio && sim.mode === 'play') { audio.engine(S.count <= 0 && !S.over, sp, S.overclock); audio.tunnel(!!S.inTunnel && !S.over); }
 
     // dynamic resolution: keep ~60fps, recover when there's headroom
     frameAvg += (dtRaw * 1000 - frameAvg) * 0.03;
@@ -216,7 +222,9 @@ export function createRedline(canvas, opts = {}) {
       bend: (() => { if (S.finale) return 0; const ahead = sim.curveAt(S.z + 170), now = sim.curveAt(S.z); return Math.abs(ahead) > 0.3 && Math.abs(ahead - now) > 0.3 ? Math.sign(ahead) * Math.min(3, Math.ceil(Math.abs(ahead) * 3)) : 0; })(),
       cam: fx.cam,
       race: cfg.race !== false,
-      wanted: Math.ceil(S.wanted || 0),
+      wanted: Math.floor((S.wanted || 0) + 1e-6),
+      heatOnYou: Math.min(1, (S.wanted || 0) % 1 || (S.wanted >= 3 ? 1 : 0)),
+      wet: !!S.wet, aqua: S.aqua > 0.5, tunnel: !!S.inTunnel, sprint: !!S.sprint, zen: !!cfg.zen,
       ghost: S.ghost > 0 ? Math.ceil(S.ghost) : 0,
       beside: !!(cfg.race !== false && S.rival && ((Math.abs(S.rival.z - S.z) < 6 && Math.abs(S.rival.x - S.x) < 4.4) || (S.cops || []).some((k) => Math.abs(k.z - S.z) < 6 && Math.abs(k.x - S.x) < 4.4)) && S.strikeCd <= 0),
       copGap: S.cops && S.cops.length ? Math.round(Math.min(...S.cops.map((k) => S.z - k.z))) : null,
