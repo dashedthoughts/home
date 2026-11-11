@@ -926,6 +926,28 @@ h1, h2, h3 { font-family: var(--f-display); font-weight: 700; letter-spacing: 0.
 .ch-music .ch-pick .ch-btn { flex: none; padding: 10px 12px; }
 .ch-k i { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: inline-block; max-width: 60%; vertical-align: bottom; }
 
+/* ================= NIGHT SHIFT on phones and tablets: a plain scrolling column =================
+   nav · clock + weather · timer · search · quote · music · notes, with the drive bar and dock pinned at the bottom */
+@media (max-width: 1100px) {
+  .chill { overflow: visible; min-height: 100dvh; padding: 104px 0 190px; }
+  .chill__grid { display: none; }
+  .ch-ambient { position: relative; left: auto; top: auto; margin: 0 var(--gutter) 14px; z-index: 3; }
+  .ch-ambient .ch-clock { font-size: 2.2rem; }
+  .ch-side { position: relative !important; left: auto !important; right: auto !important; top: auto !important; bottom: auto !important; width: auto !important; height: auto !important; min-height: 0 !important;
+    padding: 0 var(--gutter); margin: 0 0 12px; overflow: visible; z-index: 3; }
+  .ch-side--r .ch-notes-wrap { display: block; } .ch-side--r .ch-notes-wrap[hidden] { display: none; }
+  .ch-side .ch-notes textarea { min-height: 150px; height: 150px; }
+  .ch-side .ch-digital .ch-time { font-size: 3rem; }
+  .ch-bottom { position: fixed; left: 0; right: 0; bottom: 8px; gap: 6px; padding: 0 8px; z-index: 5; }
+  .ch-drive--line { flex-wrap: wrap; justify-content: center; gap: 6px 10px; padding: 7px 10px; opacity: 1; background: rgba(10,5,20,.9); width: 100%; box-sizing: border-box; }
+  .ch-rng input { width: 70px; }
+  .ch-dock { opacity: 1; background: rgba(10,5,20,.9); }
+  .ch-keep { position: absolute !important; left: -9999px !important; }
+  .chill--vibe .ch-side, .chill--vibe .ch-ambient { display: none; }
+}
+@media (max-width: 760px) { .ch-dock button { padding: 9px 12px; } .ch-sel span, .ch-rng span { display: none; } .ch-sel::before { content: none; } }
+@media (max-width: 760px) { .ch-rng span { display: inline; font-size: .54rem; } .ch-rng input { width: 62px; } }
+
 /* =========================================================
    REDLINE · play page: garage, HUD, callouts, panels
    ========================================================= */
@@ -1253,6 +1275,94 @@ h1, h2, h3 { font-family: var(--f-display); font-weight: 700; letter-spacing: 0.
 @keyframes siren-full { 0% { background: radial-gradient(70% 90% at 0% 50%, rgba(255,16,48,.55), transparent 70%), radial-gradient(70% 90% at 100% 50%, rgba(42,107,255,.15), transparent 70%); } 50% { background: radial-gradient(70% 90% at 0% 50%, rgba(255,16,48,.15), transparent 70%), radial-gradient(70% 90% at 100% 50%, rgba(42,107,255,.6), transparent 70%); } }
 @media (prefers-reduced-motion: reduce) { .siren-full { animation: none; background: rgba(255,16,48,.18); } }
 
+/* ---------- weather beside the time picker; road-state and pursuit read-outs ---------- */
+.timepick .tp-gap { margin-top: 10px; }
+.timepick .tp-row { display: flex; gap: 6px; }
+.timepick .tp-wx { min-width: 0; display: flex; align-items: center; gap: 8px; padding: 12px 14px; }
+.timepick .tp-wx i { font-style: normal; font-size: 1rem; line-height: 1; }
+.timepick .tp-wx--rain.on { background: var(--data); border-color: var(--data); color: #0b0910; }
+.tp-note { max-width: 230px; text-align: right; font: 400 .62rem / 1.4 var(--f-mono); letter-spacing: .08em; color: var(--ink-muted); text-shadow: 0 1px 4px #000; }
+.hud2__cop--build span { color: #ffd23a; }
+.hud2__cop--build .bustbar { background: rgba(255,210,58,.16); } .hud2__cop--build .bustbar i { background: #c99700; }
+.hud2__race.sprint { box-shadow: 0 0 0 2px var(--signal), 0 0 26px -4px var(--signal); animation: blink .6s steps(2) infinite; }
+.hud2__race.sprint span { color: var(--signal); }
+@media (max-width: 760px) { .timepick .tp-wx { padding: 6px 8px; } .tp-note { display: none; } }
+@media (prefers-reduced-motion: reduce) { .hud2__race.sprint { animation: none; } }
+/* phones: the time and weather pickers live inside the menu, never on top of it */
+.only-phone { display: none; }
+@media (max-width: 760px) {
+  .timepick { display: none; }
+  .only-phone { display: grid; gap: var(--sp-3); }
+  .only-phone .seg button { padding: 8px 6px !important; font-size: .64rem !important; min-height: 0 !important; }
+}
+
+/* ================= phone HUD (portrait): one clean stack, nothing on top of anything =================
+   row A  score · files / integrity / camera / pause
+   row B  route chip (left) · speed, status, heat, draft (right)
+   row C  race position, then police, centred
+   road   call-outs
+   pad    steer (left) · whip / wheelie, overclock, brake (right)                                        */
+@media (max-width: 760px) {
+  .hud2__score { left: 12px; top: 10px; }
+  .hud2__score b { font-size: 1.7rem; }
+  .hud2__right { right: 10px; top: 10px; gap: 10px; }
+  .hud2__right b { font-size: 1.35rem; }
+  .hud2__cam { padding: 7px 7px; font-size: .6rem; }
+  .hud2__pause { width: 38px; height: 38px; }
+  .hud2__route { top: 84px !important; bottom: auto !important; left: 12px !important; max-width: 46vw; gap: 4px; }
+  .hud2__route b { font-size: .72rem; padding: 4px 7px; }
+  .hud2__route .junction-hint { font-size: .56rem; }
+  .hud2__dash { top: 78px !important; bottom: auto !important; right: 10px !important; min-width: 128px; }
+  .dash-speed { font-size: 2.1rem; }
+  .dash-status { font-size: .6rem; padding: 3px 6px; }
+  .dash-bars { gap: 4px; margin-top: 4px; }
+  .hud2__race { top: 168px !important; bottom: auto !important; padding: 4px 10px; gap: 8px; white-space: nowrap; }
+  .hud2__race b { font-size: 1.2rem; }
+  .hud2__race span { font-size: .6rem; }
+  .hud2__cop { top: 204px !important; bottom: auto !important; padding: 4px 9px; gap: 7px; white-space: nowrap; }
+  .hud2__cop b { font-size: .8rem; } .hud2__cop span { font-size: .58rem; }
+  .bustbar { width: 74px; font-size: .52rem; }
+  .pops { top: 37%; width: 94vw; }
+  .pop { padding: 6px 14px 8px; }
+  .pop b { font-size: clamp(1.25rem, 6.4vw, 1.9rem) !important; }
+  .pop span { font-size: .6rem; letter-spacing: .1em; }
+  .bendsign { top: 37% !important; padding: 4px 12px 6px; }
+  .bendsign b { font-size: 1.5rem; }
+  .ghost-chip { left: 12px; top: 128px; padding: 5px 9px; font-size: .7rem; }
+  .strike-ready { display: none; } /* the WHIP button itself lights up instead */
+  .countdown__brief { top: 12%; font-size: .72rem; }
+  /* music keeps playing; the video is not shown over the race */
+  .radio { left: 12px !important; right: auto !important; top: 132px !important; bottom: auto !important; width: auto !important; }
+  .radio span { font-size: .52rem; opacity: .8; }
+  .radio iframe { position: absolute; left: -9999px; width: 200px !important; height: 113px !important; }
+  /* pad */
+  .pad { padding: 10px; gap: 10px; }
+  .pad__steer { gap: 10px; }
+  .pad__steer button { width: 72px; height: 72px; }
+  .pad__act { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; width: min(46vw, 190px); }
+  .pad__act button { height: 54px; min-width: 0 !important; padding: 0 8px; font-size: .74rem; }
+  .pad__strike { grid-row: 1; }
+  .pad__act:not(:has(.pad__wheelie)) .pad__strike { grid-column: 1 / 3; }
+  .pad__oc { grid-row: 2; grid-column: 1 / 3; height: 64px !important; }
+  .pad__brake { grid-row: 3; grid-column: 1 / 3; height: 50px !important; }
+  .pad__strike.is-ready { animation: blink .3s steps(2) infinite; box-shadow: 0 0 0 3px #fff, 0 0 22px #ff2bd6; }
+  /* pause and results fit one screen and scroll if they must */
+  .panel { max-height: calc(100dvh - 16px); overflow-y: auto; padding: 16px 14px !important; }
+  .panel__h { font-size: 2rem !important; }
+  .pause-toggles { grid-template-columns: 1fr 1fr; gap: 8px !important; }
+  .panel .seg button { padding: 8px 4px !important; font-size: .62rem !important; min-height: 0 !important; }
+  .result { grid-template-columns: 1fr 1fr !important; }
+}
+@media (max-width: 760px) and (prefers-reduced-motion: reduce) { .pad__strike.is-ready { animation: none; } }
+@media (max-width: 760px) {
+  .hud2__route { top: 94px !important; }
+  .radio { top: 142px !important; }
+  .hud2__race { top: 196px !important; }
+  .hud2__cop { top: 230px !important; }
+  .ghost-chip { top: 166px; }
+}
+@media (max-width: 760px) { .dash-bars label.is-idle { display: none; } .hud2__cam { display: none; } }
+
 /* =========================================================
    Mixed media: printed collage. Torn paper, Ben-Day dots, hatching, SFX lettering, marker notes.
    Motion is stepped "on twos"; ink lines boil between three hand-roughened frames.
@@ -1455,5 +1565,5 @@ h1, h2, h3 { font-family: var(--f-display); font-weight: 700; letter-spacing: 0.
 </style>
 </head><body><div id="root"></div>
 <noscript><p style="padding:2rem;font-family:monospace;color:#f5f2ea;background:#0d0d0d">This page needs JavaScript. Contact: anur.dash@gmail.com</p></noscript>
-<script type="module" src="./assets/app-RUEL66GQ.js"></script>
+<script type="module" src="./assets/app-N6GQ4MXA.js"></script>
 </body></html>
