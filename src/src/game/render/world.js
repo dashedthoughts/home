@@ -36,17 +36,17 @@ export function createWorld(renderer, initialCfg) {
   const hemi = new THREE.HemisphereLight('#ff5aa0', '#120a1e', 0.5);
   scene.add(hemi);
   const key = new THREE.DirectionalLight('#ff9a7a', 0.35);
-  key.position.set(-60, 90, -120);
+  key.position.set(-60, 90, 120); // behind the camera: it lights the side of the car you see, and its glint on the road falls out of frame
   scene.add(key);
   // showroom rig: a soft warm key, a cool rim from behind, a low fill. Always in the scene (constant light count,
   // no shader recompiles); faded up only while the car is parked in the bay.
-  const showKey = new THREE.DirectionalLight('#fff0e0', 0);
-  showKey.position.set(-4, 7, -5);
-  const showRim = new THREE.DirectionalLight('#7fe8ff', 0);
-  showRim.position.set(4, 10, 7);   // high: a low light mirrors off the glossy road straight into the lens
-  const showFill = new THREE.DirectionalLight('#ff8ad8', 0);
-  showFill.position.set(6, 7, -3);
-  scene.add(showKey, showRim, showFill);
+  // spotlights aimed at the car, not directional: the car is lit, the road gets a pool under it, the horizon stays dark
+  const bayTarget = new THREE.Object3D();
+  const baySpot = (color, pos) => { const l = new THREE.SpotLight(color, 0, 0, 0.42, 0.85, 0); l.userData.off = new THREE.Vector3(...pos); l.target = bayTarget; return l; };
+  const showKey = baySpot('#fff0e0', [-4, 7, -5]);
+  const showRim = baySpot('#7fe8ff', [4, 10, 7]);   // high: a low light mirrors off the glossy road straight into the lens
+  const showFill = baySpot('#ff8ad8', [6, 7, -3]);
+  scene.add(showKey, showRim, showFill, bayTarget);
   let showMix = 0;
   const head = new THREE.SpotLight('#fff1dc', 140, 75, 0.42, 0.6, 1.4);
   const headTarget = new THREE.Object3D();
@@ -796,7 +796,10 @@ export function createWorld(renderer, initialCfg) {
     if (ghostShell) { ghostShell.visible = S.ghost > 0; ghostShell.scale.setScalar(1 + Math.sin(U.uTime.value * 12) * 0.04); ghostShell.material.uniforms.opacity.value = Math.min(1, S.ghost) * 0.35; }
     // the bay: studio light on, the underglow light pulled back so it doesn't wash the body, the headlamp beam off
     showMix = fx.view === 'showroom' ? 1 : 0;
-    showKey.intensity = 2.4 * showMix; showRim.intensity = 1.8 * showMix; showFill.intensity = 0.7 * showMix;
+    showKey.intensity = 2.6 * showMix; showRim.intensity = 2 * showMix; showFill.intensity = 0.8 * showMix;
+    bayTarget.position.set(S.x, 0.55, 0);
+    pools.visible = quality.extras && !showMix; // in the bay the floor is lit by the studio spots, not a coloured lamp pool under the car
+    for (const l of [showKey, showRim, showFill]) l.position.set(S.x + l.userData.off.x, l.userData.off.y, l.userData.off.z);
     head.intensity = showMix ? 0 : 140;
     // in the bay the underglow is a soft pool, not a floodlight: no hot spot on the road, no bloom over the body
     if (P.glowLight) P.glowLight.intensity = (P.glowBase || 26) * (showMix ? 0.12 : 1) * (0.85 + 0.15 * Math.sin(U.uTime.value * 9));
