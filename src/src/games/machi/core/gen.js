@@ -207,7 +207,7 @@ export function tokyo(seed = 1977) {
   alley(g);
   ramenBuilding(g);
   konbiniBuilding(g);
-  snackBuilding(g);
+  emptyPlot(g);
   karaokeBuilding(g);
   sento(g);
   bookshop(g);
@@ -225,7 +225,7 @@ export function tokyo(seed = 1977) {
   g.meta.props.push({ t: 'bike', x: 64.5, y: GY, z: 50.6, r: 0.1 }, { t: 'bike', x: 66.2, y: GY, z: 50.7, r: -0.05 }, { t: 'bike', x: 68, y: GY, z: 50.5, r: 0.12 },
     { t: 'bike', x: 27, y: GY, z: 64.8, r: 1.5 }, { t: 'bike', x: 50.5, y: GY, z: 68.6, r: 0.02 });
   g.meta.cat = { x: 16, z: 33 };
-  g.meta.spawn = { x: 22, z: 45, yaw: -Math.PI / 2 };
+  g.meta.spawn = { x: 21, z: 46, yaw: -Math.PI / 2 }; // on the shotengai, looking east down the street
   w.meta = g.meta;
   w.relight();
   return w;
@@ -390,16 +390,15 @@ function konbiniBuilding(g) {
   g.mark('konbini', 46, GY, 8, 59, top + 7, 40);
   g.mark('rooftop', 46, r, 8, 59, r + 6, 39);
 }
-function snackBuilding(g) {
-  const L = new Lot(g, 60, 67, 8, 39, 1);
-  const top = GY + 7 + 6 * 5 - 1;
-  shell(L, { top, wall: 'cream', band: 'brick', litP: 0.45 });
-  shopCavity(L, 1, 6, 5, 5, 'darkwood', 'shoplight');
-  L.box(1, GY, 0, 6, GY + 4, 0, 'darkwood');
-  L.box(2, GY, 0, 3, GY + 3, 0, 'air'); L.set(5, GY + 2, 0, 'shoji'); L.set(5, GY + 1, 0, 'shoji');
-  L.set(1, GY + 4, -1, 'paperlamp');
-  facadeSign(L, 'スナック', 0, top - 2, 'neonpink', { border: 'neoncyan' });
-  g.mark('snack', 60, GY, 8, 67, top + 1, 40);
+function emptyPlot(g) {
+  // a vacant lot (akichi) between the konbini and the karaoke bar, left free for the visitor
+  g.box(60, 3, 8, 67, 3, 39, 'gravel');
+  for (let x = 60; x <= 67; x++) { g.set(x, 3, 20, 'plaster'); g.set(x, 3, 39, (x % 2) ? 'plaster' : 'gravel'); }
+  for (let z = 20; z <= 39; z++) { g.set(60, 3, z, 'plaster'); g.set(67, 3, z, 'plaster'); }
+  for (const [x, z] of [[60, 39], [67, 39], [60, 20], [67, 20]]) { g.set(x, GY, z, 'woodpost'); g.set(x, GY + 1, z, 'woodpost'); g.set(x, GY + 2, z, 'paperlamp'); }
+  for (let z = 8; z < 20; z++) for (const x of [60, 67]) g.set(x, GY, z, 'concrete');
+  g.set(63, GY, 21, 'fern'); g.set(65, GY, 24, 'flowers');
+  g.mark('plot', 60, GY, 20, 67, GY, 39);
 }
 function karaokeBuilding(g) {
   const L = new Lot(g, 68, 77, 8, 39, 1);

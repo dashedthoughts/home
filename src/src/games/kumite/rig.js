@@ -29,6 +29,7 @@ const ALT = {
   sayo: { main: '#163f6e', mainD: '#0a2242', accent: '#00f0ff', hair: '#f0ece6' },
 };
 const altCache = {};
+export function sideColor(id, alt) { return alt ? ALT[id].accent : null; }
 function altLook(id) { return altCache[id] || (altCache[id] = { ...LOOKS[id], ...ALT[id] }); }
 // ---------------------------------------------------------------- math
 function ik(ax, ay, tx, ty, l1, l2, bend) {

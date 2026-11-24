@@ -9,6 +9,7 @@ import { Walker } from './core/walker.js';
 import { encodeWorld, decodeWorld, parseImport } from './core/save.js';
 import { buildStamps, letterStamp } from './core/stamps.js';
 import { Audio } from './audio.js';
+import { REQUESTS, LOCKED_STAMPS, LOCKED_NEON, progress, nextRequest } from './core/requests.js';
 
 const LS = 'nc2:machi:';
 export const lsGet = (k, d = null) => { try { const v = localStorage.getItem(LS + k); return v === null ? d : JSON.parse(v); } catch { return d; } };
@@ -20,7 +21,7 @@ export const TOOLS = ['place', 'remove', 'paint', 'pick', 'box', 'line', 'select
 export const DEFAULT_HOTBAR = ['plaster', 'tile', 'wood', 'rooftile', 'glass', 'lantern', 'neonpink', 'neoncyan', 'sakura'].map((k) => ID[k]);
 const DH = 18.6; // default: blue hour, drifting to night
 const PRESETS = {
-  opening: { target: [50, 8, 50], yaw: 0.52, pitch: 0.6, dist: 104 },
+  opening: { target: [42, 6, 50], yaw: -1.72, pitch: 0.62, dist: 64 }, // from the west: shrine, torii, sakura, canal and bridge leading into the neon
   south: { target: [48, 12, 48], yaw: 0, pitch: 0.42, dist: 100 },
   north: { target: [48, 12, 48], yaw: Math.PI, pitch: 0.42, dist: 100 },
   east: { target: [48, 12, 48], yaw: Math.PI / 2, pitch: 0.42, dist: 100 },
@@ -45,7 +46,10 @@ export class Game {
     this.settings = { quality: 'auto', sound: true, invertY: false, sens: 1, tilt: true, ...(lsGet('settings') || {}) };
     this.renderer = new Renderer(canvas, { quality: this.resolveQuality(), reduced: this.reduced });
     this.audio = new Audio(); this.audio.on = this.settings.sound;
-    this.stamps = buildStamps();
+    this.allStamps = buildStamps();
+    this.req = { done: [], off: false, open: true, ...(lsGet('req') || {}) };
+    if (!Array.isArray(this.req.done)) this.req.done = [];
+    this._refreshUnlocks();
     this.ui = {
       mode: 'build', tool: 'place', slot: 0, hotbar: (lsGet('hotbar') || DEFAULT_HOTBAR).slice(0, 9), mirrorX: false, mirrorZ: false,
       canUndo: false, canRedo: false, hour: DH, drift: true, cycle: false, rain: false, boxMode: 'fill', boxH: 0, selection: null,
@@ -66,7 +70,7 @@ export class Game {
     this.renderer.flush();
     this.orbit = { target: [...PRESETS.opening.target], yaw: PRESETS.opening.yaw, pitch: PRESETS.opening.pitch, dist: PRESETS.opening.dist * this._aspectK() };
     this.orbitGoal = { ...this.orbit, target: [...this.orbit.target] };
-    this.sim = { t: 0, trainT: 22, cat: null, petals: new Float32Array(600 * 3), petalV: new Float32Array(600 * 4), nPetals: 0, wet: 0, stepT: 0 };
+    this.sim = { t: 0, trainT: 22, cat: null, petals: new Float32Array(700 * 3), petalV: new Float32Array(600 * 4), nPetals: 0, wet: 0, stepT: 0, puffs: [] };
     this._initCat(); this._initPetals();
     this.keys = new Set();
     this.pointer = { x: -1, y: -1, inside: false };
@@ -82,10 +86,56 @@ export class Game {
     this._raf = requestAnimationFrame((t) => this._frame(t));
     this._exposeHook();
   }
+  // ---------------- neighbourhood requests ----------------
+  _refreshUnlocks() {
+    const got = new Set(); const neon = new Set();
+    for (const r of REQUESTS) if (this.req.done.includes(r.id)) { if (r.reward.stamp) got.add(r.reward.stamp); (r.reward.neon || []).forEach((n) => neon.add(n)); }
+    this.stamps = this.allStamps.filter((st) => !LOCKED_STAMPS.includes(st.name) || got.has(st.name));
+    this.lockedNeon = LOCKED_NEON.filter((n) => !neon.has(n));
+  }
+  get request() { return this.ui.template === 'tokyo' && !this.req.off ? nextRequest(this.req) : null; }
+  requestProgress() {
+    const r = this.request; if (!r || r.photo) return 0;
+    if (!this._base) this._base = tokyo();
+    return progress(r, this.world, this._base);
+  }
+  _checkRequest() {
+    const r = this.request; if (!r || r.photo) return;
+    const p = this.requestProgress();
+    if (p !== this.ui.reqProgress) { this.ui.reqProgress = p; this.emit(); }
+    if (p >= r.need) this.completeRequest(r);
+  }
+  completeRequest(r) {
+    if (this.req.done.includes(r.id)) return;
+    this.req.done.push(r.id); this.req.open = true; lsSet('req', this.req);
+    this._refreshUnlocks();
+    if (r.reward.cat && this.sim.cat) { const [x, z] = r.reward.cat; const c = this.sim.cat; c.home = [x, z]; c.x = x + 0.5; c.z = z + 0.5; c.y = this._standY(x + 0.5, z + 0.5, this.world.H - 1); c.state = 'sit'; c.t = 30; this.puff(x, c.y - 1, z, 16); }
+    this.audio.chime();
+    const what = r.reward.stamp ? `${r.reward.stamp} stamp unlocked` : 'Green and violet neon letters unlocked';
+    this.ui.reqDone = { title: r.title, reward: what + (r.reward.cat ? '. The cat moved in.' : '') };
+    this.emit();
+  }
+  requestAction(a) {
+    if (a === 'later') { this.req.open = false; lsSet('req', this.req); }
+    else if (a === 'open') { this.req.open = true; lsSet('req', this.req); }
+    else if (a === 'next') { this.ui.reqDone = null; }
+    else if (a === 'off') { this.req.off = true; lsSet('req', this.req); }
+    else if (a === 'on') { this.req.off = false; this.req.open = true; lsSet('req', this.req); }
+    else if (a === 'show') { const r = this.request; if (r && r.look) { if (this.ui.mode === 'walk') this.setMode('build'); this._userActed = true; const k = this._aspectK(); this.orbitGoal = { ...r.look, target: [...r.look.target], dist: r.look.dist * k }; if (r.photo) this.ui.hour = 18.9, this.ui.drift = false; } }
+    this.emit();
+  }
+  onPhoto() {
+    const r = this.request; if (!r || !r.photo) return;
+    const t = this._trainState(), h = this.ui.hour;
+    if (!t.on) { this.toast('No train in the picture yet. It passes every 48 seconds.', 2600); return; }
+    if (h < 18.5 || h > 19.5) { this.toast('The rail fan wants blue hour: set the time between 18:30 and 19:30.', 3000); return; }
+    this.completeRequest(r);
+  }
   resolveQuality() { const q = this.settings.quality; return QUALITY[q] ? q : this.touch ? 'low' : 'balanced'; }
   emit() { if (this._emitQueued) return; this._emitQueued = true; queueMicrotask(() => { this._emitQueued = false; for (const f of this.listeners) f(); }); }
   subscribe(f) { this.listeners.add(f); return () => this.listeners.delete(f); }
-  set(patch) { Object.assign(this.ui, patch); this.emit(); }
+  set(patch) { if ('panel' in patch && patch.panel !== this.ui.panel) this.keys.clear(); Object.assign(this.ui, patch); this.emit(); }
+  closePanel() { this.set({ panel: null }); try { if (document.activeElement && document.activeElement.blur) document.activeElement.blur(); this.canvas.focus({ preventScroll: true }); } catch { /* fine */ } }
   toast(msg, ms = 2200) { this.ui.toast = msg; this.emit(); clearTimeout(this._toastT); this._toastT = setTimeout(() => { this.ui.toast = null; this.emit(); }, ms); }
 
   // ---------------- simulation ----------------
@@ -165,7 +215,15 @@ export class Game {
     P[i * 3 + 1] = anywhere ? GY + Math.random() * (e[1] - GY) : e[1] - e[3] * 0.3 + Math.random() * 2;
     V[i * 4] = Math.random() * 6.28; V[i * 4 + 1] = 0.5 + Math.random() * 0.6; V[i * 4 + 2] = 0; V[i * 4 + 3] = 0;
   }
+  puff(x, y, z, n = 12) {
+    if (this.reduced) return;
+    const P = this.sim.puffs;
+    for (let i = 0; i < n; i++) { const a = Math.random() * 6.283, sp = 1.5 + Math.random() * 2.5; P.push({ p: [x + 0.5, y + 0.6, z + 0.5], v: [Math.cos(a) * sp, 2 + Math.random() * 2.5, Math.sin(a) * sp], life: 0.45 + Math.random() * 0.25 }); }
+    if (P.length > 90) P.splice(0, P.length - 90);
+  }
   _petalStep(h) {
+    const F = this.sim.puffs;
+    for (let i = F.length - 1; i >= 0; i--) { const q = F[i]; q.life -= h; if (q.life <= 0) { F.splice(i, 1); continue; } q.v[1] -= 9 * h; for (let k = 0; k < 3; k++) { q.v[k] *= 1 - 2.5 * h; q.p[k] += q.v[k] * h; } }
     const P = this.sim.petals, V = this.sim.petalV, w = this.world, t = this.sim.t;
     const sp = this.reduced ? 0.5 : 1;
     for (let i = 0; i < this.sim.nPetals; i++) {
@@ -221,10 +279,12 @@ export class Game {
     if (m === 'walk') {
       const sp = (this.world.meta && this.world.meta.spawn) || { x: this.world.W / 2, z: this.world.D / 2, yaw: 0 };
       // start where the orbit camera is looking, if that spot is open; otherwise at the spawn point
+      // first walk of a visit: start on the shotengai looking down the street; later, where the camera is looking
       const [tx, , tz] = this.orbit.target;
-      this.walker.spawn(tx, tz, this.orbit.yaw);
-      if (this.walker.pos[1] > GY + 6) this.walker.spawn(sp.x, sp.z, sp.yaw);
-      this.walker.yaw = this.orbit.yaw; this.walker.pitch = -0.05;
+      if (!this._walked) { this.walker.spawn(sp.x, sp.z, sp.yaw); this.walker.yaw = sp.yaw; }
+      else { this.walker.spawn(tx, tz, this.orbit.yaw); this.walker.yaw = this.orbit.yaw; if (this.walker.pos[1] > GY + 6) { this.walker.spawn(sp.x, sp.z, sp.yaw); this.walker.yaw = sp.yaw; } }
+      this._walked = true;
+      this.walker.pitch = 0.02;
       this.ui.mode = 'walk';
       if (this.ui.coach === 2) this._coachNext();
       if (!['place', 'remove'].includes(this.ui.tool)) this.ui.tool = 'place';
@@ -261,11 +321,20 @@ export class Game {
     if (k.has('Equal') || k.has('NumpadAdd')) g.dist *= 1 - h * 1.5; if (k.has('Minus') || k.has('NumpadSubtract')) g.dist *= 1 + h * 1.5;
     g.pitch = clamp(g.pitch, 0.06, 1.48); g.dist = clamp(g.dist, 10, 240);
     g.target[0] = clamp(g.target[0], -16, this.world.W + 16); g.target[2] = clamp(g.target[2], -16, this.world.D + 16); g.target[1] = clamp(g.target[1], 0, this.world.H);
+    // a slow drift on the opening view until the visitor touches anything
+    if (!this._userActed && !this.reduced && !this.frozen && this.ui.template === 'tokyo') { this._drift = (this._drift || 0) + h; g.yaw = PRESETS.opening.yaw + Math.sin(this._drift * 0.035) * 0.12; }
     const o = this.orbit, a = this.reduced ? 1 : 1 - Math.exp(-h * 12);
     o.yaw += (g.yaw - o.yaw) * a; o.pitch += (g.pitch - o.pitch) * a; o.dist += (g.dist - o.dist) * a;
     for (let i = 0; i < 3; i++) o.target[i] += (g.target[i] - o.target[i]) * a;
     const cp = Math.cos(o.pitch);
-    cam.position.set(o.target[0] + Math.sin(o.yaw) * cp * o.dist, o.target[1] + Math.sin(o.pitch) * o.dist, o.target[2] + Math.cos(o.yaw) * cp * o.dist);
+    const dx = Math.sin(o.yaw) * cp, dy = Math.sin(o.pitch), dz = Math.cos(o.yaw) * cp;
+    // keep the camera out of buildings: if the eye would sit inside a solid block, slide it toward the target until it is in the open
+    let dist = o.dist;
+    const solidAt = (d) => { const x = o.target[0] + dx * d, y = o.target[1] + dy * d, z = o.target[2] + dz * d; for (const [ox, oy, oz] of [[0, 0, 0], [0.35, 0, 0], [-0.35, 0, 0], [0, 0.35, 0], [0, -0.35, 0], [0, 0, 0.35], [0, 0, -0.35]]) { const b = this.world.get(Math.floor(x + ox), Math.floor(y + oy), Math.floor(z + oz)); if (b && SOLID[b]) return true; } return false; };
+    if (solidAt(dist)) { let d = dist; while (d > 2 && solidAt(d)) d -= 0.5; dist = Math.max(2, d); }
+    this._camD = this._camD === undefined || this.reduced ? dist : (dist < this._camD ? dist : this._camD + (dist - this._camD) * Math.min(1, h * 4));
+    dist = this._camD;
+    cam.position.set(o.target[0] + dx * dist, o.target[1] + dy * dist, o.target[2] + dz * dist);
     cam.lookAt(o.target[0], o.target[1], o.target[2]);
     const fov = this.ui.photo ? this.ui.fov : 45;
     if (cam.fov !== fov) { cam.fov = fov; cam.updateProjectionMatrix(); }
@@ -274,6 +343,7 @@ export class Game {
   _aspectK() { const r = this.stage.getBoundingClientRect(); const a = r.width / Math.max(1, r.height); return clamp(1.45 / a, 1, 2.1); }
   camera(preset) {
     if (preset && PRESETS[preset]) {
+      if (preset !== 'opening') this._userActed = true;
       const p = PRESETS[preset];
       if (p.walk) {
         if (this.ui.mode !== 'walk') { this.ui.mode = 'walk'; this.renderer.setGhost(null); }
@@ -332,13 +402,13 @@ export class Game {
       const [x, y, z] = this._placeCell(h);
       if (!this._canPlaceAt(x, y, z)) return false;
       const id = this._selectedId();
-      if (ed.place(x, y, z, id)) { this.audio.pop(now); this._catNotice(x, y, z); if (this.ui.coach === 0) this._coachNext(); return true; }
+      if (ed.place(x, y, z, id)) { this.audio.pop(now); this.renderer.pop(x, y, z, id); this.puff(x, y, z); this._catNotice(x, y, z); if (this.ui.coach === 0) this._coachNext(); this._placed(); return true; }
     } else if (tool === 'remove') {
       if (h.ground) return false;
-      if (ed.remove(h.x, h.y, h.z)) { this.audio.thud(); if (this.ui.coach === 1) this._coachNext(); return true; }
+      if (ed.remove(h.x, h.y, h.z)) { this.audio.thud(); this.puff(h.x, h.y - 0.3, h.z, 6); if (this.ui.coach === 1) this._coachNext(); return true; }
     } else if (tool === 'paint') {
       if (h.ground) return false;
-      if (ed.place(h.x, h.y, h.z, this._selectedId())) { this.audio.pop(now); return true; }
+      if (ed.place(h.x, h.y, h.z, this._selectedId())) { this.audio.pop(now); this.renderer.pop(h.x, h.y, h.z, this._selectedId()); this._placed(); return true; }
     } else if (tool === 'pick') {
       if (h.ground || !h.id) return false;
       let id = h.id; const b = BLOCKS[id]; if (b.base) id = ID[b.base + 'N']; if (b.hidden && !b.base) return false;
@@ -350,7 +420,7 @@ export class Game {
     } else if (tool === 'stamp') {
       const s = this._stampFor(h); if (!s) return false;
       const [x, y, z] = this._placeCell(h);
-      if (ed.stamp(s.st, x, y, z, s.rot)) { this.audio.pop(now); this._catNotice(x, y, z); return true; }
+      if (ed.stamp(s.st, x, y, z, s.rot)) { this.audio.pop(now); this.puff(x, y, z, 18); this._catNotice(x, y, z); this._placed(); return true; }
     }
     return false;
   }
@@ -372,7 +442,7 @@ export class Game {
     if (tool === 'box') n = ed.box([box[0], box[1], box[2]], [box[3], box[4], box[5]], this.ui.boxMode === 'clear' ? 0 : this._selectedId());
     else if (tool === 'line') n = ed.line(a, b, this.ui.boxMode === 'clear' ? 0 : this._selectedId(), 1 + Math.max(0, this.ui.boxH));
     else if (tool === 'select') { this.ui.selection = box; this.emit(); return; }
-    if (n) { if (this.ui.boxMode === 'clear') this.audio.thud(); else { this.audio.pop(this.sim.t); this._catNotice(b[0], b[1], b[2]); } this.toast(`${n} ${n === 1 ? 'block' : 'blocks'}`, 1000); }
+    if (n) { if (this.ui.boxMode === 'clear') this.audio.thud(); else { this.audio.pop(this.sim.t); this.puff(b[0], b[1], b[2], 16); this._catNotice(b[0], b[1], b[2]); this._placed(); } this.toast(`${n} ${n === 1 ? 'block' : 'blocks'}`, 1000); }
   }
   shapeAnchor(h, tool) { if (!h) return null; return (this.ui.boxMode === 'clear' && tool !== 'select') || (tool === 'select' && !h.ground) ? [h.x, Math.max(0, h.y), h.z] : this._placeCell(h); }
   copySelection() { const s = this.ui.selection; if (!s) return; const st = this.editor.copy([s[0], s[1], s[2]], [s[3], s[4], s[5]], 'Clipboard'); this.clipboard = st; this.set({ stamp: st, stampRot: 0, tool: 'stamp', selection: null }); this.renderer.setGhost(null); this.toast('Copied. Click to paste, R to rotate', 2600); }
@@ -383,6 +453,7 @@ export class Game {
   letter(ch, neon) { const s = letterStamp(ch, neon, null); if (s) { s.letter = true; this.setStamp(s); } }
   undo() { if (this.editor.undo()) { this.audio.click(); this.toast('Undo', 700); } }
   redo() { if (this.editor.redo()) { this.audio.click(); this.toast('Redo', 700); } }
+  _placed() { this._userActed = true; }
   _edited() { this.ui.canUndo = this.editor.canUndo; this.ui.canRedo = this.editor.canRedo; this._dirtySave = true; this._saveT = performance.now(); clearTimeout(this._autoT); this._autoT = setTimeout(() => { if (this._dirtySave && this.running) this.autosave(); }, 2000); this.emit(); }
 
   // ---------------- saves ----------------
@@ -406,6 +477,7 @@ export class Game {
   }
   newWorld(template) {
     const T = TEMPLATES[template]; if (!T) return;
+    this.ui.reqProgress = 0;
     this._load(T.make()); this.ui.template = template;
     if (template === 'tokyo') { this.camera('opening'); this.ui.hour = DH; this.ui.drift = true; }
     this.toast(template === 'tokyo' ? 'Back to the Tokyo corner' : T.name);
@@ -450,6 +522,7 @@ export class Game {
     this.draw(dt);
     this._govern(dt);
     if (this._dirtySave && performance.now() - this._saveT > 2000) this.autosave();
+    if (now - (this._reqT || 0) > 1000) { this._reqT = now; if (this.ui.coach >= 3) this._checkRequest(); }
   }
   draw(dt = 1 / 60, full = false) {
     const R = this.renderer;
@@ -459,7 +532,9 @@ export class Game {
     if (R.wiresDirty || this.world.version !== this._wv) { if (!R.world.dirty.some((d) => d)) { R._buildWires(); R._refreshEntityLight(); this._wv = this.world.version; } }
     R.setTrain(this._trainState());
     if (this.sim.cat) R.setCat(this.sim.cat);
-    R.setPetals(this.sim.petals, this.sim.nPetals);
+    let np = this.sim.nPetals; const PP = this.sim.petals;
+    for (const q of this.sim.puffs) { if (np >= 700) break; PP[np * 3] = q.p[0]; PP[np * 3 + 1] = q.p[1]; PP[np * 3 + 2] = q.p[2]; np++; }
+    R.setPetals(PP, np);
     R.setRain(this.sim.wet > 0.05, Math.min(1, this.sim.wet * 1.2));
     this._updateHover();
     const t = this._trainState();
@@ -485,7 +560,7 @@ export class Game {
   }
   _updateHover() {
     const ui = this.ui, R = this.renderer;
-    if (ui.photo) { R.setHover(null); R.setStampGhost(null); this.hit = null; return; }
+    if (ui.photo) { R.setHover(null); R.setStampGhost(null); R.setPlaceGhost(0); this.hit = null; return; }
     let h = null;
     if (ui.mode === 'walk') h = this.pick();
     else if (this.pointer.inside && !this.touch && !(this.drag && this.drag.kind !== 'shape')) h = this.pick(this.pointer.x, this.pointer.y);
@@ -496,6 +571,7 @@ export class Game {
     const tool = ui.mode === 'walk' ? 'place' : ui.tool;
     R.subtle = ui.mode === 'walk';
     // stamp ghost
+    if (tool !== 'place') R.setPlaceGhost(0);
     if (tool === 'stamp' && h && ui.stamp) {
       const s = this._stampFor(h); const rs = this._rotCache && this._rotCache.src === s.st && this._rotCache.rot === s.rot ? this._rotCache.out : (this._rotCache = { src: s.st, rot: s.rot, out: rotateStamp(s.st, s.rot) }).out;
       const [x, y, z] = this._placeCell(h);
@@ -515,6 +591,7 @@ export class Game {
     } else if (ui.selection) R.setGhost(ui.selection, 'select');
     else R.setGhost(null);
     if (!h) { R.setHover(null); return; }
+    if (tool === 'place' && !this.drag) { const [x, y, z] = this._placeCell(h); R.setPlaceGhost(this._canPlaceAt(x, y, z) ? this._selectedId() : 0, [x, y, z]); } else R.setPlaceGhost(0);
     if (tool === 'place' || (['box', 'line'].includes(tool) && ui.boxMode === 'fill')) { const [x, y, z] = this._placeCell(h); R.setHover(h.ground ? { ...h, y: -1 } : h, 'place'); R.hover.position.set(x + 0.5, y + 0.5, z + 0.5); }
     else R.setHover(h, tool === 'box' || tool === 'line' ? 'remove' : tool);
   }
@@ -542,7 +619,7 @@ export class Game {
   }
   _local(e) { const r = this.stage.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; }
   _down(e) {
-    this.audio.resume();
+    this.audio.resume(); this._userActed = true;
     if (this.ui.photo) { /* photo mode still lets you orbit */ }
     const [x, y] = this._local(e);
     this.pointer = { x, y, inside: true };
@@ -558,6 +635,7 @@ export class Game {
     if (e.button === 0 && ['box', 'line', 'select'].includes(tool) && !e.altKey && !this.ui.photo) {
       const h = this.pick(x, y);
       if (h) { const a = this.shapeAnchor(h, tool); this.drag = { kind: 'shape', a, b: a, x, y, id: e.pointerId }; return; }
+      this.drag = { kind: 'none', id: e.pointerId }; this.toast('Start the shape on the lot. Right-drag or Alt-drag to move the camera', 2200); return;
     }
     this.drag = { kind: e.button === 0 && !e.shiftKey ? 'orbit' : 'pan', x, y, sx: x, sy: y, moved: false, button: e.button, id: e.pointerId, t: performance.now() };
   }
@@ -570,7 +648,8 @@ export class Game {
     }
     const r = this.stage.getBoundingClientRect();
     this.pointer = { x, y, inside: x >= 0 && y >= 0 && x <= r.width && y <= r.height };
-    const d = this.drag; if (!d || d.kind === 'shape') return;
+    const d = this.drag; if (!d || d.kind === 'shape' || d.kind === 'none') return;
+    this._userActed = true;
     const dx = x - d.x, dy = y - d.y; d.x = x; d.y = y;
     if (Math.hypot(x - d.sx, y - d.sy) > 5) d.moved = true;
     if (!d.moved) return;
@@ -586,6 +665,7 @@ export class Game {
     if (e.pointerType === 'touch') return this._touchUp(e, x, y, cancel);
     const d = this.drag; this.drag = null;
     if (!d || cancel || this.ui.mode === 'walk') return;
+    if (d.kind === 'none') return;
     if (d.kind === 'shape') { if (d.a && d.b) this._commitShape(this.ui.tool, d.a, d.b); return; }
     if (!d.moved && !this.ui.photo) {
       const h = this.pick(x, y);
@@ -595,16 +675,20 @@ export class Game {
     }
   }
   _wheel(e) {
-    e.preventDefault();
+    e.preventDefault(); this._userActed = true;
     if (e.altKey || this.ui.mode === 'walk') { const n = this.ui.hotbar.length; this.ui.slot = (this.ui.slot + (e.deltaY > 0 ? 1 : n - 1)) % n; this.emit(); return; }
     if (this.drag && this.drag.kind === 'shape') { this.ui.boxH = clamp(this.ui.boxH + (e.deltaY < 0 ? 1 : -1), -30, 40); this.emit(); return; }
     const g = this.orbitGoal; g.dist = clamp(g.dist * Math.exp(e.deltaY * 0.0012), 10, 240);
   }
   _key(e, down) {
-    const t = e.target; if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
     const code = e.code;
-    if (!down) { this.keys.delete(code); return; }
-    this.audio.resume();
+    if (!down) { this.keys.delete(code); return; } // always release, even when focus is in a field
+    const t = e.target;
+    if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) {
+      if (code === 'Escape' && this.ui.panel) { e.preventDefault(); this.closePanel(); }
+      return;
+    }
+    this.audio.resume(); this._userActed = true;
     if (code === 'Space' && !e.repeat) this._jumpPressed = true;
     this.keys.add(code);
     const ctrl = e.ctrlKey || e.metaKey;
@@ -614,11 +698,11 @@ export class Game {
     if (ctrl && code === 'KeyV') { if (this.clipboard) { e.preventDefault(); this.setStamp(this.clipboard); } return; }
     if (ctrl) return;
     if (code === 'Tab') { e.preventDefault(); this.setMode(this.ui.mode === 'walk' ? 'build' : 'walk'); return; }
-    if (code === 'Escape') { if (this.ui.panel) this.set({ panel: null }); else if (this.ui.photo) this.set({ photo: false }); else if (this.ui.selection) { this.set({ selection: null }); this.renderer.setGhost(null); } else if (this.ui.mode !== 'walk' || !this.ui.locked) this.set({ panel: 'menu' }); return; }
+    if (code === 'Escape') { if (this.ui.panel) this.closePanel(); else if (this.ui.photo) this.set({ photo: false }); else if (this.ui.selection) { this.set({ selection: null }); this.renderer.setGhost(null); } else if (this.ui.mode !== 'walk' || !this.ui.locked) this.set({ panel: 'menu' }); return; }
     if (e.repeat) return;
     const digit = /^Digit([1-9])$/.exec(code);
     if (digit) { this.ui.slot = +digit[1] - 1; this.emit(); return; }
-    if (code === 'KeyE') { this.set({ panel: this.ui.panel === 'palette' ? null : 'palette' }); if (document.pointerLockElement) document.exitPointerLock(); return; }
+    if (code === 'KeyE') { e.preventDefault(); this.keys.clear(); this.set({ panel: this.ui.panel === 'palette' ? null : 'palette' }); if (document.pointerLockElement) document.exitPointerLock(); return; }
     if (code === 'Slash' || code === 'KeyH') { this.set({ panel: this.ui.panel === 'help' ? null : 'help' }); return; }
     if (code === 'KeyO') { this.set({ photo: !this.ui.photo, panel: null }); return; }
     if (this.ui.mode !== 'build') return;
@@ -685,7 +769,7 @@ export class Game {
       state: () => ({ mode: g.ui.mode, tool: g.ui.tool, hour: +g.ui.hour.toFixed(2), slot: g.ui.slot, hotbar: g.ui.hotbar.map((i) => BLOCKS[i].key), walker: { pos: g.walker.pos.map((v) => +v.toFixed(3)), onGround: g.walker.onGround, fly: g.walker.fly }, cat: g.sim.cat && { x: +g.sim.cat.x.toFixed(2), y: +g.sim.cat.y.toFixed(2), z: +g.sim.cat.z.toFixed(2), state: g.sim.cat.state }, train: g._trainState(), undo: g.editor.undoStack.length, redo: g.editor.redoStack.length, quality: g.renderer.qualityName, stats: { ...g.renderer.stats }, dirty: g.world.dirty.reduce((a, b) => a + b, 0), coach: g.ui.coach, rain: g.ui.rain, petals: g.sim.nPetals }),
       advance(sec) { const H = 1 / 60; const n = Math.round(sec / H); for (let i = 0; i < n; i++) g.simTick(H); g.draw(H, true); return this.state(); },
       pause() { g.frozen = true; }, resume() { g.frozen = false; g._last = performance.now(); },
-      input: { key: (code, down = true) => g._key({ code, target: null, preventDefault() {}, ctrlKey: false, metaKey: false, shiftKey: false, repeat: false }, down), keys: g.keys, stick: (x, y) => { g.stick = x === null ? null : { x, y }; } },
+      input: { key: (code, down = true) => g._key({ code, target: document.activeElement, preventDefault() {}, ctrlKey: false, metaKey: false, shiftKey: false, repeat: false }, down), keys: g.keys, stick: (x, y) => { g.stick = x === null ? null : { x, y }; } },
       reset() { g.newWorld('tokyo'); return this.state(); },
       template: (t) => g.newWorld(t),
       setMode: (m) => { g.setMode(m); if (m === 'walk') { try { document.exitPointerLock(); } catch { /* fine */ } } return g.ui.mode; },
@@ -694,7 +778,7 @@ export class Game {
       box: (a, b, id) => g.editor.box(a, b, typeof id === 'string' ? ID[id] : id),
       get: (x, y, z) => BLOCKS[g.world.get(x, y, z)].key,
       camera: (p) => g.camera(p),
-      orbit: (yaw, pitch, dist, target) => { const o = { yaw, pitch, dist, target: target || g.orbitGoal.target }; g.orbit = { ...o, target: [...o.target] }; g.orbitGoal = { ...o, target: [...o.target] }; g._cameraStep(0); },
+      orbit: (yaw, pitch, dist, target) => { g._userActed = true; const o = { yaw, pitch, dist, target: target || g.orbitGoal.target }; g.orbit = { ...o, target: [...o.target] }; g.orbitGoal = { ...o, target: [...o.target] }; g._cameraStep(0); },
       look: (yaw, pitch) => { g.walker.yaw = yaw; g.walker.pitch = pitch; },
       walkTo: (x, z, yaw = g.walker.yaw, pitch = 0) => { g.setMode('walk'); g.walker.spawn(x, z, yaw); g.walker.pitch = pitch; },
       setTime: (h, drift = false) => { g.ui.hour = h; g.ui.drift = drift; g.ui.cycle = false; g.emit(); },

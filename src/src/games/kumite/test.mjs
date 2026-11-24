@@ -3,6 +3,7 @@
 // 2) win rates per character inside 35-65% (matrix printed)
 // 3) per-frame invariants: in bounds, no pushbox overlap, health never rises mid-round
 // 4) frame data sums, every move runs for exactly its frame count, every special comes out from its documented input
+// 5) the CPU levels: a masher, one-button spam and a competent scripted player (see section 5)
 // plus mechanics checks: blocking by height, throws beat block, throw tech, juggle limit, meter costs.
 import { createMatch, step, B, STAGE_L, STAGE_R, isAir, moveOf } from './sim.js';
 import { FIGHTERS, ROSTER, INPUT_OF, moveTotal } from './data.js';
@@ -137,5 +138,55 @@ for (const a of ROSTER) {
   console.log('    ' + a.padEnd(8) + row + '   ' + (100 * r).toFixed(1) + '%');
   ok(r >= 0.35 && r <= 0.65, `${a} overall win rate ${(100 * r).toFixed(1)}% outside 35-65%`);
 }
+// ---------------------------------------------------------------- 5) the CPU must be outplayed, not out-mashed
+// Policies: a random button-masher (re-rolls every 6 frames, never blocks), walk-forward + Heavy every 24 frames,
+// and a competent scripted player (sees the CPU 10 frames late, guards at the right height, punishes, anti-airs, techs).
+console.log('[5] CPU difficulty vs masher, spam and a competent player (rounds won by the human side)');
+{
+  let sd = 7; const r = () => { sd = (sd * 1103515245 + 12345) & 0x7fffffff; return sd / 0x7fffffff; };
+  const masher = (S, cur) => { const me = S.f[0], op = S.f[1]; if (S.frame % 6 === 0) { let b = 0; const fwd = op.x > me.x ? B.R : B.L; if (r() < 0.65) b |= fwd; if (r() < 0.08) b |= B.U; if (r() < 0.1) b |= B.D; const bt = [B.LP, B.HP, B.SP]; if (r() < 0.75) b |= bt[Math.floor(r() * 3)]; if (r() < 0.15) b |= bt[Math.floor(r() * 3)]; cur.b = b; } return S.frame % 6 < 3 ? cur.b : 0; };
+  const spamH = (S) => { const f = S.f[1].x > S.f[0].x ? B.R : B.L; return S.frame % 24 < 2 ? B.HP : f; };
+  const makePro = (delay = 10) => {
+    const hist = []; let queue = [], punishFor = null, lastKey = '', s = 1; const rnd = () => { s = (s * 16807) % 2147483647; return s / 2147483647; };
+    const AA = { rin: 'bS', ganji: 'H2', suzu: 'bS', sayo: 'H5' }, END = { rin: 'S', ganji: 'fS', suzu: 'S', sayo: 'dS' };
+    const IN = { L5: B.LP, H5: B.HP, L2: B.D | B.LP, H2: B.D | B.HP, S: B.SP, fS: 'F', bS: 'BK', dS: B.D | B.SP };
+    return (S) => {
+      const me = S.f[0], op = S.f[1]; hist.push({ st: op.st, mv: op.mv, mf: op.mf, y: op.y, m: moveOf(op) });
+      const o = hist[Math.max(0, hist.length - 1 - delay)]; const fwd = op.x > me.x ? B.R : B.L, back = op.x > me.x ? B.L : B.R, dist = Math.abs(op.x - me.x);
+      const enc = (b) => (b === 'F' ? fwd | B.SP : b === 'BK' ? back | B.SP : b);
+      if (me.st === 'held') return me.sf === 3 || me.sf === 4 ? B.LP | B.HP : 0;
+      if (queue.length) { const q = queue[0]; if (q.wait && !(me.st === 'atk' && me.contact && me.mv === q.wait)) { if (me.st !== 'atk' || q.t++ > 30) queue = []; return 0; } queue.shift(); return q.b; }
+      if (me.st === 'block') { if (o.st === 'atk' && o.m && !o.m.proj) { const left = o.m.st + o.m.ac + o.m.rc - (o.mf + delay); if (left - me.stun >= 6) punishFor = o.mv; } return back | (o.m && o.m.h === 'over' ? 0 : B.D); }
+      if (!(['idle', 'walk', 'crouch', 'guard'].includes(me.st))) return back | B.D;
+      const combo = (first) => { queue = [{ b: IN[first] }, { b: 0 }, { wait: first, t: 0 }, { b: B.HP }, { b: 0 }, { wait: 'H5', t: 0 }, { b: enc(IN[END[me.id]]) }, { b: 0 }]; return IN[first]; };
+      if (punishFor && dist < 110) { punishFor = null; return combo('L5'); } punishFor = null;
+      if (op.y > 30 && o.y > 30 && dist < 130 && op.vy < 2) return enc(IN[AA[me.id]]);
+      if (o.st === 'atk' && o.m && (o.m.hit || o.m.proj) && o.mf < o.m.st + o.m.ac) return back | (o.m.h === 'over' ? 0 : B.D);
+      if (o.st === 'atk' && o.m && o.mf >= o.m.st + o.m.ac && dist < 120) { const k = o.mv + (S.frame - delay - o.mf); if (k !== lastKey) { lastKey = k; return combo(dist < 80 ? 'L5' : 'H5'); } }
+      if (dist > 170) return rnd() < 0.8 ? fwd : 0;
+      if (dist < 75 && rnd() < 0.05) return combo('L2');
+      if (dist < 75 && rnd() < 0.03) return B.LP | B.HP;
+      return back | B.D;
+    };
+  };
+  const rate = (pol, level, n, fresh) => { let w = 0, c = 0; for (const p1 of ROSTER) for (let k = 0; k < n; k++) {
+    const S = createMatch({ p1, p2: ROSTER[k % 4], stage: 'viaduct' }); const ai = createAI(level, 77 + k * 31 + level); const cur = { b: 0 }; const f = fresh ? fresh() : pol;
+    for (let i = 0; i < 60 * 200; i++) { step(S, f(S, cur), aiInput(ai, S, 1)); if (S.round > 1 || S.phase === 'match') break; }
+    c++; w += S.f[0].wins > 0 ? 1 : S.f[1].wins > 0 ? 0 : 0.5; } return (100 * w) / c; };
+  const m = [1, 2, 3, 4].map((l) => rate(masher, l, 40));
+  console.log(`    masher wins vs EASY/NORMAL/HARD/RIVAL: ${m.map((x) => x.toFixed(0) + '%').join(' / ')}`);
+  ok(m[0] >= 85, `EASY should lose to a masher most of the time (${m[0].toFixed(0)}%)`);
+  ok(m[1] >= 50 && m[1] <= 75, `NORMAL should be around 60% vs a masher (${m[1].toFixed(0)}%)`);
+  ok(m[2] >= 25 && m[2] <= 48, `HARD should be around 35% vs a masher (${m[2].toFixed(0)}%)`);
+  ok(m[3] < 20, `RIVAL should beat a masher over 80% of the time (${m[3].toFixed(0)}%)`);
+  ok(m[0] > m[1] && m[1] > m[2] && m[2] > m[3], 'each level is harder than the one below');
+  const sp = [3, 4].map((l) => rate(spamH, l, 24));
+  console.log(`    walk-forward Heavy spam wins vs HARD/RIVAL: ${sp.map((x) => x.toFixed(0) + '%').join(' / ')}`);
+  ok(sp[0] < 40 && sp[1] < 25, 'one-button Heavy spam loses to HARD and RIVAL most of the time');
+  const pro = rate(null, 4, 24, () => makePro(10));
+  console.log(`    competent scripted player wins vs RIVAL: ${pro.toFixed(0)}%`);
+  ok(pro >= 55, `a competent player (blocks, punishes) can beat RIVAL (${pro.toFixed(0)}%)`);
+}
+
 console.log(`\n${fails ? fails + ' CHECKS FAILED' : 'ALL KUMITE CHECKS PASSED'} (${((Date.now() - t0) / 1000).toFixed(1)} s)`);
 process.exit(fails ? 1 : 0);

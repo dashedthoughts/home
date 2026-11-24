@@ -62,6 +62,7 @@ export class Audio {
     this._tone(f, 0.16, { type: 'sine', gain: 0.16, slide: 1.02, verb: 0.35 });
     this._tone(f * 2, 0.06, { type: 'triangle', gain: 0.04, verb: 0 });
   }
+  chime() { [0, 4, 7, 12].forEach((s, i) => this._tone(523.25 * Math.pow(2, s / 12), 1.2, { type: 'sine', gain: 0.09, attack: 0.01, verb: 0.6, when: i * 0.09 })); }
   thud() { this._tone(150, 0.12, { type: 'sine', gain: 0.18, slide: 0.5, verb: 0.1 }); this._noise(0.08, 900, 0.08); }
   click() { this._tone(1200, 0.03, { type: 'square', gain: 0.025, verb: 0 }); }
   step(material) {

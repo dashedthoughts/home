@@ -189,3 +189,116 @@ export function neonEnvironment(renderer, colors) {
   box.dispose();
   return rt;
 }
+
+// ---------------------------------------------------------------- Tokyo signage (render/tokyo.js)
+// One 2048² canvas atlas holds every shop sign, road sign and plate, so the whole city's signage is two draw calls.
+// Shop names are invented (config.js TOKYO_SIGNS); road signs follow Japanese conventions (green guide signs, white text,
+// romaji below, red-ring speed limits with blue numerals, ward boundary plates). Drawn again once the web fonts arrive.
+export const JP = '"Noto Sans JP", "Hiragino Sans", "Yu Gothic", "Meiryo", sans-serif';
+const fitFont = (g, text, weight, family, max, width) => {
+  let size = max;
+  g.font = `${weight} ${size}px ${family}`;
+  while (g.measureText(text).width > width && size > 8) { size -= 2; g.font = `${weight} ${size}px ${family}`; }
+  return size;
+};
+export function fitText(g, text, x, y, width, max, weight = 900, family = JP) { fitFont(g, text, weight, family, max, width); g.fillText(text, x, y); }
+const rr = (g, x, y, w, h, r) => { g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r); g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath(); };
+export { rr as roundRect };
+
+/** entries: [{ id, w, h, draw(g, w, h) }] → { texture, rect(id) → [u, v, du, dv], redraw() } (shelf-packed, 4 px gutters). */
+export function createAtlas(entries, size = 2048) {
+  const [c, g] = canvas(size, size);
+  const pos = new Map();
+  const sorted = [...entries].sort((a, b) => b.h - a.h);
+  let x = 0, y = 0, rowH = 0;
+  for (const e of sorted) {
+    const w = e.w + 8, h = e.h + 8;
+    if (x + w > size) { x = 0; y += rowH; rowH = 0; }
+    if (y + h > size) { console.warn('atlas full at', e.id); break; }
+    pos.set(e.id, [x + 4, y + 4, e.w, e.h, e]);
+    x += w; rowH = Math.max(rowH, h);
+  }
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = 8;
+  tex.generateMipmaps = true;
+  tex.minFilter = THREE.LinearMipmapLinearFilter;
+  const redraw = () => {
+    g.clearRect(0, 0, size, size);
+    for (const [, [px, py, w, h, e]] of pos) {
+      g.save(); g.translate(px, py); g.beginPath(); g.rect(-2, -2, w + 4, h + 4); g.clip();
+      g.textAlign = 'center'; g.textBaseline = 'middle';
+      try { e.draw(g, w, h); } catch { /* a missing glyph never breaks the atlas */ }
+      g.restore();
+      // gutter: repeat the cell's border colour outward so mipmaps don't bleed neighbours in
+      for (const [sx, sy, sw, sh, dx, dy, dw, dh] of [[px, py, w, 1, px, py - 4, w, 4], [px, py + h - 1, w, 1, px, py + h, w, 4], [px, py, 1, h, px - 4, py, 4, h], [px + w - 1, py, 1, h, px + w, py, 4, h]]) g.drawImage(c, sx, sy, sw, sh, dx, dy, dw, dh);
+    }
+    tex.needsUpdate = true;
+  };
+  redraw();
+  return {
+    texture: tex,
+    has: (id) => pos.has(id),
+    rect(id) { const p = pos.get(id); if (!p) return [0, 0, 0, 0]; return [p[0] / size, 1 - (p[1] + p[3]) / size, p[2] / size, p[3] / size]; },
+    aspect(id) { const p = pos.get(id); return p ? p[2] / p[3] : 1; },
+    redraw,
+  };
+}
+
+// Shuto-style guide sign for a gantry (one canvas per gantry, redrawn as each JCT comes up).
+// kind 'advance': name + distance; kind 'jct': branch route(s) with arrows on the left, C1 straight on.
+export const SHUTO_GREEN = '#0d7a4a';
+export function routeShield(g, x, y, h, label, inverse = false) {
+  g.save();
+  g.font = `900 ${Math.round(h * 0.62)}px Rajdhani, "Chakra Petch", sans-serif`;
+  const w = Math.max(h * 1.15, g.measureText(label).width + h * 0.45);
+  rr(g, x, y, w, h, h * 0.2);
+  g.fillStyle = inverse ? '#ffffff' : SHUTO_GREEN; g.fill();
+  g.lineWidth = Math.max(2, h * 0.07); g.strokeStyle = inverse ? SHUTO_GREEN : '#ffffff'; g.stroke();
+  g.fillStyle = inverse ? SHUTO_GREEN : '#ffffff'; g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.fillText(label, x + w / 2, y + h * 0.55);
+  g.restore();
+  return w;
+}
+export function guideSignTexture(tex) {
+  const W = 1024, H = 384;
+  const [c, g] = tex && tex.image ? [tex.image, tex.image.getContext('2d')] : canvas(W, H);
+  const t = tex || new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8;
+  t.draw = (o) => {
+    g.setTransform(1, 0, 0, 1, 0, 0);
+    g.fillStyle = SHUTO_GREEN; g.fillRect(0, 0, W, H);
+    g.strokeStyle = '#ffffff'; g.lineWidth = 8; rr(g, 10, 10, W - 20, H - 20, 18); g.stroke();
+    g.fillStyle = '#ffffff'; g.textBaseline = 'middle';
+    const arrow = (x, y, s, dir) => { // dir 0 = up, -1 = up-left
+      g.save(); g.translate(x, y); g.rotate(dir * 0.6); g.beginPath();
+      g.moveTo(0, -s); g.lineTo(s * 0.62, -s * 0.28); g.lineTo(s * 0.2, -s * 0.28); g.lineTo(s * 0.2, s); g.lineTo(-s * 0.2, s); g.lineTo(-s * 0.2, -s * 0.28); g.lineTo(-s * 0.62, -s * 0.28); g.closePath(); g.fill(); g.restore();
+    };
+    if (!o) { g.textAlign = 'center'; routeShield(g, 380, 60, 110, 'C1'); fitText(g, '都心環状線', 640, 215, 700, 96); g.font = '600 52px Rajdhani, sans-serif'; g.fillText('Inner Circular Route', 512, 310); }
+    else if (o.kind === 'advance') {
+      routeShield(g, 46, 46, 96, 'C1');
+      g.textAlign = 'left'; fitText(g, o.jp, 190, 120, 560, 120);
+      g.font = '600 56px Rajdhani, sans-serif'; g.fillText(o.name, 196, 222);
+      g.textAlign = 'right'; g.font = '700 92px Rajdhani, sans-serif'; g.fillText(o.dist, W - 50, 120);
+      g.textAlign = 'left'; g.font = '500 40px "Noto Sans JP", sans-serif'; g.fillText('内回り  Inner Loop', 196, 300);
+    } else {
+      // left half: the branch route(s); right: C1 continues
+      g.fillStyle = '#ffffff'; g.fillRect(W * 0.56, 30, 6, H - 60);
+      const br = o.branches || [];
+      br.forEach((b, i) => {
+        const y = br.length > 1 ? 70 + i * 150 : 110;
+        arrow(70, y + 40, 46, -1);
+        const sw = routeShield(g, 120, y - 10, 78, b[0]);
+        g.textAlign = 'left'; fitText(g, b[1], 140 + sw, y + 22, 400 - sw, 84);
+        g.font = '600 40px Rajdhani, sans-serif'; g.fillText(b[2], 142 + sw, y + 86);
+      });
+      arrow(W * 0.56 + 70, 190, 64, 0);
+      routeShield(g, W * 0.56 + 130, 60, 92, 'C1');
+      g.textAlign = 'left'; fitText(g, o.next || '都心環状線', W * 0.56 + 130, 225, 300, 72);
+      g.font = '600 40px Rajdhani, sans-serif'; g.fillText(o.nextEn || 'Inner Loop', W * 0.56 + 132, 295);
+      g.font = '700 30px "Noto Sans JP", sans-serif'; g.textAlign = 'right'; g.fillText(o.jp, W - 40, H - 44);
+    }
+    t.needsUpdate = true;
+  };
+  return t;
+}

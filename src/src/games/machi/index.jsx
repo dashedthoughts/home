@@ -78,8 +78,8 @@ function Hud({ g, ui, onExit }) {
       <header className="m-top">
         <div className="m-brand"><b>MACHI</b><span lang="ja">街</span></div>
         <div className="m-seg" role="group" aria-label="Mode">
-          <button type="button" className={!walk ? 'on' : ''} aria-pressed={!walk} onClick={() => g.setMode('build')}><Icon n="build" s={16} /><span>Build</span></button>
-          <button type="button" className={walk ? 'on' : ''} aria-pressed={walk} onClick={() => g.setMode('walk')}><Icon n="walk" s={16} /><span>Walk</span></button>
+          <button type="button" className={!walk ? 'on' : ''} aria-pressed={!walk} aria-label="Build" onClick={() => g.setMode('build')}><Icon n="build" s={16} /><span>Build</span></button>
+          <button type="button" className={walk ? 'on' : ''} aria-pressed={walk} aria-label="Walk" onClick={() => g.setMode('walk')}><Icon n="walk" s={16} /><span>Walk</span></button>
         </div>
       </header>
       <nav className="m-actions" aria-label="Scene">
@@ -93,6 +93,7 @@ function Hud({ g, ui, onExit }) {
       {(!walk || !g.touch) && <Hotbar g={g} ui={ui} />}
       {walk && <WalkHud g={g} ui={ui} />}
       <Coach g={g} ui={ui} />
+      {!ui.panel && (ui.coach | 0) >= 3 && <RequestCard g={g} ui={ui} />}
       {ui.toast && <div className="m-toast" role="status">{ui.toast}</div>}
       {ui.panel === 'palette' && <Palette g={g} ui={ui} />}
       {ui.panel === 'help' && <Help g={g} />}
@@ -103,20 +104,58 @@ function Hud({ g, ui, onExit }) {
 }
 
 function ToolRail({ g, ui }) {
+  const [more, setMore] = useState(false);
+  const mirror = (k) => { const v = !ui[k]; g.editor[k] = v; g.set({ [k]: v }); };
   return (
     <aside className="m-tools" aria-label="Tools">
-      {TOOLS.map((t) => (
-        <button key={t} type="button" className={`m-tool ${ui.tool === t ? 'on' : ''}`} aria-pressed={ui.tool === t} title={`${TOOL_META[t][0]} (${TOOL_META[t][1]})`} aria-label={TOOL_META[t][0]} onClick={() => g.setTool(t)}>
-          <Icon n={t} /><span className="m-tool__lbl">{TOOL_META[t][0]}</span>
-        </button>
-      ))}
-      <span className="m-sep" />
-      <button type="button" className="m-tool" disabled={!ui.canUndo} title="Undo (Ctrl+Z)" aria-label="Undo" onClick={() => g.undo()}><Icon n="undo" /><span className="m-tool__lbl">Undo</span></button>
-      <button type="button" className="m-tool" disabled={!ui.canRedo} title="Redo (Ctrl+Shift+Z)" aria-label="Redo" onClick={() => g.redo()}><Icon n="redo" /><span className="m-tool__lbl">Redo</span></button>
-      <button type="button" className={`m-tool ${ui.mirrorX ? 'on' : ''}`} aria-pressed={ui.mirrorX} title="Mirror X (Shift+X)" aria-label="Mirror X" onClick={() => { g.editor.mirrorX = !ui.mirrorX; g.set({ mirrorX: !ui.mirrorX }); }}><Icon n="mx" /><span className="m-tool__lbl">Mirror X</span></button>
-      <button type="button" className={`m-tool ${ui.mirrorZ ? 'on' : ''}`} aria-pressed={ui.mirrorZ} title="Mirror Z (Shift+Z)" aria-label="Mirror Z" onClick={() => { g.editor.mirrorZ = !ui.mirrorZ; g.set({ mirrorZ: !ui.mirrorZ }); }}><Icon n="mz" /><span className="m-tool__lbl">Mirror Z</span></button>
-      <button type="button" className={`m-tool m-tool--pal ${ui.panel === 'palette' ? 'on' : ''}`} title="All blocks (E)" aria-label="All blocks" onClick={() => g.set({ panel: ui.panel === 'palette' ? null : 'palette' })}><Icon n="grid" /><span className="m-tool__lbl">Blocks</span></button>
+      <div className="m-tools__main">
+        {TOOLS.map((t) => (
+          <button key={t} type="button" className={`m-tool ${ui.tool === t ? 'on' : ''}`} aria-pressed={ui.tool === t} title={`${TOOL_META[t][0]} (${TOOL_META[t][1]})`} aria-label={TOOL_META[t][0]} onClick={() => g.setTool(t)}>
+            <Icon n={t} /><span className="m-tool__lbl">{TOOL_META[t][0]}</span>
+          </button>
+        ))}
+      </div>
+      <div className="m-tools__util">
+        <button type="button" className="m-tool" disabled={!ui.canUndo} title="Undo (Ctrl+Z)" aria-label="Undo" onClick={() => g.undo()}><Icon n="undo" /><span className="m-tool__lbl">Undo</span></button>
+        <button type="button" className="m-tool" disabled={!ui.canRedo} title="Redo (Ctrl+Shift+Z)" aria-label="Redo" onClick={() => g.redo()}><Icon n="redo" /><span className="m-tool__lbl">Redo</span></button>
+        <button type="button" className={`m-tool m-desk ${ui.mirrorX ? 'on' : ''}`} aria-pressed={ui.mirrorX} title="Mirror X (Shift+X)" aria-label="Mirror X" onClick={() => mirror('mirrorX')}><Icon n="mx" /><span className="m-tool__lbl">Mirror X</span></button>
+        <button type="button" className={`m-tool m-desk ${ui.mirrorZ ? 'on' : ''}`} aria-pressed={ui.mirrorZ} title="Mirror Z (Shift+Z)" aria-label="Mirror Z" onClick={() => mirror('mirrorZ')}><Icon n="mz" /><span className="m-tool__lbl">Mirror Z</span></button>
+        <button type="button" className={`m-tool m-tool--pal ${ui.panel === 'palette' ? 'on' : ''}`} title="All blocks (E)" aria-label="All blocks" onClick={() => g.set({ panel: ui.panel === 'palette' ? null : 'palette' })}><Icon n="grid" /><span className="m-tool__lbl">Blocks</span></button>
+        <button type="button" className={`m-tool m-phone ${more || ui.mirrorX || ui.mirrorZ ? 'on' : ''}`} aria-expanded={more} aria-label="More tools" onClick={() => setMore(!more)}><span className="m-tool__more">···</span></button>
+      </div>
+      {more && (
+        <div className="m-more" role="group" aria-label="More tools">
+          <button type="button" className={`m-btn m-btn--sm ${ui.mirrorX ? 'm-btn--signal' : ''}`} aria-pressed={ui.mirrorX} onClick={() => mirror('mirrorX')}><Icon n="mx" s={16} /> Mirror X</button>
+          <button type="button" className={`m-btn m-btn--sm ${ui.mirrorZ ? 'm-btn--signal' : ''}`} aria-pressed={ui.mirrorZ} onClick={() => mirror('mirrorZ')}><Icon n="mz" s={16} /> Mirror Z</button>
+        </div>
+      )}
     </aside>
+  );
+}
+
+function RequestCard({ g, ui }) {
+  if (ui.mode === 'walk' && g.touch) return null;
+  if (ui.reqDone) return (
+    <section className="m-req m-req--done" role="status" aria-live="polite">
+      <span className="m-req__seal" lang="ja" aria-hidden="true">済</span>
+      <div><small>Request done</small><b>{ui.reqDone.title}</b><p>{ui.reqDone.reward}</p></div>
+      <button type="button" className="m-btn m-btn--sm m-btn--signal" onClick={() => g.requestAction('next')}>Nice</button>
+    </section>
+  );
+  const r = g.request; if (!r) return null;
+  const p = Math.min(r.need || 1, ui.reqProgress || 0);
+  if (!g.req.open) return <button type="button" className="m-req m-req--chip" onClick={() => g.requestAction('open')} aria-label={`Request: ${r.title}`}><i aria-hidden="true">!</i><span>{r.title}</span>{!r.photo && <b>{p}/{r.need}</b>}</button>;
+  return (
+    <section className="m-req" aria-label="Neighbourhood request">
+      <small>Request · {r.who}</small>
+      <b>{r.title}</b>
+      <p>{r.text}</p>
+      {!r.photo && <div className="m-req__bar" role="progressbar" aria-valuemin={0} aria-valuemax={r.need} aria-valuenow={p}><i style={{ width: `${(p / r.need) * 100}%` }} /><span>{p}/{r.need}</span></div>}
+      <div className="m-req__btns">
+        <button type="button" className="m-btn m-btn--sm" onClick={() => g.requestAction('show')}>Show me</button>
+        <button type="button" className="m-btn m-btn--sm m-btn--ghost" onClick={() => g.requestAction('later')}>Later</button>
+      </div>
+    </section>
   );
 }
 
@@ -150,22 +189,31 @@ function ContextBar({ g, ui }) {
 }
 
 function StampBar({ g, ui }) {
+  const [tab, setTab] = useState(ui.stamp && ui.stamp.letter ? (/[A-Z0-9]/.test(ui.stamp.name) ? 'latin' : 'kana') : 'objects');
   const [txt, setTxt] = useState('');
   const [neon, setNeon] = useState('neonpink');
-  const lib = g.stamps;
+  const neons = NEONS.filter(([k]) => !(g.lockedNeon || []).includes(k));
+  const pickLetter = (ch, col = neon) => { setTxt(ch); g.letter(ch, col); };
   return (
     <div className="m-ctx m-ctx--stamp" role="toolbar" aria-label="Stamps">
-      <div className="m-chips">
-        {lib.map((s) => <button key={s.name} type="button" className={`m-chip ${ui.stamp === s ? 'on' : ''}`} onClick={() => g.setStamp(s)}>{s.name}</button>)}
-        {g.clipboard && <button type="button" className={`m-chip ${ui.stamp === g.clipboard ? 'on' : ''}`} onClick={() => g.setStamp(g.clipboard)}>Clipboard</button>}
+      <div className="m-tabs" role="tablist">
+        {[['objects', 'Objects'], ['kana', 'Kana'], ['latin', 'Latin']].map(([k, n]) => <button key={k} type="button" role="tab" aria-selected={tab === k} className={tab === k ? 'on' : ''} onClick={() => setTab(k)}>{n}</button>)}
+        <button type="button" className="m-mini" aria-label="Rotate stamp (R)" title="Rotate (R)" onClick={() => g.set({ stampRot: (ui.stampRot + 1) % 4 })}>⟳</button>
       </div>
-      <div className="m-letters">
-        <label className="m-ctx__lbl" htmlFor="m-letter">Sign letter</label>
-        <input id="m-letter" className="m-input" value={txt} maxLength={1} placeholder="A or ラ" onChange={(e) => { const ch = e.target.value.slice(-1).toUpperCase(); setTxt(ch); if (ch) g.letter(ch, neon); }} />
-        <select className="m-input" aria-label="Neon colour" value={neon} onChange={(e) => { setNeon(e.target.value); if (txt) g.letter(txt, e.target.value); }}>{NEONS.map(([k, n]) => <option key={k} value={k}>{n}</option>)}</select>
-        <div className="m-kana" aria-label="Katakana">{KANA.slice(0, 46).map((k) => <button key={k} type="button" lang="ja" className={`m-kana__k ${txt === k ? 'on' : ''}`} onClick={() => { setTxt(k); g.letter(k, neon); }}>{k}</button>)}</div>
-      </div>
-      <button type="button" className="m-mini" aria-label="Rotate stamp (R)" title="Rotate (R)" onClick={() => g.set({ stampRot: (ui.stampRot + 1) % 4 })}>⟳</button>
+      {tab === 'objects' && (
+        <div className="m-chips">
+          {g.stamps.map((s) => <button key={s.name} type="button" className={`m-chip ${ui.stamp === s ? 'on' : ''}`} onClick={() => g.setStamp(s)}>{s.name}</button>)}
+          {g.clipboard && <button type="button" className={`m-chip ${ui.stamp === g.clipboard ? 'on' : ''}`} onClick={() => g.setStamp(g.clipboard)}>Clipboard</button>}
+        </div>
+      )}
+      {tab !== 'objects' && (
+        <div className="m-letters">
+          {tab === 'latin' && <input id="m-letter" className="m-input" value={txt} maxLength={2} placeholder="Type a letter or digit" aria-label="Sign letter" onChange={(e) => { const ch = e.target.value.slice(-1).toUpperCase(); if (/[A-Z0-9!]/.test(ch)) pickLetter(ch); else setTxt(''); }} />}
+          <select className="m-input" aria-label="Neon colour" value={neon} onChange={(e) => { setNeon(e.target.value); if (txt) g.letter(txt, e.target.value); }}>{neons.map(([k, n]) => <option key={k} value={k}>{n}</option>)}</select>
+          {tab === 'kana' && <div className="m-kana" aria-label="Katakana">{KANA.map((k) => <button key={k} type="button" lang="ja" className={`m-kana__k ${txt === k ? 'on' : ''}`} onClick={() => pickLetter(k)}>{k}</button>)}</div>}
+          {g.lockedNeon && g.lockedNeon.length > 0 && <span className="m-ctx__hint">More neon colours unlock with requests</span>}
+        </div>
+      )}
     </div>
   );
 }
@@ -195,9 +243,10 @@ function Palette({ g, ui }) {
   return (
     <section className="m-panel m-palette" aria-label="All blocks">
       <div className="m-panel__head">
-        <input className="m-input m-search" autoFocus={!g.touch} placeholder="Search blocks" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search blocks" />
+        <input className="m-input m-search" autoFocus={!g.touch} placeholder="Search blocks" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search blocks"
+          onKeyDown={(e) => { if (e.key === 'Escape' || ((e.key === 'e' || e.key === 'E') && !q)) { e.preventDefault(); e.stopPropagation(); g.closePanel(); } }} />
         <span className="m-panel__note">Picks go into slot {ui.slot + 1}</span>
-        <button type="button" className="m-icon" aria-label="Close" onClick={() => g.set({ panel: null })}><Icon n="close" /></button>
+        <button type="button" className="m-icon" aria-label="Close" onClick={() => g.closePanel()}><Icon n="close" /></button>
       </div>
       <div className="m-palette__body">
         {groups.map(([grp, bs]) => (
@@ -237,7 +286,7 @@ function Help({ g }) {
   ];
   return (
     <section className="m-panel m-help" role="dialog" aria-label="Controls">
-      <div className="m-panel__head"><h2>Controls</h2><button type="button" className="m-icon" aria-label="Close" onClick={() => g.set({ panel: null })}><Icon n="close" /></button></div>
+      <div className="m-panel__head"><h2>Controls</h2><button type="button" className="m-icon" aria-label="Close" onClick={() => g.closePanel()}><Icon n="close" /></button></div>
       <dl>{rows.map(([k, v]) => <div key={k}><dt>{k}</dt><dd>{v}</dd></div>)}</dl>
       <p className="m-panel__note">Your town saves itself in this browser. Signs, shops and street names here are invented.</p>
     </section>
@@ -252,7 +301,7 @@ function Menu({ g, ui, onExit }) {
   const importFile = (e) => { const f = e.target.files && e.target.files[0]; if (!f) return; if (f.size > 4 * 1024 * 1024) { g.toast('File too large (4 MB max)'); return; } const r = new FileReader(); r.onload = () => { g.importJSON(String(r.result)); g.set({ panel: null }); }; r.readAsText(f); e.target.value = ''; };
   return (
     <section className="m-panel m-menu" role="dialog" aria-label="Menu">
-      <div className="m-panel__head"><h2>Menu</h2><button type="button" className="m-icon" aria-label="Close" onClick={() => g.set({ panel: null })}><Icon n="close" /></button></div>
+      <div className="m-panel__head"><h2>Menu</h2><button type="button" className="m-icon" aria-label="Close" onClick={() => g.closePanel()}><Icon n="close" /></button></div>
       <h3>Saves</h3>
       <ul className="m-slots">
         {g.slots().map((sl) => (
@@ -276,6 +325,7 @@ function Menu({ g, ui, onExit }) {
       <div className="m-row"><span>Quality</span>
         <div className="m-seg m-seg--sm">{['auto', 'low', 'balanced', 'high'].map((q) => <button key={q} type="button" className={s.quality === q ? 'on' : ''} onClick={() => g.saveSettings({ quality: q })}>{q === 'auto' ? `Auto (${ui.quality})` : q[0].toUpperCase() + q.slice(1)}</button>)}</div>
       </div>
+      <label className="m-check"><input type="checkbox" checked={!g.req.off} onChange={(e) => g.requestAction(e.target.checked ? 'on' : 'off')} /> Neighbourhood requests ({g.req.done.length}/5 done)</label>
       <label className="m-check"><input type="checkbox" checked={s.sound} onChange={(e) => g.saveSettings({ sound: e.target.checked })} /> Sound</label>
       <label className="m-check"><input type="checkbox" checked={s.invertY} onChange={(e) => g.saveSettings({ invertY: e.target.checked })} /> Invert look</label>
       <label className="m-check"><input type="checkbox" checked={s.tilt} onChange={(e) => g.saveSettings({ tilt: e.target.checked })} /> Miniature focus in build view</label>
@@ -332,7 +382,7 @@ function WalkHud({ g, ui }) {
 }
 
 function PhotoPanel({ g, ui }) {
-  const save = () => { const url = g.renderer.screenshot({ tilt: ui.tilt, focus: 0.55, bloom: 0.8, vignette: 0.4 }); const a = document.createElement('a'); a.href = url; a.download = `machi-${fmtHour(ui.hour).replace(':', '')}.png`; a.click(); };
+  const save = () => { const url = g.renderer.screenshot({ tilt: ui.tilt, focus: 0.55, bloom: 0.8, vignette: 0.4 }); const a = document.createElement('a'); a.href = url; a.download = `machi-${fmtHour(ui.hour).replace(':', '')}.png`; a.click(); g.onPhoto(); };
   return (
     <section className="m-photo" aria-label="Photo mode">
       <label className="m-row"><span>Time <b>{fmtHour(ui.hour)}</b></span><input type="range" min="0" max="23.99" step="0.05" value={ui.hour} onChange={(e) => g.set({ hour: +e.target.value, drift: false, cycle: false })} aria-label="Time of day" /></label>

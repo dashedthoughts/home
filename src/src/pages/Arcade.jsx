@@ -20,6 +20,7 @@ export default function Arcade() {
         </p>
       </header>
       <Cabinets />
+      <p className="arcade__note">REDLINE runs on the real Shuto Expressway C1 loop. Map data © OpenStreetMap contributors.</p>
     </main>
   );
 }

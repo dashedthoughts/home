@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import GameCanvas from '../components/GameCanvas.jsx';
 import { projects, rankFor } from '../data/content.js';
@@ -64,6 +64,50 @@ function Toggle({ label, checked, onChange, hint }) {
   );
 }
 
+// ---------- the real road: a minimap of the C1 inner loop, built once from track/c1.js (north up) ----------
+// track/c1.js (and its OSM data) loads with the game chunk, not the page: import it lazily.
+function useTrack() {
+  const [T, setT] = useState(null);
+  useEffect(() => {
+    let on = true;
+    import('../game/track/c1.js').then((m) => { if (on) setT(m); }).catch(() => {});
+    return () => { on = false; };
+  }, []);
+  return T;
+}
+function buildMap(T) {
+  const B = T.BOUNDS, pad = 240;
+  const districts = {};
+  for (const d of T.DISTRICTS) districts[d.id] = T.svgPath(d.from, d.from < d.to ? d.to : d.to + T.LENGTH, 30);
+  return {
+    vb: [B.minX - pad, -B.maxY - pad, B.maxX - B.minX + 2 * pad, B.maxY - B.minY + 2 * pad].map(Math.round).join(' '),
+    road: T.svgPath(0, T.LENGTH, 40),
+    tunnels: T.tunnelSpans.map((t) => T.svgPath(t.from, t.to, 20)),
+    districts,
+    tower: T.LANDMARKS.find((l) => l.id === 'tokyo-tower'),
+    n: [Math.round(B.minX - pad + 120), Math.round(-B.maxY - pad + 340)],
+  };
+}
+const fmtDist = (m) => (m >= 1000 ? `${(m / 1000).toFixed(1)} KM` : `${Math.max(10, Math.round(m / 10) * 10)} M`);
+function MiniMap({ T, map, hud }) {
+  const pt = { x: 0, y: 0 };
+  const at = (s) => { T.posAt(s, pt); return [Math.round(pt.x), Math.round(-pt.y)]; };
+  const [px, py] = at(hud.s || 0);
+  const head = (T.headingAt(hud.s || 0) * 180) / Math.PI;
+  return (
+    <svg className="minimap" viewBox={map.vb} role="img" aria-label="Minimap of the C1 inner loop">
+      <path className="mm-road" d={map.road} vectorEffect="non-scaling-stroke" />
+      {map.tunnels.map((d, i) => <path key={i} className="mm-tunnel" d={d} vectorEffect="non-scaling-stroke" />)}
+      {hud.district && map.districts[hud.district] && <path className="mm-here" d={map.districts[hud.district]} vectorEffect="non-scaling-stroke" />}
+      {map.tower && <path className="mm-tower" d={`M${map.tower.x} ${-map.tower.y - 170}L${map.tower.x - 90} ${-map.tower.y + 110}L${map.tower.x + 90} ${-map.tower.y + 110}Z`} />}
+      {hud.copS != null && (() => { const [x, y] = at(hud.copS); return <circle className="mm-cop" cx={x} cy={y} r="130" />; })()}
+      {hud.rivalS != null && (() => { const [x, y] = at(hud.rivalS); return <circle className="mm-rival" cx={x} cy={y} r="130" />; })()}
+      <path className="mm-you" d="M0 -260L170 200L0 110L-170 200Z" transform={`translate(${px} ${py}) rotate(${head.toFixed(1)})`} />
+      <text className="mm-n" x={map.n[0]} y={map.n[1]}>N</text>
+    </svg>
+  );
+}
+
 function StatBar({ k, v }) {
   return (
     <div className="statbar">
@@ -80,6 +124,9 @@ export default function Play() {
   const [phase, setPhase] = useState('title'); // title | run | paused | over
   const [tab, setTab] = useState('run');
   const [cfg, setCfg] = useState(getRaceConfig);
+  const T = useTrack();
+  const map = useMemo(() => (T ? buildMap(T) : null), [T]);
+  const lastPlacePop = useRef(-1e9); // district call-outs stay rare: one every 20 s at most, never over a JCT call
   const [hud, setHud] = useState({ score: 0, kmh: 0, heat: 0, lives: 3, maxLives: 3, files: 0, chain: 0, mult: 1, draft: 0, count: 0 });
   const [pops, setPops] = useState([]);
   const [runFiles, setRunFiles] = useState([]);
@@ -134,7 +181,7 @@ export default function Play() {
       if (phaseRef.current !== 'run') return;
       switch (e.type) {
         case 'go': pop('GO', 'signal'); break;
-        case 'nearmiss': pop(e.chain > 1 ? `CLOSE CALL ×${e.chain}` : 'NEAR MISS', e.chain > 2 ? 'signal' : 'data', `+${e.pts.toLocaleString('en-IN')}`); break;
+        case 'nearmiss': pop(e.chain > 1 ? `CLOSE CALL ×${e.chain}` : 'NEAR MISS', e.chain > 2 ? 'signal' : 'data', `+${e.pts.toLocaleString('en-IN')}${e.merge ? ' · MERGE ×2' : ''}`); break;
         case 'slipstream': pop('SLIPSTREAM', 'data', 'BOOST · HEAT VENTED'); break;
         case 'chain-break': pop('CHAIN LOST', 'dim'); break;
         case 'glitch': pop('SIGNAL GLITCH', 'alert', 'STEERING INVERTED'); break;
@@ -145,9 +192,18 @@ export default function Play() {
         case 'blocked': pop('KUROGANE BLOCKS', 'alert', 'FAKE HIM OUT'); break;
         case 'parried': pop('PARRIED', 'dim', 'HE SAW IT COMING'); break;
         case 'sprint': pop('FINAL STRETCH', 'signal', '2 FILES LEFT · BE IN FRONT AT THE LAST ONE'); break;
-        case 'junction':
-          pop(e.route === 'backstreets' ? 'BACKSTREETS' : 'EXPRESSWAY', e.route === 'backstreets' ? 'route' : 'routex', e.route === 'backstreets' ? 'SHARDS ×1.5 · TIGHTER STREETS · SLOWER TRAFFIC' : 'OPEN ROAD · FAST TRAFFIC');
+        case 'junction': // a real Shuto junction: traffic merges in after it
+          lastPlacePop.current = performance.now();
+          pop(e.name.toUpperCase(), 'route', `${e.jp} · MERGE AHEAD · NEAR MISSES ×2`);
           break;
+        case 'district': { // only the landmark districts get a call-out; the HUD always shows where you are
+          const now = performance.now();
+          if (!['ginza', 'kitanomaru', 'shibakoen'].includes(e.id) || now - lastPlacePop.current < 20000) break;
+          lastPlacePop.current = now;
+          pop(e.name.toUpperCase(), 'routex', e.id === 'shibakoen' ? `${e.jp} · TOKYO TOWER` : e.id === 'kitanomaru' ? `${e.jp} · THE PALACE MOAT` : e.jp);
+          break;
+        }
+        case 'lap': pop(`LAP ${e.lap}`, 'data', 'C1 INNER LOOP · 都心環状線'); break;
         case 'finale': pop(e.won === null ? 'ALL TEN FILES' : e.won ? 'YOU WIN' : 'KUROGANE WINS', e.won === false ? 'alert' : 'ok', 'LAST EXIT: THE LOOKOUT'); break;
         case 'strike': pop('LASHED', 'ok', e.cop ? 'CRUISER DROPS BACK' : 'KUROGANE SPINS WIDE'); break;
         case 'struck': pop('HIT', 'alert', cfgRef.current.rash ? 'KUROGANE SWINGS' : 'KUROGANE LEANS ON YOU'); break;
@@ -338,11 +394,13 @@ export default function Play() {
             </div>
           )}
           <div className="hud2__route">
-            <span className="hud-k">SECTOR {pad2(hud.sector || 1)}</span>
-            <b className={hud.route === 'backstreets' ? 'tone-signal' : 'tone-data'}>{hud.route === 'backstreets' ? 'BACKSTREETS' : 'EXPRESSWAY'}</b>
-            {!hud.finale && hud.toJunction > 0 && hud.toJunction < 450 && (
-              <span className="junction-hint">JUNCTION IN {hud.toJunction} M · LEFT LANES EXPRESSWAY · RIGHT LANE BACKSTREETS</span>
-            )}
+            {T && map && <MiniMap T={T} map={map} hud={hud} />}
+            <div className="route-txt">
+              <span className="hud-k">C1 · LAP {hud.lap || 1}</span>
+              {hud.districtName && <b className="route-d">{hud.districtName}<i lang="ja">{hud.districtJp}</i></b>}
+              {hud.jct && <span className={`route-j ${hud.toJunction < 450 ? 'soon' : ''}`}><span>{hud.jct}</span> <i lang="ja">{hud.jctJp}</i> <em>{fmtDist(hud.toJunction)}</em></span>}
+              {hud.merge && <span className="route-m">MERGE ZONE · NEAR MISS ×2</span>}
+            </div>
           </div>
           {hud.bend !== 0 && hud.bend !== undefined && (
             <div className={`bendsign ${hud.bend > 0 ? 'r' : 'l'}`}>
@@ -472,6 +530,7 @@ export default function Play() {
               JACK IN <span className="btn__k">ENTER</span>
             </button>
             <Link to="/" className="btn btn--ghost">PORTFOLIO</Link>
+            {T && <p className="map-credit">Road: Shuto Expressway C1, Tokyo · {T.CREDIT}</p>}
           </footer>
         </section>
       )}

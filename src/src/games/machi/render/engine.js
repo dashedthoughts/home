@@ -325,6 +325,41 @@ export class Renderer {
     const c = mode === 'clear' ? 0xff4d6d : mode === 'select' ? 0xfcee0a : 0x00f0ff;
     this.ghostBox.material.color.setHex(c); this.ghostEdges.material.color.setHex(c);
   }
+  // geometry of one block (for the placement ghost and the pop), cached per id
+  blockGeom(id) {
+    this._bg = this._bg || new Map();
+    if (!this._bg.has(id)) {
+      const data = new Uint8Array([id]);
+      const w = { W: 1, H: 1, D: 1, blocks: data, light: new Uint16Array(1), get(x, y, z) { return x || y || z ? 0 : id; } };
+      const m = meshWorld(w, true);
+      this._bg.set(id, m.opaque.ni ? geomFrom(m.opaque) : null);
+    }
+    return this._bg.get(id);
+  }
+  setPlaceGhost(id, pos) {
+    if (!this.placeGhost) { this.placeGhost = new THREE.Mesh(new THREE.BufferGeometry(), this.matGhost); this.placeGhost.renderOrder = 7; this.scene.add(this.placeGhost); }
+    const g = id && pos ? this.blockGeom(id) : null;
+    this.placeGhost.visible = !!g;
+    if (g) { this.placeGhost.geometry = g; this.placeGhost.position.set(pos[0], pos[1], pos[2]); }
+  }
+  // a quick outward pop when a block lands (the real voxel is meshed underneath)
+  pop(x, y, z, id) {
+    if (this.reduced) return;
+    const g = this.blockGeom(id); if (!g) return;
+    this.pops = this.pops || [];
+    let p = this.pops.find((q) => q.t >= 1);
+    if (!p) { if (this.pops.length >= 6) p = this.pops[0]; else { const mat = this.entityMat(); mat.uniforms.uEntLit.value.set(1, 0.85, 0.85, 0.85); p = { mesh: new THREE.Mesh(g, mat), t: 1 }; p.mesh.renderOrder = 4; this.scene.add(p.mesh); this.pops.push(p); } }
+    p.mesh.geometry = g; p.c = [x + 0.5, y + 0.5, z + 0.5]; p.t = 0; p.mesh.visible = true;
+  }
+  _stepPops(dt) {
+    if (!this.pops) return;
+    for (const p of this.pops) {
+      if (p.t >= 1) { p.mesh.visible = false; continue; }
+      p.t = Math.min(1, p.t + dt / 0.14);
+      const s = 1 + 0.22 * Math.sin(p.t * Math.PI);
+      p.mesh.scale.setScalar(s); p.mesh.position.set(p.c[0] - 0.5 * s, p.c[1] - 0.5 * s, p.c[2] - 0.5 * s);
+    }
+  }
   setStampGhost(stamp, pos) {
     if (this.ghostStampSrc !== stamp) {
       if (this.ghostStamp) { this.scene.remove(this.ghostStamp); this.ghostStamp.geometry.dispose(); this.ghostStamp = null; }
@@ -340,7 +375,7 @@ export class Renderer {
 
   // ---------------- particles: petals and rain ----------------
   _buildParticles() {
-    const MAXP = 600;
+    const MAXP = 700;
     this.petalPos = new Float32Array(MAXP * 3);
     const pg = new THREE.BufferGeometry();
     pg.setAttribute('position', new THREE.BufferAttribute(this.petalPos, 3).setUsage(THREE.DynamicDrawUsage));
@@ -462,7 +497,7 @@ export class Renderer {
     // hide what should not reflect: water itself, overlays, rain
     const hidden = [];
     for (const c of this.chunks) if (c && c.tr && c.tr.visible) { c.tr.visible = false; hidden.push(c.tr); }
-    for (const o of [this.hover, this.face, this.ghostBox, this.ghostEdges, this.rain, this.ghostStamp, ...(this.skirt || []).filter((m) => m.material === this.matTrans)]) if (o && o.visible) { o.visible = false; hidden.push(o); }
+    for (const o of [this.hover, this.face, this.ghostBox, this.ghostEdges, this.rain, this.ghostStamp, this.placeGhost, ...(this.skirt || []).filter((m) => m.material === this.matTrans)]) if (o && o.visible) { o.visible = false; hidden.push(o); }
     this.sky.position.copy(rc.position);
     this.gl.setRenderTarget(P.refl); this.gl.render(this.scene, rc);
     for (const o of hidden) o.visible = true;
@@ -478,6 +513,7 @@ export class Renderer {
     this.rain.material.uniforms.uCam.value.copy(cam.position);
     this.U.uFogDensity.value = (opts.fog ?? 0.0032) * this.Q.fog;
     const gl = this.gl;
+    const now = performance.now(); this._stepPops(Math.min(0.05, (now - (this._lastR || now)) / 1000)); this._lastR = now;
     if (!this.post) { this.U.uReflOn.value = 0; gl.setRenderTarget(null); gl.render(this.scene, cam); }
     else {
       const P = this.post;
@@ -512,6 +548,9 @@ export class Renderer {
     if (this.ents) for (const o of this.ents) o.traverse((m) => { if (m.isMesh) { m.geometry.dispose(); m.material.dispose(); } });
     if (this.wires) this.wires.geometry.dispose();
     if (this.ghostStamp) this.ghostStamp.geometry.dispose();
+    if (this._bg) for (const g of this._bg.values()) if (g) g.dispose();
+    if (this.placeGhost) this.placeGhost.geometry = new THREE.BufferGeometry();
+    if (this.pops) for (const p of this.pops) p.mesh.geometry = new THREE.BufferGeometry();
     this.scene.traverse((o) => { if (o.geometry) o.geometry.dispose(); if (o.material) (Array.isArray(o.material) ? o.material : [o.material]).forEach((m) => m.dispose()); });
     this.matOpaque.dispose(); this.matTrans.dispose(); this.matGhost.dispose();
     this._disposePost();

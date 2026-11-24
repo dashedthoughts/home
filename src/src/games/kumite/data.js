@@ -22,7 +22,7 @@ export const FIGHTERS = {
     id: 'rin', name: 'RIN', full: 'Rin Hayase', jp: '早瀬 凛', color: '#b8ff2e', ink: '#101208',
     style: 'Rushdown', bio: 'Shimbashi bike courier. Never late, never second. Kicks first, signs for it later.',
     quote: ['Signed, sealed, delivered. You owe me a tip.', 'Too slow. My bike has more fight in it.', 'Next drop is across town. Keep up.'],
-    hp: 960, power: 1.18, walkF: 4.3, walkB: 3.4, jumpV: 12.4, jumpX: 4.7, grav: 0.62, dashF: [16, 118], dashB: [18, 92], hw: 25, hh: 158, ch: 102, scale: 0.96, meterRate: 1.1,
+    hp: 960, power: 1.15, walkF: 4.3, walkB: 3.4, jumpV: 12.4, jumpX: 4.7, grav: 0.62, dashF: [16, 118], dashB: [18, 92], hw: 25, hh: 158, ch: 102, scale: 0.96, meterRate: 1.1,
     moves: {
       L5: M({ name: 'Flick Jab', st: 3, ac: 2, rc: 7, dmg: 28, hs: 12, bs: 8, hit: [26, 108, 72, 136], push: 6 }),
       H5: M({ name: 'Courier Roundhouse', tier: 2, st: 8, ac: 3, rc: 16, dmg: 76, hs: 19, bs: 13, h: 'high', hit: [24, 92, 94, 132], push: 10, mg: 40 }),
@@ -44,7 +44,7 @@ export const FIGHTERS = {
     id: 'ganji', name: 'GANJI', full: 'Ganji Oshima', jp: '大島 岩治', color: '#ff5a1f', ink: '#140806',
     style: 'Grappler', bio: 'Twenty years on a Kabukicho door. One hydraulic arm, zero patience for queue-jumpers.',
     quote: ['Not on the list. Not tonight.', 'Doors close at two. You closed early.', 'Walk it off. Somewhere else.'],
-    hp: 1100, power: 0.91, walkF: 2.5, walkB: 2.1, jumpV: 11.6, jumpX: 3.5, grav: 0.66, dashF: [22, 92], dashB: [24, 72], hw: 34, hh: 184, ch: 120, scale: 1.12, meterRate: 1.0,
+    hp: 1150, power: 1.02, walkF: 2.9, walkB: 2.1, jumpV: 11.6, jumpX: 3.5, grav: 0.66, dashF: [22, 92], dashB: [24, 72], hw: 34, hh: 184, ch: 120, scale: 1.12, meterRate: 1.0,
     moves: {
       L5: M({ name: 'Palm Shove', st: 5, ac: 3, rc: 9, dmg: 40, hs: 14, bs: 9, h: 'high', hit: [28, 104, 86, 140], push: 8 }),
       H5: M({ name: 'Hammer Fist', tier: 2, st: 12, ac: 4, rc: 18, dmg: 108, hs: 21, bs: 14, h: 'mid', hit: [30, 84, 108, 160], push: 12, mg: 45 }),
@@ -69,10 +69,10 @@ export const FIGHTERS = {
     id: 'suzu', name: 'SUZU', full: 'Suzu Mizushiro', jp: '水城 鈴', color: '#00f0ff', ink: '#05111a',
     style: 'Zoner', bio: 'Freelance drone tech from Akihabara. Fights from across the street and bills by the hour.',
     quote: ['Invoice is in your inbox. Late fees apply.', 'You never got within ten metres. Noted.', 'Patch notes: you lose.'],
-    hp: 900, power: 0.84, walkF: 3.0, walkB: 3.0, jumpV: 11.8, jumpX: 3.8, grav: 0.55, dashF: [18, 96], dashB: [20, 96], hw: 25, hh: 162, ch: 104, scale: 0.98, meterRate: 1.0,
+    hp: 900, power: 0.8, walkF: 3.0, walkB: 3.0, jumpV: 11.8, jumpX: 3.8, grav: 0.55, dashF: [18, 96], dashB: [20, 96], hw: 25, hh: 162, ch: 104, scale: 0.98, meterRate: 1.0,
     moves: {
       L5: M({ name: 'Wrist Taser', st: 4, ac: 2, rc: 8, dmg: 28, hs: 12, bs: 8, hit: [28, 108, 74, 136], push: 7 }),
-      H5: M({ name: 'Coat Kick', tier: 2, st: 9, ac: 4, rc: 18, dmg: 64, hs: 18, bs: 12, h: 'mid', hit: [24, 58, 100, 108], push: 16, mg: 40 }),
+      H5: M({ name: 'Coat Kick', tier: 2, st: 9, ac: 4, rc: 20, dmg: 64, hs: 18, bs: 12, h: 'mid', hit: [24, 58, 100, 108], push: 16, mg: 40 }),
       L2: M({ name: 'Ankle Zap', st: 5, ac: 2, rc: 9, dmg: 26, hs: 12, bs: 8, h: 'low', hit: [24, 0, 80, 26], push: 7 }),
       H2: M({ name: 'Long Sweep', tier: 2, st: 9, ac: 4, rc: 20, dmg: 66, bs: 12, h: 'low', kd: 1, hit: [24, 0, 114, 22], push: 10, mg: 40, cancel: false }),
       Lj: M({ name: 'Air Chop', st: 4, ac: 6, rc: 6, dmg: 38, hs: 14, bs: 10, h: 'over', air: 1, hit: [8, 50, 50, 92], push: 5 }),

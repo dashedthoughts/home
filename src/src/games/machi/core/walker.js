@@ -55,7 +55,7 @@ export class Walker {
       if (this.time - this.lastJump < 0.3) { this.fly = !this.fly; this.vel[1] = 0; this.lastJump = -9; }
       else this.lastJump = this.time;
     }
-    const speed = (this.fly ? 18 : input.sprint ? 13 : 8) * (this.inWater ? 0.55 : 1);
+    const speed = (this.fly ? 16 : input.sprint ? 9 : 5.2) * (this.inWater ? 0.55 : 1);
     const s = Math.sin(this.yaw), c = Math.cos(this.yaw);
     const fw = input.fwd || 0, st = input.strafe || 0;
     let mx = -s * fw + c * st, mz = -c * fw - s * st;

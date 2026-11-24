@@ -412,3 +412,36 @@
   .ghost-chip { top: 166px; }
 }
 @media (max-width: 760px) { .dash-bars label.is-idle { display: none; } .hud2__cam { display: none; } }
+
+/* ================= the real road: minimap of the C1 loop, district, next JCT (bottom left; phones: one text stack) ================= */
+.hud2__route { display: flex; flex-direction: column-reverse; align-items: flex-start; gap: 6px; max-width: 280px; }
+.minimap { width: 132px; height: 132px; flex: none; padding: 6px; background: rgba(8,7,13,.62); clip-path: var(--shape-sm); overflow: visible; }
+.minimap .mm-road { fill: none; stroke: rgba(255,255,255,.34); stroke-width: 3; stroke-linejoin: round; }
+.minimap .mm-tunnel { fill: none; stroke: #08070d; stroke-width: 3; stroke-dasharray: 3 3; }
+.minimap .mm-here { fill: none; stroke: var(--data); stroke-width: 4; stroke-linecap: round; opacity: .9; }
+.minimap .mm-tower { fill: #ff5a3c; opacity: .85; }
+.minimap .mm-you { fill: var(--signal); stroke: #08070d; stroke-width: 40; paint-order: stroke; }
+.minimap .mm-rival { fill: #ff2bd6; stroke: #08070d; stroke-width: 40; }
+.minimap .mm-cop { fill: #4d8dff; stroke: #ff3b4f; stroke-width: 60; }
+.minimap .mm-n { fill: var(--ink-muted); font: 700 300px / 1 var(--f-mono); }
+.route-txt { display: grid; gap: 5px; justify-items: start; padding: 8px 10px; background: rgba(8,7,13,.62); clip-path: var(--shape-sm); max-width: 280px; }
+.route-d { font: 700 1.05rem / 1.05 var(--f-display); letter-spacing: .08em; text-transform: uppercase; color: var(--ink); display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.route-d i, .route-j i { font: 700 .8rem / 1 'Noto Sans JP', sans-serif; font-style: normal; letter-spacing: .04em; color: var(--ink-muted); }
+.route-j { font: 400 .72rem / 1.2 var(--f-mono); letter-spacing: .1em; color: var(--data); text-transform: uppercase; }
+.route-j i { font-size: .72rem; }
+.route-j em { font-style: normal; color: var(--ink); margin-left: 4px; }
+.route-j.soon { color: var(--signal); }
+.route-m { font: 700 .7rem / 1 var(--f-mono); letter-spacing: .12em; color: #0b0910; background: var(--signal); padding: 3px 6px; }
+.map-credit { flex-basis: 100%; margin: 0; font: 400 .72rem / 1.4 var(--f-mono); letter-spacing: .06em; color: var(--ink-muted); }
+@media (pointer: coarse) and (min-width: 761px) { .minimap { width: 104px; height: 104px; } }
+@media (max-width: 760px) {
+  .minimap { display: none; }
+  .route-txt { padding: 5px 7px; gap: 3px; max-width: 46vw; }
+  .route-txt > .hud-k { display: none; }
+  .route-d { font-size: .74rem; gap: 5px; }
+  .route-d i { font-size: .7rem; }
+  .route-j { font-size: .69rem; letter-spacing: .05em; }
+  .route-j i { display: none; }
+  .route-m { font-size: .69rem; padding: 2px 5px; }
+  .map-credit { font-size: .69rem; }
+}

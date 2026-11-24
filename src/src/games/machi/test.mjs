@@ -24,7 +24,7 @@ console.log(`  tokyo() built and lit in ${((performance.now() - t0) / 3).toFixed
 ok(eqArr(A.blocks, B.blocks) && eqArr(A.light, B.light), 'same seed gives identical voxels and light');
 ok(!eqArr(A.blocks, C.blocks), 'different seed gives a different world');
 const LM = A.meta.landmarks;
-for (const k of ['shotengai', 'canal', 'bridge', 'shrine', 'honden', 'torii', 'ramen', 'konbini', 'rooftop', 'snack', 'karaoke', 'sento', 'bookshop', 'izakaya', 'vending', 'kissa', 'oldhouse', 'viaduct', 'lanterns', 'kei']) ok(Array.isArray(LM[k]), `landmark ${k} recorded`);
+for (const k of ['shotengai', 'canal', 'bridge', 'shrine', 'honden', 'torii', 'ramen', 'konbini', 'rooftop', 'plot', 'karaoke', 'sento', 'bookshop', 'izakaya', 'vending', 'kissa', 'oldhouse', 'viaduct', 'lanterns', 'kei']) ok(Array.isArray(LM[k]), `landmark ${k} recorded`);
 ok(count(A, LM.torii, 'vermilion') >= 25 && count(A, LM.torii, 'black') >= 12, `torii is vermilion and black (${count(A, LM.torii, 'vermilion')} vermilion)`);
 ok(count(A, LM.shrine, 'sakura') >= 800, `big sakura in the shrine (${count(A, LM.shrine, 'sakura')} blossom voxels)`);
 ok(count(A, LM.shrine, 'paperlamp') >= 4, 'stone lanterns are lit');
@@ -52,6 +52,22 @@ ok(checkGlyph('ン', (c, r) => [35 + c, ramenTop - 24 - r, 40], 'neonred'), 'ン
 const sentoTop = GY + 19;
 ok(checkGlyph('湯', (c, r) => [17 - 3 - c, sentoTop - 2 - r, 51], 'neoncyan'), '湯 on the public bath');
 for (const [n, f] of [['park', flatPark], ['district', () => randomDistrict(5)], ['empty', emptyLot]]) { const w = f(); let s = 0; for (const b of w.blocks) if (b) s++; ok(s > 96 * 96 * 4, `template ${n} builds (${s} voxels)`); }
+
+{
+  // neighbourhood requests: none is done in the untouched world, each completes when its blocks are added
+  const { REQUESTS, progress } = await import('./core/requests.js');
+  for (const r of REQUESTS) {
+    if (r.photo) continue;
+    const w = A.clone(); w.meta = A.meta;
+    ok(progress(r, w, A) === 0, `request "${r.id}" starts at 0`);
+    const [x0, y0, z0, x1, y1, z1] = r.box; let added = 0;
+    const id = r.ids ? ID[r.ids[0]] : ID.stone;
+    for (let y = y0; y <= y1 && added < r.need; y++) for (let z = z0; z <= z1 && added < r.need; z++) for (let x = x0; x <= x1 && added < r.need; x++) if (w.get(x, y, z) === 0) { w.set(x, y, z, id); added++; }
+    ok(progress(r, w, A) >= r.need, `request "${r.id}" completes after ${r.need} blocks (${progress(r, w, A)})`);
+  }
+  const plot = A.meta.landmarks.plot; let filled = 0; for (let z = plot[2]; z <= plot[5]; z++) for (let x = plot[0] + 1; x < plot[3]; x++) if (A.get(x, GY + 1, z)) filled++;
+  ok(filled === 0, 'the empty plot is empty above head height');
+}
 
 // ---------------------------------------------------------------
 section('2. Mesher: hidden-face culling and vertex AO');

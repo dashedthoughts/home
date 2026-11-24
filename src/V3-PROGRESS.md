@@ -24,3 +24,11 @@ claude/vibrant-curie-0x7eb2 @ 1ad129b (main was published from it). Tag pushes a
 - Limit hit ~18:20, reset 20:40. Round-1 state committed as `bbc134f` (track done and tested; light partial; four games in progress).
 - Relaunched: REDLINE pipeline Light (finish) → City → Review, sequential; four game builders resumed with a "finish, verify, report" order.
 - Integrator next: arcade teaser on the home page, README credit, regression, deploy what passes; hide anything unfinished in `games/registry.js`.
+
+## 21:20 UTC — first increment live
+- All four games reported complete with passing tests: ITO, NEON KUMITE (frame-data tests fixed truthfully + one real pushbox bug), KAZE (379 checks), MACHI (91 checks).
+- Arcade hub rebuilt as a bento of cabinets with real captures (`media/arcade/<id>.jpg`); arcade section on the home page.
+- DEPLOYED (branch a6aed6a, main published): arcade + four games, with REDLINE still at the pre-v3 checkpoint (built from a worktree: games from HEAD, `src/src/game` + Play from tag `checkpoint-pre-v3`). Live check: hub shows 5 cabinets with images, kaze/kumite mount, no errors.
+- REDLINE: track stage's report embedded in a new workflow script (`redline-v3b.js`); Light and City running in parallel, Review after.
+- Round 2 started: independent playtest critics for KUMITE and MACHI (then ITO, KAZE); findings go back to the builders.
+- Integrator notes for round 2: KAZE has a faint vertical paler band (tile seam) in the sky in two chapters.

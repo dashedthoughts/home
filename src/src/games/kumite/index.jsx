@@ -6,7 +6,7 @@ import { LEVELS } from './ai.js';
 import { STAGES, STAGE_IDS, createStage, drawBack, drawFloor } from './stages.js';
 import { createAudio } from './audio.js';
 import { createInput, DEFAULT_KEYS, ACTIONS, ACTION_LABEL, keyName } from './input.js';
-import { drawFighter } from './rig.js';
+import { drawFighter, sideColor } from './rig.js';
 import { BASE } from './anim.js';
 import { createEngine } from './engine.js';
 
@@ -22,22 +22,22 @@ const totalDmg = (m) => { const G = m.seq || m.grab; const extra = G && G.hits ?
 const HEIGHT = { high: 'High', mid: 'Mid', low: 'Low', over: 'Overhead', throw: 'Throw' };
 
 // ---------------------------------------------------------------- portraits drawn with the actual rig
-function Portrait({ id, pose = 'win', size = 160, flip = false, dim = false }) {
+function Portrait({ id, pose = 'win', size = 160, flip = false, dim = false, alt = false }) {
   const ref = useRef(null);
   useEffect(() => {
     const c = ref.current; if (!c) return;
     const dpr = Math.min(2, window.devicePixelRatio || 1); c.width = size * dpr; c.height = size * 1.25 * dpr;
     const g = c.getContext('2d'); g.setTransform(dpr, 0, 0, dpr, 0, 0);
-    const ch = FIGHTERS[id];
+    const ch = FIGHTERS[id]; const col = sideColor(id, alt) || ch.color;
     const bg = g.createLinearGradient(0, 0, 0, size * 1.25); bg.addColorStop(0, '#16121f'); bg.addColorStop(1, '#0b0910'); g.fillStyle = bg; g.fillRect(0, 0, size, size * 1.25);
-    g.fillStyle = ch.color; g.globalAlpha = 0.22; for (let y = 0; y < size * 1.25; y += 7) for (let x = (y / 7) % 2 * 3.5; x < size; x += 7) { g.beginPath(); g.arc(x, y, 2.2 * (y / (size * 1.25)), 0, 7); g.fill(); } g.globalAlpha = 1;
-    g.fillStyle = ch.color; g.globalAlpha = 0.85; g.beginPath(); g.moveTo(0, size * 0.95); g.lineTo(size, size * 0.7); g.lineTo(size, size * 0.82); g.lineTo(0, size * 1.07); g.fill(); g.globalAlpha = 1;
+    g.fillStyle = col; g.globalAlpha = 0.22; for (let y = 0; y < size * 1.25; y += 7) for (let x = (y / 7) % 2 * 3.5; x < size; x += 7) { g.beginPath(); g.arc(x, y, 2.2 * (y / (size * 1.25)), 0, 7); g.fill(); } g.globalAlpha = 1;
+    g.fillStyle = col; g.globalAlpha = 0.85; g.beginPath(); g.moveTo(0, size * 0.95); g.lineTo(size, size * 0.7); g.lineTo(size, size * 0.82); g.lineTo(0, size * 1.07); g.fill(); g.globalAlpha = 1;
     const s = (size / 105) * (id === 'ganji' ? 0.92 : 1.05);
     g.save(); g.setTransform(dpr * s * (flip ? -1 : 1), 0, 0, -dpr * s, dpr * (size / 2 + (flip ? 8 : -8)), dpr * size * 1.95);
-    try { drawFighter(g, id, BASE[id][pose] || BASE[id].stance, { lw: 2.4, light: [0.5 * (flip ? -1 : 1), 0.85], rim: ch.color, rimDir: -1, win: pose === 'win' }); } catch (e) { /* draw failure leaves the background */ }
+    try { drawFighter(g, id, BASE[id][pose] || BASE[id].stance, { lw: 2.4, light: [0.5 * (flip ? -1 : 1), 0.85], rim: col, rimDir: -1, win: pose === 'win', alt }); } catch (e) { /* draw failure leaves the background */ }
     g.restore();
     if (dim) { g.fillStyle = 'rgba(0,0,0,0.45)'; g.fillRect(0, 0, size, size * 1.25); }
-  }, [id, pose, size, flip, dim]);
+  }, [id, pose, size, flip, dim, alt]);
   return <canvas ref={ref} className="nk-portrait" style={{ width: size, height: size * 1.25 }} aria-hidden="true" />;
 }
 function StageThumb({ id }) {
@@ -170,6 +170,16 @@ function Settings({ settings, setSettings, keys, setKeys, onClose, input }) {
   );
 }
 
+// Result banner: in 1P modes it speaks to the player (YOU WIN / YOU LOSE); colour follows the winner's side palette.
+function resultLine(r, screen) {
+  if (screen === 'ending') return { title: 'ARCADE CLEAR', sub: `${FIGHTERS[r.ids[0]].name} takes the city`, color: FIGHTERS[r.ids[0]].color };
+  if (r.winner < 0) return { title: 'DRAW', sub: 'Nobody walks away', color: '#a29fb8' };
+  const id = r.ids[r.winner]; const col = (r.mirror && r.winner === 1 && sideColor(id, true)) || FIGHTERS[id].color;
+  const onePlayer = r.cpu && !r.cpu[0] && r.cpu[1];
+  if (onePlayer) return r.winner === 0 ? { title: 'YOU WIN', sub: `${FIGHTERS[id].name} wins`, color: col } : { title: 'YOU LOSE', sub: `CPU ${FIGHTERS[id].name} wins`, color: col, lose: true };
+  return { title: `P${r.winner + 1} WINS`, sub: `${FIGHTERS[id].name} wins`, color: col };
+}
+
 // ---------------------------------------------------------------- the game
 export default function NeonKumite({ onExit }) {
   const rootRef = useRef(null), canvasRef = useRef(null);
@@ -290,7 +300,7 @@ export default function NeonKumite({ onExit }) {
     if (E.cfg.mode === 'attract') { setTimeout(() => { if (ui.current.screen !== 'fight') attract(); }, 1500); return; }
     setTimeout(() => {
       const w = res.winner; const human0 = !E.cfg.cpu[0];
-      const r = { winner: w, ids: [S.f[0].id, S.f[1].id], wins: res.wins, mode: E.cfg.mode, quote: w >= 0 ? FIGHTERS[S.f[w].id].quote[S.frame % 3] : 'Nobody walks away from this one.' };
+      const r = { winner: w, ids: [S.f[0].id, S.f[1].id], wins: res.wins, mode: E.cfg.mode, cpu: [...E.cfg.cpu], mirror: S.f[0].id === S.f[1].id, quote: w >= 0 ? FIGHTERS[S.f[w].id].quote[S.frame % 3] : 'Nobody walks away from this one.' };
       if (u.mode === 'arcade' && u.arcade) {
         if (w === 0) {
           const a = { ...u.arcade, idx: u.arcade.idx + 1 };
@@ -317,7 +327,7 @@ export default function NeonKumite({ onExit }) {
   }
   function arcadeFight(a) {
     const opp = a.ladder[a.idx]; const rival = a.idx === a.ladder.length - 1;
-    startFight({ p1: a.p1, p2: opp, cpu: [false, true], level: rival ? 4 : a.level, stage: rival ? 'roof' : STAGE_IDS[a.idx % 3], mode: 'arcade', rival, round: `STAGE ${a.idx + 1} / ${a.ladder.length}` });
+    startFight({ p1: a.p1, p2: opp, cpu: [false, true], level: rival ? Math.min(4, a.level + 1) : a.level, stage: rival ? 'roof' : STAGE_IDS[a.idx % 3], mode: 'arcade', rival, round: `STAGE ${a.idx + 1} / ${a.ladder.length}` });
   }
   function choose(id) {
     const p = ui.current.pick; const m = ui.current.mode;
@@ -445,18 +455,19 @@ export default function NeonKumite({ onExit }) {
         <div className="nk-vs" aria-live="polite">
           <div className="nk-vs__side nk-vs__l" style={{ '--c': FIGHTERS[vs.p1].color }}><Portrait id={vs.p1} size={portrait ? 120 : 210} /><b>{FIGHTERS[vs.p1].name}</b><span className="nk-jp">{FIGHTERS[vs.p1].jp}</span></div>
           <div className="nk-vs__mid"><span>VS</span>{vs.round && <small>{vs.round}</small>}{vs.rival && <em>RIVAL</em>}<small>{STAGES[vs.stage] ? STAGES[vs.stage].jp : ''}</small></div>
-          <div className="nk-vs__side nk-vs__r" style={{ '--c': FIGHTERS[vs.p2].color }}><Portrait id={vs.p2} size={portrait ? 120 : 210} flip /><b>{FIGHTERS[vs.p2].name}</b><span className="nk-jp">{FIGHTERS[vs.p2].jp}</span></div>
+          <div className="nk-vs__side nk-vs__r" style={{ '--c': FIGHTERS[vs.p2].color }}><Portrait id={vs.p2} size={portrait ? 120 : 210} flip alt={vs.p1 === vs.p2} /><b>{FIGHTERS[vs.p2].name}</b><span className="nk-jp">{FIGHTERS[vs.p2].jp}</span></div>
         </div>
       )}
 
       {(screen === 'result' || screen === 'ending') && result && !overlay && (
         <div className="nk-result is-top" data-menu>
-          <div className="nk-result__card" style={{ '--c': result.winner >= 0 ? FIGHTERS[result.ids[result.winner]].color : '#a29fb8' }}>
-            {result.winner >= 0 && <Portrait id={result.ids[result.winner]} size={portrait ? 130 : 180} />}
+          <div className={'nk-result__card' + (resultLine(result, screen).lose ? ' is-lose' : '')} style={{ '--c': resultLine(result, screen).color }}>
+            {result.winner >= 0 && <Portrait id={result.ids[result.winner]} size={portrait ? 130 : 180} alt={result.mirror && result.winner === 1} />}
             <div>
-              <h2>{screen === 'ending' ? 'ARCADE CLEAR' : result.winner >= 0 ? `${FIGHTERS[result.ids[result.winner]].name} WINS` : 'DRAW'}</h2>
+              <h2>{resultLine(result, screen).title}</h2>
+              <p className="nk-result__sub">{resultLine(result, screen).sub}</p>
               <p className="nk-quote">“{result.quote}”</p>
-              <p className="nk-score">{result.wins[0]} : {result.wins[1]}{result.mode === 'arcade' && arcade ? ` · stage ${Math.min(arcade.idx + (result.next ? 0 : 1), ladder.length)} of ${ladder.length}` : ''}</p>
+              <p className="nk-score"><b>{result.wins[0]}</b><span> : </span><b>{result.wins[1]}</b><small>{result.cpu && result.cpu[1] ? ' YOU · CPU' : ' P1 · P2'}</small>{result.mode === 'arcade' && arcade ? ` · stage ${Math.min(arcade.idx + (result.next ? 0 : 1), ladder.length)} of ${ladder.length}` : ''}</p>
             </div>
           </div>
           <nav className="nk-menu nk-menu--row">

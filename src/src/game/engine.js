@@ -4,6 +4,7 @@ import * as THREE from 'three';
 import { createSim, MAX } from './sim.js';
 import { createWorld } from './render/world.js';
 import { createPost } from './render/post.js';
+import { U } from './render/materials.js';
 import { createAudio } from './audio.js';
 import { DEFAULT_CONFIG, QUALITY, resolveQuality } from './config.js';
 
@@ -33,10 +34,11 @@ export function createRedline(canvas, opts = {}) {
   // if the GPU driver resets, don't leave a dead black canvas: tell the shell so it can rebuild
   let lost = false;
   canvas.addEventListener('webglcontextlost', (e) => { e.preventDefault(); lost = true; onEvent({ type: 'context-lost' }); });
-  renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  const exposure = () => 0.88 * (cfg.weather === 'rain' ? 0.8 : 1); // rain is bright: take it down to 80%
-  renderer.toneMappingExposure = exposure();
+  // tone mapping, exposure and sRGB all happen in the post chain's finish pass (render/post.js); the scene stays linear HDR.
+  // exposure = authored base (Neutral tone map: no hidden 1/0.6 gain like ACES) × GPU eye adaptation inside post
+  const exposure = () => 1.2 * (cfg.weather === 'rain' ? 0.9 : 1); // rain is bright: take it down a little
   renderer.outputColorSpace = THREE.SRGBColorSpace;
+  renderer.info.autoReset = false; // stats() reports the whole frame (scene + every post pass), reset once per frame
 
   const audio = lite ? null : getAudio();
   const sim = createSim({ mode: opts.mode || 'attract', config: cfg, onEvent: handle });
@@ -53,7 +55,11 @@ export function createRedline(canvas, opts = {}) {
     return Math.max(0.45, Math.min(window.devicePixelRatio || 1, fit)) * scale;
   };
   renderer.setPixelRatio(pixelRatio());
-  let post = createPost(renderer, world.scene, world.camera, { samples: lite ? 0 : q().samples, bloom: lite ? 0.3 : q().bloom });
+  // the hero backdrop (lite) gets the cheap chain: no reflections, no streak, FXAA
+  const postOpts = (extra) => (lite ? { samples: 0, bloom: 0.3, aa: 'fxaa', reflect: 0, streak: false } : { samples: q().samples, bloom: q().bloom, aa: q().aa, reflect: q().reflect, streak: q().streak, ...extra });
+  let look = {}; // test hook overrides (tone map A/B, reflections on/off)
+  let post = createPost(renderer, world.scene, world.camera, postOpts(look));
+  post.setExposure(exposure());
 
   function resize() {
     const w = Math.max(1, canvas.clientWidth), h = Math.max(1, canvas.clientHeight);
@@ -63,12 +69,33 @@ export function createRedline(canvas, opts = {}) {
     world.resize(w, h);
   }
   world.applyQuality(lite ? { ...QUALITY.low, extras: false } : q());
+  // edges: every mipmapped texture in the scene (sign atlases, billboards, gantry signs, road paint) gets anisotropic
+  // filtering, so thin strokes and lane paint stay crisp at grazing angles instead of blurring or crawling. Runs once,
+  // before the first upload; textures that already ask for more (the road: up to 16x) keep it.
+  {
+    const maxA = Math.min(8, renderer.capabilities.getMaxAnisotropy?.() || 1);
+    const seen = new Set();
+    const mip = (t) => t.minFilter === THREE.LinearMipmapLinearFilter || t.minFilter === THREE.LinearMipmapNearestFilter;
+    const fix = (t) => {
+      if (!t || !t.isTexture || seen.has(t) || t.isRenderTargetTexture || !t.generateMipmaps || !mip(t)) return;
+      seen.add(t);
+      if (t.anisotropy < maxA) { t.anisotropy = maxA; if (t.image) t.needsUpdate = true; }
+    };
+    world.scene.traverse((o) => {
+      for (const m of Array.isArray(o.material) ? o.material : [o.material]) {
+        if (!m) continue;
+        for (const k in m) if (m[k] && m[k].isTexture) fix(m[k]);
+        if (m.uniforms) for (const k in m.uniforms) fix(m.uniforms[k] && m.uniforms[k].value);
+      }
+    });
+  }
   // compile every shader up front (including things that appear later: tunnel, finale), so nothing hitches mid-run
   try { world.precompile(renderer); } catch { /* best effort */ }
   function rebuildPost() {
     post.dispose();
     renderer.setPixelRatio(pixelRatio());
-    post = createPost(renderer, world.scene, world.camera, { samples: lite ? 0 : q().samples, bloom: lite ? 0.3 : q().bloom });
+    post = createPost(renderer, world.scene, world.camera, postOpts(look));
+    post.setExposure(exposure());
     world.applyQuality(lite ? { ...QUALITY.low, extras: false } : q());
     resize();
   }
@@ -173,13 +200,14 @@ export function createRedline(canvas, opts = {}) {
     L.uLines.value += (Math.max(0, linesT) - L.uLines.value) * Math.min(1, dt * 6);
     if (fx.view === 'showroom') L.uSpeed.value = 0;
     // the hero backdrop only needs 30fps: render every other frame, keep the sim at full rate
-    if (!lite || tick % 2 === 0) post.render(dt);
+    if (!lite || tick % 2 === 0) draw(dt);
 
     if (audio && sim.mode === 'play') { audio.engine(S.count <= 0 && !S.over, sp, S.overclock); audio.tunnel(!!S.inTunnel && !S.over); }
 
     // dynamic resolution: keep ~60fps, recover when there's headroom
     frameAvg += (dtRaw * 1000 - frameAvg) * 0.03;
-    if (frameAvg > 21) { slowFor += dtRaw; fastFor = 0; } else if (frameAvg < 15) { fastFor += dtRaw; slowFor = 0; } else { slowFor = fastFor = 0; }
+    // "fast" = holding 60 (a vsync-locked 60 Hz display never reports < 16.7 ms, so the old < 15 ms test never recovered)
+    if (frameAvg > 21) { slowFor += dtRaw; fastFor = 0; } else if (frameAvg < 17.6) { fastFor += dtRaw; slowFor = 0; } else { slowFor = fastFor = 0; }
     if (now - lastScaleChange > 5000) {
       if (slowFor > 2.5 && scale > 0.7) { scale = Math.max(0.7, scale - 0.1); slowFor = 0; lastScaleChange = now; resize(); }
       else if (slowFor > 3 && cfg.quality === 'auto' && effective !== 'low' && !lite) {
@@ -192,6 +220,38 @@ export function createRedline(canvas, opts = {}) {
     }
 
     if (++tick % 6 === 0) emitTick();
+  }
+
+  // one frame through the post chain: feed it the road state, count the whole frame's draw calls
+  // height haze takes the colour of the district the road is passing through (track/c1.js DISTRICTS[].style).
+  // The tints are art direction (invented), chosen from what lights each kind of street: LED office glass, shop neon,
+  // sodium lamps on the ministries, the orange of Tokyo Tower, the teal of water. Eased over ~2 s so a boundary never pops.
+  const HAZE_TINT = {
+    towers: '#9fb8ff', neon: '#ff4fa8', office: '#c8dcff', river: '#4fd0c8', park: '#4a6a8a', moat: '#4a6a8a',
+    gov: '#ffb35a', hills: '#b07aff', resid: '#ffc78a', tower: '#ff7a2a', bay: '#5ac8ff',
+  };
+  for (const k in HAZE_TINT) HAZE_TINT[k] = new THREE.Color(HAZE_TINT[k]);
+  const hazeNow = new THREE.Color(), hazeTarget = new THREE.Color();
+  let hazeTun = 0, hazeInit = false;
+  function updateHaze(dt) {
+    const S = sim.S, D = S.district;
+    const tint = (D && HAZE_TINT[D.style]) || HAZE_TINT.towers;
+    hazeTarget.copy(tint).multiplyScalar(0.03).add(U.uFogColor.value);
+    const k = hazeInit ? 1 - Math.exp(-Math.max(0, dt) / 0.7) : 1;
+    hazeInit = true;
+    hazeNow.lerp(hazeTarget, k);
+    hazeTun += ((S.inTunnel ? 1 : 0) - hazeTun) * k;
+    const rain = cfg.weather === 'rain' ? 1.6 : 1;
+    post.haze(hazeNow, 0.0016 * rain * (1 - 0.8 * hazeTun), 0.5 * (1 - hazeTun));
+  }
+
+  function draw(dt) {
+    const R = world.road;
+    if (R) post.road(R.wet, R.z, R.rough, R.fallback);
+    updateHaze(dt);
+    post.adapt(fx.view === 'showroom' ? 0.35 : 1, false);
+    renderer.info.reset();
+    post.render(dt);
   }
 
   function emitTick() {
@@ -214,9 +274,14 @@ export function createRedline(canvas, opts = {}) {
       count: S.count,
       over: S.over,
       km: (S.dist / 1000).toFixed(1),
-      route: S.route,
       sector: S.sector,
+      // the real road (track/c1.js): where you are on the C1 loop, for the minimap and the district/JCT line
+      s: S.s, lap: S.lap, merge: !!S.merge,
+      district: S.district ? S.district.id : '', districtName: S.district ? S.district.name : '', districtJp: S.district ? S.district.jp : '',
+      jct: S.jct ? S.jct.name : '', jctJp: S.jct ? S.jct.jp : '',
       toJunction: Math.max(0, Math.round(S.nextJunction - S.z)),
+      rivalS: cfg.race !== false && S.rival ? sim.trackS(S.rival.z) : null,
+      copS: S.cops && S.cops.length ? sim.trackS(S.cops[0].z) : null,
       finale: S.finale,
       // a turn is coming when the road ahead bends hard and differently from where we are now
       bend: (() => { if (S.finale) return 0; const ahead = sim.curveAt(S.z + 170), now = sim.curveAt(S.z); return Math.abs(ahead) > 0.3 && Math.abs(ahead - now) > 0.3 ? Math.sign(ahead) * Math.min(3, Math.ceil(Math.abs(ahead) * 3)) : 0; })(),
@@ -247,7 +312,7 @@ export function createRedline(canvas, opts = {}) {
   if (reduced && sim.mode === 'attract') {
     for (let i = 0; i < 30; i++) sim.step(STEP);
     world.update(sim, 0.016, { full: false });
-    post.render(0.016);
+    draw(1);
   }
 
   const api = {
@@ -275,6 +340,7 @@ export function createRedline(canvas, opts = {}) {
     orbit(a) { fx.orbit = a; },
     get scene() { return world.scene; }, // test hook // test hook: freeze the showroom camera at an angle (null = orbit)
     setView(v) {
+      if (fx.view !== v) post.adapt(1, true); // a cut: the eye starts settled
       fx.view = v;
       if (v === 'showroom') {
         sim.S.speed = 0;
@@ -299,7 +365,7 @@ export function createRedline(canvas, opts = {}) {
       const prevQ = cfg.quality;
       cfg = { ...cfg, ...next };
       if (reduced) cfg.effects = 'reduced';
-      renderer.toneMappingExposure = exposure();
+      post.setExposure(exposure());
       sim.configure(cfg);
       world.applyConfig(cfg);
       if (audio) {
@@ -311,7 +377,7 @@ export function createRedline(canvas, opts = {}) {
         scale = 1;
         rebuildPost();
       }
-      if (!running || paused) { world.update(sim, 0, fx); post.render(0); }
+      if (!running || paused) { world.update(sim, 0, fx); post.adapt(1, true); draw(0); }
     },
     // test hook: advance the simulation by `sec` seconds, then draw one frame
     advance(sec) {
@@ -325,7 +391,7 @@ export function createRedline(canvas, opts = {}) {
         if (i % 12 === 0) world.update(sim, STEP * 12, fx);
       }
       world.update(sim, 0.016, fx);
-      post.render(0.016);
+      draw(Math.max(0.016, sec)); // the eye adapts over the simulated time too
       emitTick();
     },
     uiSound(name) { audio?.unlock(); audio?.sfx(name); },
@@ -343,8 +409,13 @@ export function createRedline(canvas, opts = {}) {
       return rows;
     },
     quality: () => effective,
-    stats: () => ({ calls: renderer.info.render.calls, triangles: renderer.info.render.triangles, geometries: renderer.info.memory.geometries, textures: renderer.info.memory.textures, programs: renderer.info.programs?.length, pixelRatio: +renderer.getPixelRatio().toFixed(2), size: [canvas.width, canvas.height] }),
+    exposureNow: () => +(post.readExposure() * post.lens.uExposure.value).toFixed(3), // test hook
+    get _post() { return post; }, // test hook (tuning the meter)
+    // calls/triangles: whole frame; sceneCalls/sceneTriangles: the 3D scene alone (the post chain adds ~10-20 quad draws)
+    stats: () => ({ calls: renderer.info.render.calls, triangles: renderer.info.render.triangles, sceneCalls: post.stats.sceneCalls, sceneTriangles: post.stats.sceneTriangles, scale, effective, geometries: renderer.info.memory.geometries, textures: renderer.info.memory.textures, programs: renderer.info.programs?.length, pixelRatio: +renderer.getPixelRatio().toFixed(2), size: [canvas.width, canvas.height] }),
     get lens() { return post.lens; },
+    // test hook: A/B the look without touching the saved config, e.g. look({ tonemap: 1 }) (1 ACES, 2 AgX, 3 Neutral), look({ reflect: 0 })
+    look(o) { look = { ...(o || {}) }; rebuildPost(); post.adapt(1, true); draw(0.016); },
     get mode() { return sim.mode; },
     destroy() {
       running = false;

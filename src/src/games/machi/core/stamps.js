@@ -31,6 +31,8 @@ export function buildStamps() {
   }));
   S.push(make('Lantern string', 1, 1, 9, (s) => { for (let z = 0; z < 9; z += 2) s(0, 0, z, z % 4 ? 'paperlamp' : 'lantern'); }));
   S.push(make('Power pole', 3, 18, 1, (s) => { for (let y = 0; y < 18; y++) s(1, y, 0, 'pole'); s(0, 16, 0, 'steel'); s(1, 16, 0, 'steel'); s(2, 16, 0, 'steel'); s(1, 10, 0, 'konbini'); }));
+  S.push(make('Street lamp', 3, 9, 1, (s) => { for (let y = 0; y < 8; y++) s(0, y, 0, 'pole'); s(1, 7, 0, 'steel'); s(2, 7, 0, 'slabconc'); s(2, 6, 0, 'paperlamp'); s(0, 8, 0, 'slabconc'); }));
+  S.push(make('Water tank', 4, 7, 4, (s) => { for (const [x, z] of [[0, 0], [3, 0], [0, 3], [3, 3]]) { s(x, 0, z, 'pole'); s(x, 1, z, 'pole'); } for (let y = 2; y < 6; y++) for (let z = 0; z < 4; z++) for (let x = 0; x < 4; x++) s(x, y, z, 'tank'); for (let z = 1; z < 3; z++) for (let x = 1; x < 3; x++) s(x, 6, z, 'slabconc'); }));
   S.push(make('Planter', 3, 2, 1, (s) => { for (let x = 0; x < 3; x++) { s(x, 0, 0, 'wood'); s(x, 1, 0, x === 1 ? 'flowers' : 'fern'); } }));
   return S;
 }

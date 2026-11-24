@@ -1,11 +1,14 @@
 // The REDLINE world: everything you see except post-processing.
 import * as THREE from 'three';
-import { U, std, basic, buildingMaterial, glowMaterial, decalMaterial, skyMaterial, celestialMaterial, particleMaterial, underglowMaterial } from './materials.js';
-import { roadTextures, kerbTexture, gridTexture, billboardTexture, neonEnvironment } from './textures.js';
+import { U, CITY, std, basic, glowMaterial, decalMaterial, skyMaterial, celestialMaterial, particleMaterial, underglowMaterial } from './materials.js';
+import { roadTextures, kerbTexture, neonEnvironment } from './textures.js';
 import { buildPlayerCar, createTrafficKit } from './cars.js';
 import { TIMES, WEATHER, LIVERIES, GLOWS, SLOGANS, TOKYO_SIGNS } from '../config.js';
-import { LANES, MAX, mulberry, SECTOR, TUNNEL } from '../sim.js';
-import { createPlayerTrails, createTrafficTrails, createSearchlights, signTextures, createViaduct, createTower, createTunnel, createCityCarpet } from './megacity.js';
+import { LANES, MAX, mulberry } from '../sim.js';
+import * as C1 from '../track/c1.js';
+import { createPlayerTrails, createTrafficTrails, createSearchlights, createCityCarpet, createTokyoFar, createTrains } from './megacity.js';
+import { createTokyo, lampKindAt, BRANCH } from './tokyo.js';
+import { guideSignTexture } from './textures.js';
 
 const ROAD_LEN = 760;     // visible road strip (m)
 const NEAR = 14;          // strip starts this far behind the player
@@ -28,7 +31,7 @@ export function createWorld(renderer, initialCfg) {
   let cfg = { ...initialCfg };
   let envRT = null;
   let base = 0;        // floating origin for recycled props
-  let heading = 0;     // accumulated turn → rotates the far city & sky
+  let heading = 0;     // the real heading (track/c1.js) → rotates the far city, landmarks & sky
   let camRoll = 0, fov = 60;
   const camPos = new THREE.Vector3(0, 2.1, 6);
 
@@ -56,65 +59,50 @@ export function createWorld(renderer, initialCfg) {
 
   // ---------------------------------------------------------------- sky & far city
   const sky = new THREE.Mesh(new THREE.SphereGeometry(2200, 48, 24), skyMaterial());
-  sky.renderOrder = -10;
+  sky.renderOrder = 10; // [lighting] after the opaque pass, depth-tested: only visible sky pixels run the cloud shader
   scene.add(sky);
   const far = new THREE.Group();
   scene.add(far);
   const celestial = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), celestialMaterial());
   far.add(celestial);
 
-  const farCount = 260;
-  const farGeo = new THREE.BoxGeometry(1, 1, 1).translate(0, 0.5, 0);
-  const farSeed = new Float32Array(farCount);
-  const farMat = buildingMaterial({ far: true });
-  const farCity = new THREE.InstancedMesh(farGeo, farMat, farCount);
-  {
-    const m = new THREE.Matrix4(), q = new THREE.Quaternion(), p = new THREE.Vector3(), s = new THREE.Vector3();
-    for (let i = 0; i < farCount; i++) {
-      const a = (rnd() * 2 - 1) * Math.PI * 0.62 + Math.PI; // mostly ahead (−z)
-      const r = 900 + rnd() * 600;
-      p.set(Math.sin(a) * r, -40, Math.cos(a) * r);
-      q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), a);
-      const h = 60 + Math.pow(rnd(), 1.6) * 380;
-      s.set(30 + rnd() * 60, h, 30 + rnd() * 60);
-      m.compose(p, q, s);
-      farCity.setMatrixAt(i, m);
-      farSeed[i] = rnd();
-    }
-    farGeo.setAttribute('aSeed', new THREE.InstancedBufferAttribute(farSeed, 1));
-  }
-  farCity.frustumCulled = false;
-  far.add(farCity);
-  // aircraft beacons on the tallest far towers
-  const beaconGeo = new THREE.PlaneGeometry(1, 1);
-  const beacons = new THREE.InstancedMesh(beaconGeo, glowMaterial({ gain: 3, fog: false, bent: false }), 40);
-  {
-    const m = new THREE.Matrix4(), p = new THREE.Vector3();
-    for (let i = 0; i < 40; i++) {
-      farCity.getMatrixAt(i * 6, m);
-      p.setFromMatrixPosition(m);
-      const sy = new THREE.Vector3().setFromMatrixColumn(m, 1).length();
-      beacons.setMatrixAt(i, new THREE.Matrix4().compose(p.add(new THREE.Vector3(0, sy + 4, 0)), new THREE.Quaternion(), new THREE.Vector3(14, 14, 14)));
-      beacons.setColorAt(i, new THREE.Color('#ff1a3c'));
-    }
-  }
-  beacons.frustumCulled = false;
-  far.add(beacons);
+  // the real skyline, landmarks and aircraft live in `far` (rotated by the real heading): see megacity.js createTokyoFar
 
   // ---------------------------------------------------------------- road
   const roadTex = roadTextures();
+  // [lighting] crisp lane paint at grazing angles: mipmaps + the GPU's full anisotropy (lines no longer crawl)
+  const maxAniso = Math.min(16, renderer.capabilities.getMaxAnisotropy?.() || 8);
+  roadTex.map.anisotropy = roadTex.rough.anisotropy = maxAniso;
+  // [lighting] what the post chain needs to put real reflections on this road (render/post.js finish pass)
+  const roadState = { wet: 0.3, z: 0, rough: roadTex.rough, fallback: new THREE.Color() };
+  let reflectOn = false;
   const roadMat = std({ map: roadTex.map, roughnessMap: roadTex.rough, roughness: 1, metalness: 0.05, envMapIntensity: 0.9 });
   const roadGeo = new THREE.PlaneGeometry(10.8, ROAD_LEN, 1, 380).rotateX(-Math.PI / 2).translate(0, 0, NEAR - ROAD_LEN / 2);
   roadTex.map.repeat.set(1, ROAD_LEN / 24);
   roadTex.rough.repeat.set(1, ROAD_LEN / 24);
+  // [lighting] roughness floor: the puddle mask goes down to ~0.04, which turned every spotlight and lamp into a
+  // mirror-sharp white blob. Analytic lights now see at least uMinRough; the mirror look comes from the post
+  // chain's screen-space reflections instead (which are soft-clamped and never blow out).
+  const roadMinRough = { value: 0.45 };
+  {
+    const bendCompile = roadMat.onBeforeCompile;
+    roadMat.onBeforeCompile = (sh) => {
+      bendCompile(sh);
+      sh.uniforms.uMinRough = roadMinRough;
+      sh.fragmentShader = sh.fragmentShader
+        .replace('void main() {', 'uniform float uMinRough;\nvoid main() {')
+        .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\n\troughnessFactor = max(roughnessFactor, uMinRough);');
+    };
+    roadMat.customProgramCacheKey = () => 'bend-road';
+  }
   const road = new THREE.Mesh(roadGeo, roadMat);
   scene.add(road);
 
   const kerbMats = [];
   const kerbs = [-1, 1].map((side) => {
-    const tex = kerbTexture(side < 0 ? '#00f0ff' : '#ff2bd6', '#f2efe6');
+    const tex = kerbTexture('#57565c', '#3c3b42'); // a plain concrete shoulder strip (Shuto roads have no racing kerbs)
     tex.repeat.set(1, ROAD_LEN / 6);
-    const mat = std({ color: '#222', emissive: '#ffffff', emissiveMap: tex, emissiveIntensity: 0.5, roughness: 0.5 });
+    const mat = std({ color: '#222', emissive: '#ffffff', emissiveMap: tex, emissiveIntensity: 0.06, roughness: 0.7 });
     kerbMats.push(mat);
     const k = new THREE.Mesh(new THREE.PlaneGeometry(0.7, ROAD_LEN, 1, 380).rotateX(-Math.PI / 2).translate(0, 0, NEAR - ROAD_LEN / 2), mat);
     k.position.set(side * 5.75, 0.01, 0);
@@ -122,37 +110,7 @@ export function createWorld(renderer, initialCfg) {
     return k;
   });
 
-  const ground = new THREE.Mesh(
-    new THREE.PlaneGeometry(260, ROAD_LEN, 26, 380).rotateX(-Math.PI / 2).translate(0, -0.02, NEAR - ROAD_LEN / 2),
-    std({ color: '#0b0910', roughness: 0.75, metalness: 0.1, emissive: '#ffffff', emissiveMap: gridTexture('#ff2bd6'), emissiveIntensity: 0.25 }),
-  );
-  ground.material.emissiveMap.repeat.set(260 / 16, ROAD_LEN / 16);
-  scene.add(ground);
-
-  // guardrails: brushed metal beam + a neon tube that runs to the horizon
-  const railMat = std({ color: '#4a4a58', metalness: 0.85, roughness: 0.3 });
-  const tubeMats = [basic({ color: HDR('#00f0ff', 2.4) }), basic({ color: HDR('#ff2bd6', 2.4) })];
-  [-1, 1].forEach((side, i) => {
-    const beam = new THREE.Mesh(stripGeo(0.16, 0.4, ROAD_LEN, 380), railMat);
-    beam.position.set(side * 6.6, 0.72, 0);
-    scene.add(beam);
-    const tube = new THREE.Mesh(stripGeo(0.07, 0.07, ROAD_LEN, 380), tubeMats[i]);
-    tube.position.set(side * 6.6, 0.98, 0);
-    scene.add(tube);
-  });
-  const POST_GAP = 4;
-  const postCount = Math.ceil(ROAD_LEN / POST_GAP) * 2;
-  const posts = new THREE.InstancedMesh(new THREE.BoxGeometry(0.12, 0.85, 0.14), std({ color: '#2a2a33', metalness: 0.6, roughness: 0.5 }), postCount);
-  {
-    const m = new THREE.Matrix4();
-    let i = 0;
-    for (let k = 0; k < postCount / 2; k++) for (const side of [-1, 1]) {
-      m.makeTranslation(side * 6.66, 0.42, NEAR - k * POST_GAP);
-      posts.setMatrixAt(i++, m);
-    }
-  }
-  posts.frustumCulled = false;
-  scene.add(posts);
+  // the street below, parapets, sound barriers, the cut and the tunnels: tokyo.js (createTokyo)
 
   // ---------------------------------------------------------------- street lamps (periodic: shift by z mod period)
   const LAMP_GAP = 34;
@@ -168,19 +126,26 @@ export function createWorld(renderer, initialCfg) {
   const pools = new THREE.InstancedMesh(new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2), decalMaterial({ shape: 'pool', gain: 0.35 }), lampN * 2);
   const streaks = new THREE.InstancedMesh(new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2), decalMaterial({ shape: 'streak', gain: 0.9 }), lampN * 2);
   const lampColors = [new THREE.Color(), new THREE.Color()];
-  function layoutLamps() {
-    const m = new THREE.Matrix4(), q = new THREE.Quaternion(), s = new THREE.Vector3(), p = new THREE.Vector3();
+  const LAMP_M = new THREE.Matrix4(), LAMP_Q = new THREE.Quaternion(), LAMP_S = new THREE.Vector3(), LAMP_P = new THREE.Vector3(), LAMP_ZERO = new THREE.Matrix4().makeScale(0, 0, 0);
+  const LED_WHITE = new THREE.Color('#eef2ff'), lampCol = new THREE.Color(), lampHead = new THREE.Color();
+  // lamps stand on the parapets; inside a real tunnel they are hidden (the tube has its own lamp rows), and each lamp is
+  // LED white or sodium amber by the district it stands in (tokyo.js styles)
+  function layoutLamps(S) {
+    const m = LAMP_M, q = LAMP_Q, s = LAMP_S, p = LAMP_P;
     let i = 0;
     for (let k = 0; k < lampN; k++) {
       for (const side of [-1, 1]) {
         // stagger sides by half a gap
         const z = NEAR - k * LAMP_GAP - (side > 0 ? LAMP_GAP / 2 : 0);
-        const px = side * 7.3;
+        const px = side * 6.62; // on the parapet
         poles.setMatrixAt(i, m.makeTranslation(px, 0, z));
         arms.setMatrixAt(i, m.makeTranslation(px - side * 1.35, 8.9, z));
         heads.setMatrixAt(i, m.makeTranslation(px - side * 2.4, 8.8, z));
-        const col = lampColors[side < 0 ? 0 : 1];
-        heads.setColorAt(i, col.clone().multiplyScalar(4.5));
+        const ls = S ? S.s - (z + lampGroup.position.z) : 0;
+        if (S && tokyo.tunnelAt(ls)) { for (const im of LAMP_IMS) im.setMatrixAt(i, LAMP_ZERO); i++; continue; }
+        const col = lampCol.copy(lampColors[side < 0 ? 0 : 1]);
+        if (S && lampKindAt(ls) === 'led') col.lerp(LED_WHITE, 0.75);
+        heads.setColorAt(i, lampHead.copy(col).multiplyScalar(4.5));
         lampGlow.setMatrixAt(i, m.compose(p.set(px - side * 2.4, 8.75, z), q, s.set(5, 5, 5)));
         lampGlow.setColorAt(i, col);
         pools.setMatrixAt(i, m.compose(p.set(px - side * 2.9, 0.02, z), q, s.set(9, 1, 11)));
@@ -196,132 +161,53 @@ export function createWorld(renderer, initialCfg) {
       im.frustumCulled = false;
     }
   }
+  const LAMP_IMS = [poles, arms, heads, lampGlow, pools, streaks];
   lampGroup.add(poles, arms, heads, lampGlow, pools, streaks);
 
-  // ---------------------------------------------------------------- city blocks (recycled)
-  const B_COUNT = 170;
-  const bGeo = new THREE.BoxGeometry(1, 1, 1).translate(0, 0.5, 0);
-  const bSeed = new Float32Array(B_COUNT);
-  bGeo.setAttribute('aSeed', new THREE.InstancedBufferAttribute(bSeed, 1));
-  const bMat = buildingMaterial();
-  const buildings = new THREE.InstancedMesh(bGeo, bMat, B_COUNT);
-  buildings.frustumCulled = false;
-  const signTex = signTextures();
-  const signGeo = new THREE.PlaneGeometry(1, 1);
-  const signMeshes = signTex.map((t) => {
-    const im = new THREE.InstancedMesh(signGeo, basic({ map: t, color: HDR('#ffffff', 2.2), side: THREE.DoubleSide }), B_COUNT);
-    im.frustumCulled = false;
-    return im;
-  });
-  const ZERO = new THREE.Matrix4().makeScale(0, 0, 0);
-  const cityGroup = new THREE.Group();
-  cityGroup.add(buildings, ...signMeshes);
-  scene.add(cityGroup);
-  const B = [];
-  const tmpM = new THREE.Matrix4();
-  let routeAt = () => 'expressway';
-  function rollBuilding(b, z) {
-    const row = b.row;
-    b.z = z;
-    const back = routeAt(z) === 'backstreets';
-    b.w = row === 0 ? 10 + rnd() * 14 : 16 + rnd() * 28;
-    b.d = 10 + rnd() * 16;
-    b.h = row === 0 ? 8 + Math.pow(rnd(), 1.8) * 50 : 30 + Math.pow(rnd(), 1.3) * 160;
-    b.x = b.side * (row === 0 ? (back ? 9.6 + rnd() * 1.5 : 16 + rnd() * 10) + b.w / 2 : (back ? 28 : 38) + rnd() * 45 + b.w / 2);
-    if (back && row === 0) b.h = 14 + Math.pow(rnd(), 1.4) * 60; // backstreets: a canyon of signs
-    // gaps in the street wall: some lots are empty plazas
-    if (row === 0 && rnd() < (back ? 0.05 : 0.22)) b.h = 0.01;
-    b.seed = rnd();
-    b.sign = row === 0 && b.h > 6 && rnd() < (back ? 0.97 : 0.7);
-    b.signH = 4 + rnd() * 8;
-    b.signY = 4 + rnd() * Math.max(1, b.h - b.signH - 6);
-    b.signC = (rnd() * signTex.length) | 0;
-  }
-  function writeBuilding(i) {
-    const b = B[i];
-    const zw = -(b.z - base);
-    tmpM.compose(new THREE.Vector3(b.x, 0, zw), new THREE.Quaternion(), new THREE.Vector3(b.w, b.h, b.d));
-    buildings.setMatrixAt(i, tmpM);
-    bSeed[i] = b.seed;
-    // blade sign: sticks out from the facade toward the street, faces down the road
-    for (const sm of signMeshes) sm.setMatrixAt(i, ZERO);
-    if (b.sign) {
-      const h = Math.min(b.signH, b.h - 2);
-      const fx = b.x - b.side * (b.w / 2 + 1.3);
-      tmpM.compose(new THREE.Vector3(fx, Math.max(3, b.signY) + h / 2, zw + b.d / 2 - 1), new THREE.Quaternion(), new THREE.Vector3(h * 0.286, h, 1));
-      signMeshes[b.signC].setMatrixAt(i, tmpM);
-    }
-  }
-  for (let i = 0; i < B_COUNT; i++) {
-    const side = i % 2 ? 1 : -1;
-    const row = i % 4 < 2 ? 0 : 1;
-    B.push({ side, row });
-    rollBuilding(B[i], -NEAR + rnd() * SPAN);
-  }
-
-  // ---------------------------------------------------------------- billboards & gantries
-  const LINES = initialCfg && initialCfg.signs === 'tokyo' ? TOKYO_SIGNS : SLOGANS;
-  const subOf = (i) => (LINES === TOKYO_SIGNS ? (i % 2 ? 'OPEN LATE' : '') : i % 3 === 0 ? '// SAID BY THE CITY' : '');
-  const boardTex = LINES.map((t, i) => billboardTexture(t, ['#fcee0a', '#00f0ff', '#ff2bd6', '#b8ff2e'][i % 4], subOf(i)));
-  const boardMats = boardTex.map((t) => basic({ map: t, color: HDR('#ffffff', 1.7) }));
-  if (document.fonts?.ready) Promise.all([document.fonts.load('900 40px "Noto Sans JP"', '高速'), document.fonts.load('700 40px Rajdhani'), document.fonts.load('400 20px "Share Tech Mono"')]).catch(() => {}).then(() => LINES.forEach((t, i) => {
-    const fresh = billboardTexture(t, ['#fcee0a', '#00f0ff', '#ff2bd6', '#b8ff2e'][i % 4], subOf(i));
-    boardTex[i].image = fresh.image;
-    boardTex[i].needsUpdate = true;
-  }));
-  const boardGeo = new THREE.PlaneGeometry(10, 3.75);
-  const backGeo = new THREE.BoxGeometry(10.4, 4.1, 0.3);
-  const legGeo = new THREE.CylinderGeometry(0.18, 0.22, 7, 8).translate(0, 3.5, 0);
+  // the city itself: tokyo.js
   const darkMat = std({ color: '#111018', metalness: 0.5, roughness: 0.5 });
-  const boards = [];
-  let boardIdx = 0;
-  for (let i = 0; i < 6; i++) {
-    const g = new THREE.Group();
-    const panel = new THREE.Mesh(boardGeo, boardMats[0]);
-    panel.position.set(0, 9, 0.17);
-    const back = new THREE.Mesh(backGeo, darkMat);
-    back.position.set(0, 9, 0);
-    g.add(panel, back);
-    for (const lx of [-3, 3]) { const l = new THREE.Mesh(legGeo, darkMat); l.position.x = lx; g.add(l); }
-    scene.add(g);
-    boards.push({ g, panel, z: 0, side: 1 });
-  }
-  function rollBoard(b, z) {
-    b.z = z;
-    b.side = rnd() < 0.5 ? -1 : 1;
-    b.x = b.side * (12 + rnd() * 3);
-    b.panel.material = boardMats[boardIdx++ % boardMats.length];
-    b.g.rotation.y = -b.side * 0.38;
-  }
-  boards.forEach((b, i) => rollBoard(b, 120 + i * (SPAN / 6)));
+  const tmpM = new THREE.Matrix4();
 
-  const gantryTex = [billboardTexture('◀ EXPRESSWAY   BACKSTREETS ▶', '#fcee0a', '高速 ・ 路地 // THE LANE YOU HOLD PICKS THE ROUTE'), billboardTexture('RING ROAD · KEEP LEFT FOR THE EXPRESSWAY', '#00f0ff')];
+  // gantries: [0] stands at the next real JCT and shows its branch routes (Shuto green, white lettering, route shields);
+  // [1] is the advance sign 500 m before it. One canvas each (textures.js guideSignTexture), redrawn as each JCT comes up.
+  // Inside a tunnel the frame is dropped and the panel hangs from the ceiling.
+  const gantryTex = [guideSignTexture(), guideSignTexture()];
+  let gantryFor = null;
+  function drawGantry(e) {
+    gantryFor = e;
+    const after = C1.nextJctEvent(e.nodes[e.nodes.length - 1] + 1);
+    gantryTex[0].draw({ kind: 'jct', jp: e.jp, branches: BRANCH[e.jp] || [], next: after.jp.replace(/JCT$/, ''), nextEn: after.name.replace(/ JCT$/, '') });
+    gantryTex[1].draw({ kind: 'advance', jp: e.jp, name: e.name, dist: '500m' });
+  }
+  gantryTex.forEach((t) => t.draw(null));
+  if (document.fonts?.load) Promise.all([document.fonts.load('900 40px "Noto Sans JP"', C1.JCT_EVENTS.map((e) => e.jp).join('') + '都心環状線内回り上野向島池袋新宿渋谷目黒羽田台場'), document.fonts.load('700 40px Rajdhani'), document.fonts.load('600 40px Rajdhani')])
+    .catch(() => {}).then(() => { if (gantryFor) drawGantry(gantryFor); else gantryTex.forEach((t) => t.draw(null)); });
   const gantries = [];
+  const laneLightMat = basic({ color: HDR('#3dff8a', 1.4) });
   for (let i = 0; i < 2; i++) {
-    const g = new THREE.Group();
+    const g = new THREE.Group(), frame = new THREE.Group(), panel = new THREE.Group();
     for (const sx of [-1, 1]) {
       const p = new THREE.Mesh(new THREE.BoxGeometry(0.6, 8.2, 0.6).translate(0, 4.1, 0), darkMat);
-      p.position.x = sx * 7.6;
-      g.add(p);
+      p.position.x = sx * 6.9;
+      frame.add(p);
     }
-    const beam = new THREE.Mesh(new THREE.BoxGeometry(16, 0.9, 0.7), darkMat);
+    const beam = new THREE.Mesh(new THREE.BoxGeometry(15, 0.9, 0.7), darkMat);
     beam.position.y = 7.9;
-    const sign = new THREE.Mesh(new THREE.PlaneGeometry(7.2, 2.7), basic({ map: gantryTex[i], color: HDR('#ffffff', 1.6) }));
+    frame.add(beam);
+    // lane-control signals over each lane (a green arrow lamp each)
+    LANES.forEach((lx) => {
+      const l = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.42, 0.05), laneLightMat);
+      l.position.set(lx, 7.2, 0.38);
+      frame.add(l);
+    });
+    const sign = new THREE.Mesh(new THREE.PlaneGeometry(7.2, 2.7), basic({ map: gantryTex[i], color: HDR('#ffffff', 1.05) }));
     sign.position.set(0, 9.75, 0.2);
     const signBack = new THREE.Mesh(new THREE.BoxGeometry(7.5, 3.0, 0.3), darkMat);
     signBack.position.set(0, 9.75, 0);
-    g.add(beam, sign, signBack);
-    // lane-control lights hanging over each lane
-    LANES.forEach((lx, li) => {
-      const l = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.5, 0.05), basic({ color: HDR(li === 1 ? '#b8ff2e' : '#00f0ff', 4) }));
-      l.position.set(lx, 7.15, 0.38);
-      g.add(l);
-    });
-    const tube = new THREE.Mesh(new THREE.BoxGeometry(16, 0.08, 0.08), basic({ color: HDR('#ff2bd6', 5) }));
-    tube.position.set(0, 8.4, 0.38);
-    g.add(tube);
+    panel.add(sign, signBack);
+    g.add(frame, panel);
     scene.add(g);
-    gantries.push({ g, z: i === 0 ? SECTOR : SECTOR - 700 });
+    gantries.push({ g, frame, panel, z: -1e6 });
   }
 
   // ---------------------------------------------------------------- shards
@@ -489,20 +375,28 @@ export function createWorld(renderer, initialCfg) {
   const trails = createPlayerTrails(scene);
   const tTrails = createTrafficTrails(scene, 64);
   const searchlights = createSearchlights(far);
-  const viaduct = createViaduct(scene, ROAD_LEN, NEAR);
-  const tower = createTower(far);
   const carpet = createCityCarpet(far);
   carpet.visible = false; // only for the lookout finale
-  const tunnel = createTunnel(scene, TUNNEL);
-  let lastReroute = -1;
+  // Tokyo: the city along the road, the road as a structure (real tunnels, the cut, viaducts), the real skyline and landmarks
+  const tokyo = createTokyo(scene);
+  const tokyoFar = createTokyoFar(far, scene);
+  const tower = tokyoFar.tower; // the real Tokyo Tower (the finale turns to it)
+  const trains = createTrains(scene);
+  const lampTint = new THREE.Color();
+  // [lighting] base light levels per time of day, so the tunnel wash can blend from and back to them
+  const hemiSky = new THREE.Color(), hemiGround = new THREE.Color(), SODIUM = new THREE.Color('#ffb35a'), SODIUM_LOW = new THREE.Color('#3a2410');
+  let hemiI = 0.1, keyI = 0.2;
 
   // ---------------------------------------------------------------- quality
   let quality = { buildings: 1, extras: true, cull: 380 };
   function applyQuality(qq) {
     quality = { ...quality, ...qq };
-    buildings.count = Math.round(B_COUNT * quality.buildings);
-    for (const sm of signMeshes) sm.count = buildings.count;
+    tokyo.applyQuality(quality);
     pools.visible = streaks.visible = quality.extras;
+    // [lighting] real screen-space reflections replace the additive streak decals (kept on LOW, where SSR is off)
+    reflectOn = !!quality.reflect;
+    if (reflectOn) streaks.visible = false;
+    tailStreaks.visible = !reflectOn;
     searchlights.visible = quality.extras && !!(TIMES[cfg.time] || TIMES.dusk).searchlights;
   }
   function precompile(r) {
@@ -526,6 +420,9 @@ export function createWorld(renderer, initialCfg) {
       sm.uGlow.value.set(T.glow);
       sm.uFogC.value.set(T.fog);
       sm.uStars.value = T.stars;
+      // [lighting] clouds lit from below by the city: the time's horizon glow warmed by sodium light
+      sm.uCityGlow.value.set(T.glow).lerp(new THREE.Color(T.windows[1]), 0.35);
+      sm.uCloud.value = T.clouds != null ? T.clouds : 0.7;
       scene.fog.color.set(T.fog);
       U.uFogColor.value.set(T.fog);
       hemi.color.set(T.hemi[0]);
@@ -533,6 +430,7 @@ export function createWorld(renderer, initialCfg) {
       hemi.intensity = T.hemi[2] * 0.3;
       key.color.set(T.key[0]);
       key.intensity = T.key[1] * 0.6;
+      hemiSky.copy(hemi.color); hemiGround.copy(hemi.groundColor); hemiI = hemi.intensity; keyI = key.intensity;
       const cu = celestial.material.uniforms;
       cu.uColor.value.set(T.body.color);
       cu.uGlowC.value.set(T.glow).multiplyScalar(0.8);
@@ -540,10 +438,13 @@ export function createWorld(renderer, initialCfg) {
       celestial.scale.setScalar(T.body.size * 3);
       celestial.position.set(-140, T.body.y + 40, -1500);
       celestial.lookAt(0, T.body.y * 0.4, 0);
-      T.windows.forEach((c, i) => { bMat.uniforms.uWin.value[i].set(c); farMat.uniforms.uWin.value[i].set(c); });
+      T.windows.forEach((c, i) => { for (const fm of tokyoFar.materials) fm.uniforms.uWin.value[i].set(c); });
+      tokyo.applyTime(T);
       lampColors[0].set(T.windows[1]).lerp(new THREE.Color('#ffffff'), 0.35);
       lampColors[1].set(T.windows[2]).lerp(new THREE.Color('#ffffff'), 0.35);
       layoutLamps();
+      // [lighting] reflection fallback: rays that leave the top of the screen see the sky above (zenith/horizon mix)
+      roadState.fallback.set(T.horizon).lerp(new THREE.Color(T.zenith), 0.55).multiplyScalar(0.6);
       if (envRT) envRT.dispose();
       envRT = neonEnvironment(renderer, { horizon: T.horizon, zenith: T.zenith, glow: T.glow, a: '#00f0ff', b: '#ff2bd6', c: T.windows[0] });
       scene.environment = envRT.texture;
@@ -562,11 +463,6 @@ export function createWorld(renderer, initialCfg) {
     cfg._applied = true;
   }
 
-  // initial building matrices
-  for (let i = 0; i < B_COUNT; i++) writeBuilding(i);
-  buildings.instanceMatrix.needsUpdate = true;
-  for (const sm of signMeshes) sm.instanceMatrix.needsUpdate = true;
-  bGeo.attributes.aSeed.needsUpdate = true;
   applyConfig(cfg);
 
   // ---------------------------------------------------------------- per-frame
@@ -577,14 +473,29 @@ export function createWorld(renderer, initialCfg) {
   let lastZ = 0;
   let blinkClock = 0;
 
-  let wetNow = 0, frameNo = 0;
+  let wetNow = 0, frameNo = 0, tunNow = 0;
   function update(sim, dt, fx) {
     frameNo++;
     {
       const raining = !!(WEATHER[cfg.weather] || WEATHER.clear).rain;
       const target = raining && !sim.tunnelAt(sim.S.z) ? 1 : 0;
       wetNow += (target - wetNow) * Math.min(1, (dt || 0.016) * 4);
-      if (raining) { roadMat.roughness = 0.85 - 0.3 * wetNow; roadMat.envMapIntensity = 0.45 + 0.45 * wetNow; }
+      if (raining) roadMat.roughness = 0.85 - 0.3 * wetNow;
+      // [lighting] road wetness for the post chain's reflections: a damp night (puddles only), soaked in rain,
+      // dry but traffic-polished asphalt inside tunnels (the ceiling lamps still streak softly in it).
+      // The env-map sheen drops when the real reflection is on.
+      tunNow += ((sim.tunnelAt(sim.S.z) ? 1 : 0) - tunNow) * Math.min(1, (dt || 0.016) * 3);
+      roadState.wet = (raining ? 0.28 + 0.72 * wetNow : 0.28) * (1 - 0.4 * tunNow);
+      roadState.z = sim.S.z;
+      // [lighting] inside a tunnel the sky light is cut off and the ceiling's sodium lamps wash walls and road warm.
+      // Kept moderate (2.6): a brighter wash flattened the tube into one orange tone; this leaves the lamp rows reading.
+      hemi.color.copy(hemiSky).lerp(SODIUM, tunNow);
+      hemi.groundColor.copy(hemiGround).lerp(SODIUM_LOW, tunNow);
+      hemi.intensity = hemiI + (2.6 - hemiI) * tunNow;
+      key.intensity = keyI * (1 - tunNow);
+      roadMat.envMapIntensity = (raining ? 0.45 + 0.45 * wetNow : 0.45) * (reflectOn ? 0.3 : 1);
+      // the bay is a studio floor: broad soft highlights only (no spot glare at any orbit angle)
+      roadMinRough.value = fx.view === 'showroom' ? 0.72 : reflectOn ? (raining ? 0.32 + 0.13 * (1 - wetNow) : 0.45) : 0.22;
     }
     const S = sim.S;
     const dz = S.z - lastZ;
@@ -596,68 +507,36 @@ export function createWorld(renderer, initialCfg) {
     const hillAhead = sim.hillAt(S.z + 90);
     U.uCurve.value += (curveAhead * CURVE_K - U.uCurve.value) * Math.min(1, dt * 2.5);
     U.uHill.value += (hillAhead * HILL_K - U.uHill.value) * Math.min(1, dt * 2.0);
-    heading += sim.curveAt(S.z) * dz * 0.0016;
+    heading = C1.headingAt(S.s); // real bearing of travel: landmarks, skyline and sky stay where they really are
     far.rotation.y = heading;
     sky.rotation.y = heading;
     far.position.y = -U.uHill.value / HILL_K * 18;
 
-    // floating origin for props
-    if (S.z - base > 4000) {
-      base += 4000;
-      for (let i = 0; i < B_COUNT; i++) writeBuilding(i);
-      buildings.instanceMatrix.needsUpdate = true;
-      for (const sm of signMeshes) sm.instanceMatrix.needsUpdate = true;
-    }
 
     // scrolling surfaces
     const tz = S.z / 24;
     roadTex.map.offset.y = tz % 1;
     roadTex.rough.offset.y = tz % 1;
     for (const m of kerbMats) m.emissiveMap.offset.y = (S.z / 6) % 1;
-    ground.material.emissiveMap.offset.y = (S.z / 16) % 1;
-    posts.position.z = S.z % POST_GAP;
     lampGroup.position.z = S.z % lampPeriod;
+    layoutLamps(S);
+    CITY.uLampPhase.value = lampGroup.position.z;
+    tokyo.setLamp(lampTint.copy(lampColors[0]).lerp(LED_WHITE, lampKindAt(S.s) === 'led' ? 0.75 : 0));
 
-    // city
-    cityGroup.position.z = S.z - base;
-    let dirty = false;
-    for (let i = 0; i < B_COUNT; i++) {
-      if (B[i].z < S.z - NEAR - 30) {
-        rollBuilding(B[i], B[i].z + SPAN);
-        writeBuilding(i);
-        dirty = true;
-      }
-    }
-    if (dirty) {
-      buildings.instanceMatrix.needsUpdate = true;
-      for (const sm of signMeshes) sm.instanceMatrix.needsUpdate = true;
-      bGeo.attributes.aSeed.needsUpdate = true;
-    }
-    for (const b of boards) {
-      if (b.z < S.z - 30) rollBoard(b, b.z + SPAN + rnd() * 80);
-      b.g.position.set(b.x, 0, -(b.z - S.z));
-    }
-    routeAt = sim.routeAt;
+    // the real road: JCT gantries and the real tunnels (track/c1.js via the sim)
+    if (S.jct && S.jct !== gantryFor) drawGantry(S.jct);
     gantries[0].z = S.nextJunction;
-    gantries[1].z = S.nextJunction - 700 > S.z - 30 ? S.nextJunction - 700 : S.nextJunction + SECTOR - 700;
-    for (const g of gantries) g.g.position.set(0, 0, -(g.z - S.z));
-    // the tunnel sits right after the most recent junction (or the upcoming one)
-    const lastJ = S.nextJunction - SECTOR;
-    const tunZ = S.z < lastJ + TUNNEL + 40 && lastJ > 0 ? lastJ : S.nextJunction;
-    tunnel.position.set(0, 0, -(tunZ - S.z));
-    tunnel.visible = !S.finale;
-    carpet.visible = !!S.finale;
-    // inside the tunnel, rebuild the city ahead for the route just chosen (hidden by the walls)
-    if (lastJ > 0 && S.z > lastJ + 25 && S.z < lastJ + TUNNEL && lastReroute !== lastJ) {
-      lastReroute = lastJ;
-      for (let i = 0; i < B_COUNT; i++) if (B[i].z > lastJ + TUNNEL - 10) { rollBuilding(B[i], B[i].z); writeBuilding(i); }
-      for (const b of B) if (b.z > S.z - 40 && b.z < lastJ + TUNNEL - 10) b.h = Math.min(b.h, 0.01);
-      for (let i = 0; i < B_COUNT; i++) writeBuilding(i);
-      buildings.instanceMatrix.needsUpdate = true;
-      for (const sm of signMeshes) sm.instanceMatrix.needsUpdate = true;
-      bGeo.attributes.aSeed.needsUpdate = true;
-      viaduct.setVisible(sim.routeAt(S.z + 300) === 'expressway');
+    gantries[1].z = S.nextJunction - 500 > S.z - 30 ? S.nextJunction - 500 : -1e6;
+    for (const g of gantries) {
+      g.g.visible = g.z > S.z - 60 && !S.finale; g.g.position.set(0, 0, -(g.z - S.z));
+      const inTube = g.g.visible && tokyo.tunnelAt(sim.trackS(g.z));
+      g.frame.visible = !inTube; g.panel.position.y = inTube ? -4.15 : 0;
     }
+    const tn = sim.tunnelNear(S.z);
+    tokyo.update(S, sim, S.finale ? null : tn);
+    tokyoFar.update(S.s, U.uTime.value);
+    trains.update(S, tokyo.deckAt, U.uTime.value, quality.extras && !S.finale);
+    carpet.visible = !!S.finale;
 
     // shards
     let si = 0;
@@ -679,7 +558,6 @@ export function createWorld(renderer, initialCfg) {
     shardGlow.instanceColor.needsUpdate = true;
 
     searchlights.update(U.uTime.value);
-    viaduct.update(S, U.uTime.value);
 
     // traffic
     tTrails.begin();
@@ -1014,5 +892,5 @@ export function createWorld(renderer, initialCfg) {
     if (envRT) envRT.dispose();
   }
 
-  return { scene, camera, update, applyConfig, applyQuality, precompile, resize, burst, dispose, get config() { return cfg; } };
+  return { scene, camera, update, applyConfig, applyQuality, precompile, resize, burst, dispose, get config() { return cfg; }, road: roadState };
 }
