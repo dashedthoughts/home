@@ -31,9 +31,10 @@ Everything below goes live about a minute after you commit it (GitHub web: open 
 | `index.html`, `assets/` | the built site (do not edit by hand) |
 | `cases/` | case-study media: deck pages, PDFs, demo video |
 | `photos/` | the photo strip |
+| `media/arcade/` | one capture per game for the arcade cabinets (`<game>.jpg`, 16:9) |
 | `resume.pdf`, `site.json` | résumé and links (see above) |
 
-Routes: `#/` home · `#/p/<slug>` case study · `#/play` REDLINE · `#/chill` Night Shift · `#/system` design system.
+Routes: `#/` home · `#/p/<slug>` case study · `#/arcade` the arcade · `#/arcade/<game>` one game · `#/play` REDLINE · `#/chill` Night Shift · `#/system` design system.
 
 ## REDLINE
 A night drive through an original Midnight-Tokyo-style megacity. Five data shards open one case file; ten files end the run at the lookout, and whoever is in front at that moment wins.
