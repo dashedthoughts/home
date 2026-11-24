@@ -10,7 +10,7 @@ export const LEVELS = {
   1: { name: 'EASY', react: [28, 40], block: 0.22, guess: 0.2, guard: 0.1, read: 0, whiff: 0, aa: 0.12, punish: 0, tech: 0.03, confirm: 0, think: [20, 34], reversal: 0.03, throwBias: 0.04, special: 0.55, combo: 0.35 },
   2: { name: 'NORMAL', react: [13, 19], block: 0.72, guess: 0.55, guard: 0.6, read: 0.75, whiff: 0.55, aa: 0.55, punish: 0.7, tech: 0.18, confirm: 0.55, think: [8, 15], reversal: 0.14, throwBias: 0.12, special: 0.85, combo: 0.75 },
   3: { name: 'HARD', react: [9, 13], block: 0.87, guess: 0.64, guard: 0.72, read: 0.9, whiff: 0.78, aa: 0.78, punish: 0.9, tech: 0.34, confirm: 0.88, think: [5, 11], reversal: 0.22, throwBias: 0.16, special: 1, combo: 0.9 },
-  4: { name: 'RIVAL', react: [6, 9], block: 0.94, guess: 0.72, guard: 0.84, read: 1, whiff: 0.9, aa: 0.9, punish: 1, tech: 0.6, confirm: 0.97, think: [4, 8], reversal: 0.3, throwBias: 0.22, special: 1, combo: 1 },
+  4: { name: 'RIVAL', react: [6, 9], block: 0.94, guess: 0.72, guard: 0.88, read: 1, whiff: 0.9, aa: 0.9, punish: 1, tech: 0.7, confirm: 0.97, think: [4, 8], reversal: 0.3, throwBias: 0.22, special: 1, combo: 1 },
 };
 const INPUT = { L5: B.LP, H5: B.HP, L2: B.D | B.LP, H2: B.D | B.HP, S: B.SP, fS: F | B.SP, bS: BK | B.SP, dS: B.D | B.SP, jS: B.SP, Lj: B.LP, Hj: B.HP, EX: B.SP | B.HP, SU: B.LP | B.HP | B.SP, TH: B.LP | B.HP };
 
@@ -205,6 +205,7 @@ export function aiInput(ai, S, side) {
   if (band === 'close') w.throw = (w.throw || 0) + Math.min(3, (me.blocks || 0) * L.throwBias * 2);
   if (o.st === 'down' || o.st === 'rise') { ai.hold = dist > P.pref[1] ? F : 0; return out(ai.hold); }
   if (me.meter >= 1000 && w.SU == null && P.superAfter) w.combo = (w.combo || 0) + 1;
+  if (me.id === 'suzu' && op.id === 'sayo' && dist < 280) { w.S = (w.S || 0) * 0.3; w.dS = (w.dS || 0) + 0.8; w.H2 = (w.H2 || 0) + 0.4; } // her slide goes under bolts at this range
   if (me.id === 'suzu' && S.proj.some((p) => p.owner === side && p.kind === 'bolt')) { w.S = 0; w.EXb = 0; }
   if (me.id === 'suzu' && S.proj.some((p) => p.owner === side && p.kind === 'mine')) w.dS = 0;
   if (me.meter < 500) w.EXb = 0;

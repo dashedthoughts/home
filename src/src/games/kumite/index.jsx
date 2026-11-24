@@ -79,9 +79,8 @@ function TouchPad({ input, onPause, portrait }) {
       </div>
       <div className="nk-btns">
         <div className="nk-btns__small">{small.map(([k, b]) => <button key={k} type="button" className={'nk-tb nk-tb--s' + (held[k] ? ' is-on' : '')} onPointerDown={press(b, k)} onPointerUp={release(b, k)} onPointerCancel={release(b, k)}>{k}</button>)}</div>
-        <div className="nk-btns__big">{B3.map(([k, b, l]) => <button key={k} type="button" aria-label={l} className={'nk-tb nk-tb--' + k + (held[k] ? ' is-on' : '')} onPointerDown={press(b, k)} onPointerUp={release(b, k)} onPointerCancel={release(b, k)}>{k}</button>)}</div>
+        <div className="nk-btns__big">{B3.map(([k, b, l]) => <button key={k} type="button" aria-label={l} className={'nk-tb nk-tb--' + k + (held[k] ? ' is-on' : '')} onPointerDown={press(b, k)} onPointerUp={release(b, k)} onPointerCancel={release(b, k)}><b>{k}</b><small>{l}</small></button>)}</div>
       </div>
-      <button type="button" className="nk-touch__pause" onClick={onPause} aria-label="Pause">II</button>
     </div>
   );
 }
@@ -89,6 +88,7 @@ function TouchPad({ input, onPause, portrait }) {
 // ---------------------------------------------------------------- move list
 function MoveList({ id, onClose, onPick }) {
   const ch = FIGHTERS[id];
+  const [frames, setFrames] = useState(false);
   return (
     <div className="nk-panel nk-moves" role="dialog" aria-label={`${ch.name} move list`}>
       <header className="nk-panel__head">
@@ -96,7 +96,8 @@ function MoveList({ id, onClose, onPick }) {
         <div className="nk-tabs">{ROSTER.map((r) => <button key={r} type="button" className={r === id ? 'is-on' : ''} onClick={() => onPick(r)} autoFocus={r === id}>{FIGHTERS[r].name}</button>)}<button type="button" onClick={onClose} data-back>Back</button></div>
       </header>
       <p className="nk-help">f = toward the opponent, b = away, d = down. L / H / S are Light, Heavy, Special. Light chains into Heavy, Heavy cancels into a special on contact, a special can cancel into the super.</p>
-      <div className="nk-movetable" role="table">
+      <button type="button" className="nk-framesbtn" onClick={() => setFrames(!frames)} aria-pressed={frames}>{frames ? 'Hide frame data' : 'Show frame data'}</button>
+      <div className={'nk-movetable' + (frames ? ' show-frames' : '')} role="table">
         <div className="nk-mrow nk-mrow--h" role="row"><span>Move</span><span>Input</span><span>Dmg</span><span>Frames</span><span>Hits</span><span>On block</span></div>
         {MOVE_ORDER.filter((k) => ch.moves[k]).map((k) => {
           const m = ch.moves[k]; const adv = advantage(m, false);
@@ -104,11 +105,11 @@ function MoveList({ id, onClose, onPick }) {
           return (
             <div className="nk-mrow" role="row" key={k}>
               <span><b>{m.name}</b><small>{MOVE_NOTE[k] || props.join(', ')}</small></span>
-              <span className="nk-kbd">{INPUT_OF[k]}</span>
-              <span>{totalDmg(m) || '-'}</span>
-              <span className="nk-mono">{m.ac ? `${m.st + 1} / ${m.ac} / ${m.rc}` : `${m.st} / - / ${m.rc}`}</span>
-              <span>{m.ac || m.proj || m.grab ? HEIGHT[m.proj ? m.proj.h : m.h] : '-'}</span>
-              <span className="nk-mono">{adv == null ? '-' : (adv > 0 ? '+' : '') + adv}</span>
+              <span className="nk-kbd" data-k="Input">{INPUT_OF[k]}</span>
+              <span data-k="Dmg">{totalDmg(m) || '-'}</span>
+              <span className="nk-mono" data-k="Frames">{m.ac ? `${m.st + 1} / ${m.ac} / ${m.rc}` : `${m.st} / - / ${m.rc}`}</span>
+              <span data-k="Hits">{m.ac || m.proj || m.grab ? HEIGHT[m.proj ? m.proj.h : m.h] : '-'}</span>
+              <span className="nk-mono" data-k="On block">{adv == null ? '-' : (adv > 0 ? '+' : '') + adv}</span>
             </div>
           );
         })}
@@ -120,7 +121,7 @@ function MoveList({ id, onClose, onPick }) {
 }
 
 // ---------------------------------------------------------------- settings
-function Settings({ settings, setSettings, keys, setKeys, onClose, input }) {
+function Settings({ settings, setSettings, keys, setKeys, onClose, input, touch }) {
   const [wait, setWait] = useState(null);
   useEffect(() => {
     if (!wait) return undefined;
@@ -142,14 +143,14 @@ function Settings({ settings, setSettings, keys, setKeys, onClose, input }) {
     <div className="nk-panel nk-settings" role="dialog" aria-label="Settings">
       <header className="nk-panel__head"><b>SETTINGS</b></header>
       <div className="nk-set">
-        <label>CPU level<span className="nk-seg">{[1, 2, 3].map((l) => <button key={l} type="button" className={settings.level === l ? 'is-on' : ''} onClick={() => set({ level: l })}>{LEVELS[l].name}</button>)}</span></label>
+        <label>CPU level<span className="nk-seg">{[1, 2, 3].map((l) => <button key={l} type="button" autoFocus={l === settings.level} className={settings.level === l ? 'is-on' : ''} onClick={() => set({ level: l })}>{LEVELS[l].name}</button>)}</span></label>
         <label>Music<span className="nk-seg">{[true, false].map((v) => <button key={String(v)} type="button" className={settings.music === v ? 'is-on' : ''} onClick={() => set({ music: v })}>{v ? 'ON' : 'OFF'}</button>)}</span></label>
         <label>Sound<span className="nk-seg">{[0, 0.4, 0.8, 1].map((v) => <button key={v} type="button" className={settings.sfx === v ? 'is-on' : ''} onClick={() => set({ sfx: v })}>{v === 0 ? 'OFF' : Math.round(v * 100) + '%'}</button>)}</span></label>
         <label>Effects<span className="nk-seg">{['full', 'lite'].map((v) => <button key={v} type="button" className={settings.fx === v ? 'is-on' : ''} onClick={() => set({ fx: v })}>{v.toUpperCase()}</button>)}</span></label>
         <label>Shake and flashes<span className="nk-seg">{[true, false].map((v) => <button key={String(v)} type="button" className={settings.shake === v ? 'is-on' : ''} onClick={() => set({ shake: v })}>{v ? 'ON' : 'OFF'}</button>)}</span></label>
         <label>Touch controls<span className="nk-seg">{['auto', 'on', 'off'].map((v) => <button key={v} type="button" className={settings.touch === v ? 'is-on' : ''} onClick={() => set({ touch: v })}>{v.toUpperCase()}</button>)}</span></label>
       </div>
-      <div className="nk-keys">
+      {!touch && <div className="nk-keys">
         {[0, 1].map((p) => (
           <div key={p} className="nk-keys__col">
             <b>{p ? 'PLAYER 2' : 'PLAYER 1'} KEYS</b>
@@ -163,9 +164,10 @@ function Settings({ settings, setSettings, keys, setKeys, onClose, input }) {
             ))}
           </div>
         ))}
-      </div>
+      </div>}
+      {touch && <p className="nk-help">On a touch screen: the pad on the left moves, LIGHT / HEAVY / SPECIAL attack, and THROW, EX and SUPER press the button combinations for you.</p>}
       <p className="nk-help">Gamepads use the standard layout: X light, Y heavy, B special, A or LB throw, RB EX, triggers super, Start pauses.</p>
-      <div className="nk-row"><button type="button" className="nk-btn nk-btn--ghost" onClick={() => setKeys(JSON.parse(JSON.stringify(DEFAULT_KEYS)))}>Reset keys</button><button type="button" className="nk-btn" onClick={onClose} autoFocus>Done</button></div>
+      <div className="nk-row">{!touch && <button type="button" className="nk-btn nk-btn--ghost" onClick={() => setKeys(JSON.parse(JSON.stringify(DEFAULT_KEYS)))}>Reset keys</button>}<button type="button" className="nk-btn" onClick={onClose}>Done</button></div>
     </div>
   );
 }
@@ -377,6 +379,7 @@ export default function NeonKumite({ onExit }) {
 
   // ---------- render
   const showTouch = screen === 'fight' && !paused && !overlay && (settings.touch === 'on' || (settings.touch === 'auto' && coarse)) && mode !== 'attract';
+  if (eng.current) eng.current.R.touch = (settings.touch === 'on' || (settings.touch === 'auto' && coarse)) && mode !== 'attract';
   const E = eng.current;
   const ladder = arcade ? arcade.ladder : [];
   const p1ch = FIGHTERS[pick.p1];
@@ -398,7 +401,7 @@ export default function NeonKumite({ onExit }) {
             <button type="button" className="nk-btn nk-btn--ghost" onClick={() => setOverlay('settings')}>Settings</button>
             <button type="button" className="nk-btn nk-btn--ghost" onClick={onExit} data-back>Exit to arcade</button>
           </nav>
-          <p className="nk-keyhint">P1: WASD move · J light · K heavy · L special · J+K throw · K+L EX · J+K+L super · Esc pause</p>
+          {!coarse && <p className="nk-keyhint">P1: WASD move · J light · K heavy · L special · J+K throw · K+L EX · J+K+L super · Esc pause</p>}
         </div>
       )}
 
@@ -509,10 +512,10 @@ export default function NeonKumite({ onExit }) {
         </div>
       )}
       {overlay === 'moves' && <div className="nk-ovl is-top" data-menu><MoveList id={movesId} onPick={setMovesId} onClose={() => setOverlay(null)} /></div>}
-      {overlay === 'settings' && <div className="nk-ovl is-top" data-menu><Settings settings={settings} setSettings={setSettings} keys={keys} setKeys={setKeys} input={input.current} onClose={() => setOverlay(null)} /></div>}
+      {overlay === 'settings' && <div className="nk-ovl is-top" data-menu><Settings touch={coarse} settings={settings} setSettings={setSettings} keys={keys} setKeys={setKeys} input={input.current} onClose={() => setOverlay(null)} /></div>}
 
       {showTouch && <TouchPad input={input.current} portrait={portrait} onPause={() => togglePause()} />}
-      {screen === 'fight' && !paused && !showTouch && <button type="button" className="nk-pausebtn" onClick={() => togglePause()} aria-label="Pause">II</button>}
+      {screen === 'fight' && !paused && !overlay && <button type="button" className="nk-pausebtn" onClick={() => togglePause()} aria-label="Pause">II</button>}
       {portrait && !hintGone && (screen === 'title' || (screen === 'fight' && !paused && !overlay)) && <button type="button" className="nk-rotate" onClick={() => setHintGone(true)}>Rotate your phone for a better view ✕</button>}
     </div>
   );

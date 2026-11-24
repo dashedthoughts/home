@@ -56,7 +56,7 @@ export function solve(L, p) {
   J.neck = [hx + up[0] * L.torso, hy + up[1] * L.torso];
   const ha = lean + (p.head || 0) * D2R;
   J.headA = ha;
-  J.head = [J.neck[0] + Math.sin(ha) * (L.neck + L.head * 1.02), J.neck[1] + Math.cos(ha) * (L.neck + L.head * 1.02)];
+  J.head = [J.neck[0] + Math.sin(ha) * (L.neck + L.head * 1.1), J.neck[1] + Math.cos(ha) * (L.neck + L.head * 1.1)];
   const sh = L.chest * 0.18;
   J.shN = [J.neck[0] - up[0] * 4 + fw[0] * sh, J.neck[1] - up[1] * 4 + fw[1] * sh];
   J.shF = [J.neck[0] - up[0] * 5 - fw[0] * sh, J.neck[1] - up[1] * 5 - fw[1] * sh];
@@ -209,7 +209,7 @@ function torso(ctx, L, J, col, shd, ink) {
   return { P, ux, uy, fx, fy };
 }
 function headShape(ctx, L, J, look, id, t) {
-  const r = L.head * 1.16; const [x, y] = J.head; const a = J.headA;
+  const r = L.head * 1.26; const [x, y] = J.head; const a = J.headA;
   ctx.save(); ctx.translate(x, y); ctx.rotate(-a);
   const skin = L.skin, skinD = shadeOf(L.skin);
   const ink = L.ink;

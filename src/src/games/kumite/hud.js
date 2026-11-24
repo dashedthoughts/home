@@ -27,7 +27,7 @@ function meter(ctx, x, y, w, h, v, col, flip, t) {
   ctx.fillStyle = full ? (Math.sin(t * 10) > 0 ? '#ffffff' : col) : col; ctx.globalAlpha = full ? 1 : 0.85; ctx.fillRect(fx, y, w * frac, h); ctx.globalAlpha = 1;
   ctx.fillStyle = '#0b0b10'; ctx.fillRect(x + w / 2 - 1, y, 2, h);
   ctx.strokeStyle = '#0b0b10'; ctx.lineWidth = 2.5; ctx.strokeRect(x, y, w, h); ctx.strokeStyle = 'rgba(255,255,255,0.4)'; ctx.lineWidth = 1; ctx.strokeRect(x, y, w, h);
-  const fs = Math.max(11, h * 1.15);
+  const fs = Math.max(12, h * 1.3);
   ctx.font = `700 ${fs}px Rajdhani, sans-serif`; ctx.textBaseline = 'bottom'; ctx.textAlign = flip ? 'right' : 'left';
   const label = full ? 'SUPER  L+H+S' : half ? 'EX  S+H' : 'METER';
   ctx.lineWidth = 3; ctx.strokeStyle = '#0b0b10'; ctx.strokeText(label, flip ? x + w : x, y - 2); ctx.fillStyle = full ? '#fcee0a' : half ? '#ffffff' : '#a29fb8'; ctx.fillText(label, flip ? x + w : x, y - 2);
@@ -48,7 +48,7 @@ export function drawHud(ctx, S, R, opts) {
     const x = flip ? W - pad - bw : pad;
     bar(ctx, x, by, bw, bh, Math.max(0, fr.hpShown), fr.hpTrail, ch.color, flip);
     // name plate
-    const ns = narrow ? 13 : Math.max(13, bh * 0.95);
+    const ns = narrow ? 13 : Math.max(14, bh * 0.95);
     ctx.save(); ctx.textBaseline = 'top'; ctx.textAlign = flip ? 'right' : 'left'; ctx.lineJoin = 'round';
     const nx = flip ? x + bw : x;
     ctx.font = `700 ${ns}px Rajdhani, sans-serif`; ctx.lineWidth = 3; ctx.strokeStyle = '#0b0b10';
@@ -65,7 +65,8 @@ export function drawHud(ctx, S, R, opts) {
     ctx.restore();
     // super meter: bottom corners in landscape, under the name in portrait
     const mw = narrow ? bw * 0.8 : Math.min(bw * 0.55, 240); const mh = narrow ? 7 : Math.max(8, bh * 0.5);
-    const my = R.portrait ? by + bh + ns + 26 : H - pad - mh - 2;
+    const top = R.portrait || (R.touch && H < 560); // with touch controls the bottom corners belong to the thumbs
+    const my = top ? by + bh + ns + 26 : H - pad - mh - 2;
     meter(ctx, flip ? W - pad - mw : pad, my, mw, mh, fr.meterShown, ch.color, flip, t);
   });
   // timer
@@ -79,7 +80,7 @@ export function drawHud(ctx, S, R, opts) {
   ctx.restore();
   // combo counters
   for (let i = 0; i < 2; i++) {
-    const c = R.combo[i]; if (!c) continue;
+    const c = R.combo[i]; if (!c || S.phase === 'match') continue;
     const left = i === 0; const k = c.t;
     const x = left ? pad + 4 : W - pad - 4; const y = H * (R.portrait ? 0.24 : 0.3);
     const sz = Math.min(H * 0.09, narrow ? 34 : 56) * (k < 4 ? 1.25 - k * 0.06 : 1);

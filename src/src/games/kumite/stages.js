@@ -329,7 +329,7 @@ export function drawFront(ctx, st, cam, dt) {
   if (st.id === 'viaduct') {
     // foreground pier edge on the far left/right when the camera nears the walls
     const wx = (x) => (x - cam.x) * scale + W / 2;
-    for (const x of [-40, 1140]) { const sx = wx(x); if (sx > -120 * scale && sx < W + 120 * scale) { ctx.fillStyle = '#0a090e'; ctx.fillRect(sx - 60 * scale, 0, 120 * scale, H); ctx.fillStyle = '#16131d'; ctx.fillRect(sx - 60 * scale + (x < 0 ? 110 : 0) * scale, 0, 10 * scale, H); } }
+    for (const x of [-75, 1175]) { const sx = wx(x); if (sx > -120 * scale && sx < W + 120 * scale) { ctx.fillStyle = '#0a090e'; ctx.fillRect(sx - 60 * scale, 0, 120 * scale, H); ctx.fillStyle = '#16131d'; ctx.fillRect(sx - 60 * scale + (x < 0 ? 110 : 0) * scale, 0, 10 * scale, H); } } // kept outside the walls so a cornered fighter is never hidden
   }
   // vignette
   const v = ctx.createRadialGradient(W / 2, H * 0.55, Math.min(W, H) * 0.35, W / 2, H * 0.55, Math.max(W, H) * 0.75);

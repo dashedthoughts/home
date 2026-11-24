@@ -5,6 +5,7 @@ import { FIGHTERS, moveTotal } from './data.js';
 export const B = { U: 1, D: 2, L: 4, R: 8, LP: 16, HP: 32, SP: 64 };
 export const FPS = 60;
 export const STAGE_L = 0, STAGE_R = 1100, MAX_SEP = 500;
+const HOLD_SPREAD = 1.4, PUSH_PAD = 8; // PUSH_PAD keeps a visible gap between bodies, also in the corner
 const BUF = 6, COMBO_WIN = 3, CW = 10, JUG_MAX = 3, JUG_G = 0.56, TECH_WIN = 10;
 const INTRO_LEN = 110, INTRO_FIGHT = 76, ROUND_FRAMES = 60 * 60, KO_LEN = 190, TIMEOVER_LEN = 150;
 const STAND_ST = new Set(['idle', 'walk', 'crouch', 'guard']);
@@ -379,7 +380,8 @@ function updateGrab(S, a, d) {
   const t = a.sf;
   const path = a.grabBack ? BACK_HOLD : G.hold;
   const [dx, dy] = holdAt(path, t);
-  if (d.st === 'held') { d.x = clampX(a.x + a.face * dx, charOf(d).hw); d.y = dy; d.face = d.x > a.x ? -1 : 1; }
+  // hold positions are spread out so the two bodies read as two people, not one blob
+  if (d.st === 'held') { d.x = clampX(a.x + a.face * dx * HOLD_SPREAD, charOf(d).hw); d.y = dy; d.face = d.x > a.x ? -1 : 1; }
   // throw tech
   if (G.tech && d.st === 'held' && t <= TECH_WIN && d.ra.L <= t && d.ra.H <= t && Math.abs(d.ra.L - d.ra.H) < COMBO_WIN) {
     for (const [f, s] of [[a, -1], [d, 1]]) { f.st = 'tech'; f.sf = 0; f.pv = 7; f.pdir = s * Math.sign(d.x - a.x || a.face); f.y = 0; f.mv = null; }
@@ -658,7 +660,7 @@ function pushboxes(a, b) {
   const aBot = a.y + (isAir(a) ? 30 : 0), bBot = b.y + (isAir(b) ? 30 : 0);
   const aTop = a.y + pushTop(a), bTop = b.y + pushTop(b);
   if (!(aBot < bTop && bBot < aTop)) return;
-  const need = ca.hw + cb.hw; const dx = b.x - a.x;
+  const need = ca.hw + cb.hw + PUSH_PAD; const dx = b.x - a.x;
   if (Math.abs(dx) >= need) return;
   let s = Math.sign(dx); if (!s) s = a.face;
   const over = need - Math.abs(dx);

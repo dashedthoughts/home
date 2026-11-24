@@ -125,7 +125,8 @@ export function createRenderer(canvas) {
     // camera
     const [a, b] = S.f;
     const sep = Math.abs(a.x - b.x);
-    const gy = R.portrait ? Math.round(H * 0.6) : Math.round(H * 0.86);
+    // with touch controls in landscape, the floor line sits above the thumb band so the fighters stay clear of the buttons
+    const gy = R.portrait ? Math.round(H * 0.6) : Math.round(H * (R.touch && H < 560 ? 0.6 : 0.86));
     let vw = R.portrait ? Math.max(400, Math.min(740, sep + 190)) : Math.max(680, Math.min(860, sep + 320));
     let scale = Math.min(W / vw, gy / (R.portrait ? 310 : 370)) * cam.zoom;
     const half = W / scale / 2;
@@ -142,7 +143,8 @@ export function createRenderer(canvas) {
     const sup = R.superT > 0;
     if (sup) { ctx.fillStyle = `rgba(6,4,12,${Math.min(0.75, (60 - R.superT) / 8 * 0.75)})`; ctx.fillRect(-20, -20, W + 40, H + 40); if (!R.reduced) speedLines(ctx, W, H, R.superBy, R.t); }
     // reflections (floor), shadows
-    const order = S.f[0].st === 'atk' || S.f[0].st === 'grab' ? [1, 0] : [0, 1];
+    // the attacker is drawn on top, except during a hold, when the victim comes to the front so the throw reads
+    const order = S.f[0].st === 'held' ? [1, 0] : S.f[1].st === 'held' ? [0, 1] : S.f[0].st === 'atk' || S.f[0].st === 'grab' ? [1, 0] : [0, 1];
     if (st.reflect > 0 && !R.lowFx) {
       ctx.save(); ctx.beginPath(); ctx.rect(0, gy, W, H - gy); ctx.clip();
       for (const i of order) drawOne(S, i, toS, scale, st, true);

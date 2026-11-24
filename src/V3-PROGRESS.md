@@ -32,3 +32,9 @@ claude/vibrant-curie-0x7eb2 @ 1ad129b (main was published from it). Tag pushes a
 - REDLINE: track stage's report embedded in a new workflow script (`redline-v3b.js`); Light and City running in parallel, Review after.
 - Round 2 started: independent playtest critics for KUMITE and MACHI (then ITO, KAZE); findings go back to the builders.
 - Integrator notes for round 2: KAZE has a faint vertical paler band (tile seam) in the sky in two chapters.
+
+## 22:00 UTC — container restart, relaunch with a concurrency cap
+- The container restarted at ~21:56 (six agents each running headless Chromium; second restart of the session). Files survived; all tests pass; WIP committed (`1296dcd`) and the source snapshot pushed to the home branch as a backup.
+- RULE from now on: at most 3 agents at once, one Chromium each, always closed.
+- Integrator looked at the city pass (`w-city/r9-sheet.png`): geography right, picture still arcade (giant red trail ribbons, magenta sky, flat box buildings, green pickup fog). Wrote `scratchpad/ART-DIRECTION-2.md`: a realistic default TOKYO look. Light agent resumed as LOOK engineer, City agent resumed on facades first (both via SendMessage, context intact: ids a6d9e860ad1086c51, aa59423e14b1e4e96).
+- KUMITE round-2 fixer resumed (ad57f81de1bb8825d). Queue: MACHI fixer (a6bc7d6e2636e629e, critic report scratchpad/crit-machi.txt), then critics for ITO and KAZE (prompt: scratchpad/critic-prompt.txt), then REDLINE review.
