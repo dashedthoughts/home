@@ -50,6 +50,9 @@ export default function Nav() {
         <Link to="/play" className="nav__play">
           REDLINE ▸
         </Link>
+        <Link to="/arcade" className="nav__arcade">
+          ARCADE ◆
+        </Link>
         <Link to="/chill" className="nav__chill">
           NIGHT SHIFT ☾
         </Link>

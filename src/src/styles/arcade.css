@@ -1,0 +1,34 @@
+/* ---------- arcade hub + game host ---------- */
+.arcade { min-height: 100dvh; padding: calc(var(--sp-9) + var(--sp-4)) var(--gutter) var(--sp-9); max-width: var(--container); margin: 0 auto; }
+.arcade__title { font: 400 var(--fs-hero) / 0.9 var(--f-name); margin: var(--sp-2) 0 var(--sp-3); color: var(--signal); text-shadow: 6px 6px 0 var(--alert), -2px 0 var(--data); }
+.arcade__lede { max-width: 56ch; color: var(--ink-muted); font-size: var(--fs-body); }
+.arcade__note { margin-top: var(--sp-6); font: 400 var(--fs-hud) / 1.5 var(--f-mono); letter-spacing: 0.06em; color: var(--ink-dim); }
+.cabs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--sp-4); margin-top: var(--sp-6); }
+.cab { position: relative; display: grid; grid-template-rows: auto 1fr; text-decoration: none; color: var(--ink); background: var(--bg-panel); border: 1px solid color-mix(in srgb, var(--accent) 28%, #2a2738); overflow: hidden; transition: transform var(--t-move) var(--ease-snap), box-shadow var(--t-move), border-color var(--t-move); }
+.cab--lead { grid-column: span 2; grid-row: span 2; grid-template-rows: 1fr auto; }
+.cab:hover, .cab:focus-visible { transform: translateY(-3px); border-color: var(--accent); box-shadow: 0 24px 48px -28px var(--accent); }
+.cab__screen { display: grid; place-items: center; aspect-ratio: 16 / 9; background: radial-gradient(120% 100% at 50% 110%, color-mix(in srgb, var(--accent) 45%, #000) 0%, #0b0910 62%); position: relative; overflow: hidden; }
+.cab--lead .cab__screen { aspect-ratio: auto; min-height: 260px; }
+.cab__screen i { font: 900 clamp(3.2rem, 7vw, 5.5rem) / 1 'Noto Sans JP', var(--f-display); font-style: normal; color: var(--accent); text-shadow: 0 0 34px var(--accent); opacity: .9; }
+.cab__screen img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; transition: transform .6s var(--ease-snap); }
+.cab:hover .cab__screen img { transform: scale(1.04); }
+.cab__screen::after { content: ''; position: absolute; inset: 0; background: linear-gradient(180deg, transparent 55%, rgba(10, 8, 16, .82)); pointer-events: none; }
+.cab__no { position: absolute; left: 12px; bottom: 10px; z-index: 1; font: 400 var(--fs-hud) / 1 var(--f-mono); letter-spacing: var(--track-hud); color: var(--accent); }
+.cab__body { display: grid; gap: 6px; padding: var(--sp-4); align-content: start; }
+.cab__genre { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; font: 400 var(--fs-hud) / 1 var(--f-mono); letter-spacing: var(--track-hud); text-transform: uppercase; color: var(--accent); }
+.cab__genre em { font: 700 0.95rem / 1 'Noto Sans JP', sans-serif; font-style: normal; letter-spacing: 0.08em; opacity: .85; }
+.cab__title { font: 700 1.5rem / 1 var(--f-display); letter-spacing: 0.04em; }
+.cab--lead .cab__title { font-size: 2.2rem; }
+.cab__tag { color: var(--ink-muted); font-size: var(--fs-small); line-height: 1.5; }
+.cab__foot { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-top: 8px; padding-top: 10px; border-top: 1px solid rgba(255, 255, 255, .08); font: 400 0.6875rem / 1.3 var(--f-mono); letter-spacing: 0.06em; color: var(--ink-dim); }
+.cab__go { flex: none; font-weight: 700; font-size: var(--fs-hud); letter-spacing: var(--track-hud); color: var(--ink); }
+.cab:hover .cab__go, .cab:focus-visible .cab__go { color: var(--accent); }
+@media (max-width: 1000px) { .cabs { grid-template-columns: repeat(2, minmax(0, 1fr)); } .cab--lead { grid-row: auto; grid-template-rows: auto 1fr; } .cab--lead .cab__screen { aspect-ratio: 16 / 9; min-height: 0; } }
+@media (max-width: 560px) { .cabs { grid-template-columns: 1fr; gap: var(--sp-3); } .cab--lead { grid-column: auto; } .cab--lead .cab__title { font-size: 1.8rem; } }
+.gamehost { position: fixed; inset: 0; background: #07050c; z-index: 60; }
+.gamehost__stage { position: absolute; inset: 0; overflow: hidden; }
+.gamehost__loading, .gamehost__missing { position: absolute; inset: 0; display: grid; place-content: center; justify-items: center; gap: 10px; color: var(--ink); }
+.gamehost__loading b { font: 400 clamp(2.4rem, 8vw, 5rem) / 1 var(--f-name); color: var(--accent, var(--signal)); }
+.gamehost__loading span { font: 400 var(--fs-hud) / 1 var(--f-mono); letter-spacing: var(--track-hud); color: var(--ink-muted); animation: blink 1s steps(2) infinite; }
+html.is-gaming, html.is-gaming body { overflow: hidden; overscroll-behavior: none; }
+@media (prefers-reduced-motion: reduce) { .cab, .cab__screen img { transition: none; } .cab:hover .cab__screen img { transform: none; } .gamehost__loading span { animation: none; } }

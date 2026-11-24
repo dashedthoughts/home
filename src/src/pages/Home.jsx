@@ -7,6 +7,8 @@ import Ticker from '../components/Ticker.jsx';
 import HudHeader from '../components/HudHeader.jsx';
 import CaseCard from '../components/CaseCard.jsx';
 import PhotoStrip from '../components/PhotoStrip.jsx';
+import Cabinets from '../components/Cabinets.jsx';
+import { GAMES } from '../games/registry.js';
 import useReveal from '../lib/useReveal.js';
 import { getDecrypted } from '../lib/store.js';
 import {
@@ -146,8 +148,17 @@ export default function Home() {
         })}
       </section>
 
+      <section id="arcade" className="section">
+        <HudHeader index={2} title="THE ARCADE" meta={`${GAMES.length} GAMES · PLAYS IN YOUR BROWSER`} />
+        <p className="lede reveal">
+          Games built for this site: a night race on a Tokyo expressway, and a few smaller ones in
+          other genres. They run in the browser, on a laptop or a phone, with nothing to install.
+        </p>
+        <Cabinets />
+      </section>
+
       <section id="memes" className="section memes">
-        <HudHeader index={2} title="CERTIFIED MEMELORE" meta="SOURCE: u/dashedthoughts" />
+        <HudHeader index={3} title="CERTIFIED MEMELORE" meta="SOURCE: u/dashedthoughts" />
         <img className="reddit-neon" src="https://cdn.simpleicons.org/reddit/FF4500" alt="" loading="lazy" decoding="async" onError={(e) => (e.currentTarget.style.display = 'none')} />
         <div className="memes__body reveal">
           <p className="lede">
@@ -174,7 +185,7 @@ export default function Home() {
       </section>
 
       <section id="photos" className="section">
-        <HudHeader index={3} title="FRAMES I SHOT" meta="LIVE FEED // /photos" />
+        <HudHeader index={4} title="FRAMES I SHOT" meta="LIVE FEED // /photos" />
         <p className="lede reveal">
           When I&apos;m not mapping user journeys I&apos;m chasing light. Fresh shots land here straight from the camera
           roll.
@@ -183,7 +194,7 @@ export default function Home() {
       </section>
 
       <footer id="contact" className="section footer">
-        <HudHeader index={4} title="LET'S CHAT" meta="CHANNEL OPEN" />
+        <HudHeader index={5} title="LET'S CHAT" meta="CHANNEL OPEN" />
         <div className="terminal reveal">
           <p>
             <span className="caret-mark">&gt;</span> topic: anything product, Ferrari, or memelore

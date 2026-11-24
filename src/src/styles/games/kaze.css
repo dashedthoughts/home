@@ -1,0 +1,94 @@
+/* KAZE: ink on paper. The game draws on canvas; this styles the DOM layers (menus, haiku, touch). */
+.kz { --kz-paper: #efe8d5; --kz-ink: #17130f; --kz-ink2: #3d362e; --kz-red: #b8321e; --kz-serif: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, "Times New Roman", serif; --kz-jp: "Yu Mincho", "YuMincho", "Hiragino Mincho ProN", "Noto Serif JP", "Noto Serif CJK JP", "MS Mincho", "Noto Sans JP", serif;
+  position: absolute; inset: 0; overflow: hidden; background: var(--kz-paper); color: var(--kz-ink); font-family: var(--kz-serif); touch-action: none; user-select: none; -webkit-user-select: none; }
+.kz__cv { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+.kz button { font: inherit; color: inherit; }
+.kz-btn { display: block; width: 100%; text-align: left; background: rgba(239, 232, 213, 0.55); border: 0; border-left: 2px solid transparent; padding: 9px 14px; font-size: 1.02rem; letter-spacing: 0.01em; cursor: pointer; color: var(--kz-ink); transition: background 0.2s, border-color 0.2s, padding 0.2s; }
+.kz-btn:hover { background: rgba(239, 232, 213, 0.92); border-left-color: var(--kz-ink); padding-left: 18px; }
+.kz-btn:focus-visible, .kz-opt:focus-visible, .kz-key:focus-visible, .kz-seg button:focus-visible, .kz-pausebtn:focus-visible, .kz input:focus-visible { outline: 2px solid var(--kz-red); outline-offset: 2px; }
+.kz-btn--p { font-weight: 700; border-left-color: var(--kz-red); background: rgba(239, 232, 213, 0.85); }
+.kz-btn:disabled { opacity: 0.4; cursor: default; }
+.kz-title { position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: center; padding: 4vh 5vw; gap: 18px; max-width: 520px; background: linear-gradient(90deg, rgba(239, 232, 213, 0.8) 0%, rgba(239, 232, 213, 0.55) 70%, rgba(239, 232, 213, 0) 100%); }
+.kz-title__brand { display: grid; grid-template-columns: auto 1fr; align-items: center; column-gap: 18px; }
+.kz-title__kanji { grid-row: span 2; font: 700 clamp(4rem, 13vh, 7.5rem) / 1 var(--kz-jp); color: var(--kz-ink); text-shadow: 0 0 2px rgba(23, 19, 15, 0.5); }
+.kz-title__name { margin: 0; font: 400 clamp(1.8rem, 5vh, 2.6rem) / 1 var(--kz-serif); letter-spacing: 0.5em; }
+.kz-title__tag { margin: 6px 0 0; font-style: italic; font-size: 1rem; color: var(--kz-ink2); max-width: 26ch; }
+.kz-menu { display: flex; flex-direction: column; gap: 2px; max-width: 340px; }
+.kz-title__note { margin: 0; font-size: 0.88rem; font-style: italic; color: var(--kz-ink2); max-width: 36ch; }
+.kz-rotate { display: none; margin: 0; font-size: 0.85rem; color: var(--kz-ink2); }
+.kz-veil { position: absolute; inset: 0; display: grid; place-items: center; background: rgba(239, 232, 213, 0.72); padding: 16px; overflow-y: auto; }
+.kz-panel { background: rgba(244, 239, 226, 0.97); box-shadow: 0 0 0 1px rgba(23, 19, 15, 0.25), 0 18px 50px rgba(23, 19, 15, 0.18); padding: 22px 24px 20px; width: min(420px, 100%); display: flex; flex-direction: column; gap: 12px; max-height: calc(100% - 8px); overflow-y: auto; }
+.kz-panel--wide { width: min(640px, 100%); }
+.kz-h { margin: 0 0 4px; font: 400 1.35rem / 1.2 var(--kz-serif); display: flex; align-items: baseline; gap: 12px; }
+.kz-h span { font: 700 1.6rem / 1 var(--kz-jp); }
+.kz-muted { margin: 0; font-size: 0.9rem; color: var(--kz-ink2); font-style: italic; }
+.kz-stack { display: flex; flex-direction: column; gap: 2px; }
+.kz-stack--row { flex-direction: row; flex-wrap: wrap; gap: 8px; align-items: center; }
+.kz-stack--row .kz-btn { width: auto; }
+.kz-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 0.98rem; }
+.kz-row input[type=range] { width: 52%; accent-color: var(--kz-ink); }
+.kz-row input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--kz-ink); }
+.kz-seg { display: flex; gap: 2px; }
+.kz-seg button { border: 1px solid rgba(23, 19, 15, 0.35); background: transparent; padding: 5px 10px; cursor: pointer; font-size: 0.92rem; }
+.kz-seg button.is-on { background: var(--kz-ink); color: var(--kz-paper); }
+.kz-chapters { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.kz-chapters span { font-family: var(--kz-jp); margin-right: 6px; }
+.kz-ctl { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 22px; }
+.kz-ctl__r { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 0.94rem; border-bottom: 1px solid rgba(23, 19, 15, 0.1); padding: 3px 0; }
+.kz-key { min-width: 64px; border: 1px solid rgba(23, 19, 15, 0.5); background: var(--kz-ink); color: var(--kz-paper) !important; padding: 3px 8px; cursor: pointer; font-size: 0.85rem; }
+.kz-key.is-wait { background: var(--kz-red); }
+.kz-scroll { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 14px; }
+.kz-poem { margin: 0; padding: 12px 14px; border-left: 2px solid var(--kz-red); background: rgba(239, 232, 213, 0.6); }
+.kz-poem figcaption { font: 700 1.1rem / 1.2 var(--kz-jp); margin-bottom: 6px; }
+.kz-poem p { margin: 0; font-style: italic; line-height: 1.5; }
+.kz-poem small { display: block; margin-top: 6px; font-size: 0.78rem; color: var(--kz-ink2); }
+.kz-pausebtn { position: absolute; top: 12px; right: 12px; width: 40px; height: 40px; border: 1px solid rgba(23, 19, 15, 0.4); background: rgba(239, 232, 213, 0.75); font: 700 0.95rem / 1 var(--kz-serif); letter-spacing: 0.08em; cursor: pointer; z-index: 3; }
+.kz-haiku { position: absolute; right: 4vw; top: 50%; transform: translateY(-50%); width: min(440px, calc(100% - 32px)); background: rgba(244, 239, 226, 0.95); box-shadow: 0 0 0 1px rgba(23, 19, 15, 0.22), 0 18px 50px rgba(23, 19, 15, 0.15); padding: 20px 22px; display: flex; flex-direction: column; gap: 12px; animation: kz-in 0.9s ease both; }
+.kz-haiku__poem { min-height: 4.8em; font-size: 1.18rem; font-style: italic; line-height: 1.55; }
+.kz-haiku__poem p { margin: 0; animation: kz-in 0.8s ease both; }
+.kz-haiku__blank { opacity: 0.4; }
+.kz-haiku__opts { display: flex; flex-direction: column; gap: 4px; }
+.kz-opt { display: flex; gap: 12px; align-items: baseline; text-align: left; border: 0; background: rgba(239, 232, 213, 0.7); padding: 8px 12px; cursor: pointer; font-size: 1.02rem; font-style: italic; }
+.kz-opt:hover { background: rgba(23, 19, 15, 0.08); }
+.kz-opt b { font-style: normal; font-size: 0.8rem; min-width: 1.4em; height: 1.4em; display: inline-grid; place-items: center; background: var(--kz-ink); color: var(--kz-paper); }
+.kz-narr { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; background: rgba(239, 232, 213, 0.9); padding: 24px; text-align: center; animation: kz-in 1.2s ease both; }
+.kz-narr p { margin: 0; max-width: 34ch; font-size: clamp(1.15rem, 3.2vh, 1.6rem); font-style: italic; line-height: 1.5; animation: kz-in 1.6s 0.4s ease both; }
+.kz-narr small { font-size: 0.8rem; color: var(--kz-ink2); animation: kz-in 1s 1.6s ease both; }
+.kz-narr--end { background: rgba(239, 232, 213, 0.35); justify-content: flex-start; padding-top: 16vh; }
+.kz-narr--end p { animation: kz-in 2s ease both; }
+.kz-credits { position: absolute; inset: 0; background: rgba(239, 232, 213, 0.94); overflow: hidden; }
+.kz-credits__roll { position: absolute; left: 50%; top: 100%; transform: translateX(-50%); width: min(480px, calc(100% - 32px)); text-align: center; animation: kz-roll 26s linear forwards; display: flex; flex-direction: column; gap: 14px; }
+.kz-credits h2 { font: 400 2rem / 1 var(--kz-serif); letter-spacing: 0.4em; margin: 0; } .kz-credits h2 span { font-family: var(--kz-jp); font-weight: 700; letter-spacing: 0; margin-right: 10px; }
+.kz-credits h3 { margin: 24px 0 0; font: 400 1rem var(--kz-serif); letter-spacing: 0.3em; text-transform: uppercase; }
+.kz-credits p { margin: 0; font-style: italic; line-height: 1.5; }
+.kz-credits .kz-poem { text-align: left; }
+.kz-touch { position: absolute; inset: 0; pointer-events: none; z-index: 2; }
+.kz-touch > * { pointer-events: auto; touch-action: none; }
+.kz-stick { position: absolute; left: max(16px, 3vw); bottom: max(16px, 4vh); width: 124px; height: 124px; border-radius: 50%; background: rgba(23, 19, 15, 0.08); box-shadow: inset 0 0 0 1.5px rgba(23, 19, 15, 0.35); }
+.kz-stick__knob { position: absolute; left: 50%; top: 50%; width: 52px; height: 52px; margin: -26px 0 0 -26px; border-radius: 50%; background: rgba(23, 19, 15, 0.55); }
+.kz-pad { position: absolute; right: max(16px, 3vw); bottom: max(14px, 3vh); width: 188px; height: 200px; }
+.kz-tb { position: absolute; width: 62px; height: 62px; border-radius: 50%; border: 1.5px solid rgba(23, 19, 15, 0.55); background: rgba(239, 232, 213, 0.7); font-size: 0.82rem; font-weight: 700; color: var(--kz-ink); }
+.kz-tb:active { background: var(--kz-ink); color: var(--kz-paper); }
+.kz-tb--slash { right: 0; bottom: 64px; } .kz-tb--heavy { right: 64px; bottom: 128px; } .kz-tb--parry { right: 128px; bottom: 64px; } .kz-tb--dodge { right: 64px; bottom: 0; }
+.kz-tb--ctx { right: 0; bottom: 138px; width: 54px; height: 54px; border-color: var(--kz-red); font-size: 0.75rem; }
+.kz-heal { position: absolute; left: 16px; top: 70px; border: 1px solid rgba(23, 19, 15, 0.5); background: rgba(239, 232, 213, 0.75); padding: 5px 10px; font-size: 0.8rem; }
+@keyframes kz-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+.kz-haiku { animation-name: kz-in2; } @keyframes kz-in2 { from { opacity: 0; } to { opacity: 1; } }
+@keyframes kz-roll { from { transform: translate(-50%, 0); } to { transform: translate(-50%, calc(-100% - 100vh)); } }
+@media (max-width: 720px), (max-height: 480px) {
+  .kz-title { max-width: none; padding: 16px; gap: 10px; background: linear-gradient(180deg, rgba(239, 232, 213, 0.88) 0%, rgba(239, 232, 213, 0.7) 75%, rgba(239, 232, 213, 0) 100%); justify-content: flex-start; padding-top: 18px; }
+  .kz-title__kanji { font-size: 3.6rem; } .kz-btn { padding: 7px 12px; font-size: 0.96rem; }
+  .kz-ctl { grid-template-columns: 1fr; }
+  .kz-haiku { right: 16px; left: 16px; width: auto; top: auto; bottom: 16px; transform: none; padding: 14px 16px; gap: 8px; }
+  .kz-haiku__poem { font-size: 1.02rem; min-height: 0; }
+}
+@media (orientation: portrait) and (max-width: 600px) { .kz-rotate { display: block; } }
+@media (max-height: 480px) { .kz-title { flex-direction: row; flex-wrap: wrap; align-content: center; justify-content: flex-start; } .kz-title__note, .kz-title__tag { display: none; } .kz-menu { max-width: 300px; } }
+@media (prefers-reduced-motion: reduce) { .kz *, .kz *::before { animation-duration: 0.01ms !important; animation-delay: 0ms !important; transition: none !important; } .kz-credits__roll { animation: none; top: 8%; } }
+@media (max-height: 480px) and (orientation: landscape) {
+  .kz-pad { width: 150px; height: 160px; bottom: 8px; right: max(10px, 2vw); }
+  .kz-tb { width: 48px; height: 48px; font-size: 0.72rem; }
+  .kz-tb--slash { right: 0; bottom: 50px; } .kz-tb--heavy { right: 50px; bottom: 100px; } .kz-tb--parry { right: 100px; bottom: 50px; } .kz-tb--dodge { right: 50px; bottom: 0; }
+  .kz-tb--ctx { right: 0; bottom: 108px; width: 44px; height: 44px; }
+  .kz-stick { width: 104px; height: 104px; bottom: 10px; left: 10px; }
+}

@@ -36,6 +36,19 @@ Everything below goes live about a minute after you commit it (GitHub web: open 
 
 Routes: `#/` home · `#/p/<slug>` case study · `#/arcade` the arcade · `#/arcade/<game>` one game · `#/play` REDLINE · `#/chill` Night Shift · `#/system` design system.
 
+## The arcade
+`#/arcade` is a floor of original games. Each one is its own lazy chunk, so nothing downloads until someone opens it; all of them run on keyboard, touch and gamepad, and keep their saves in the browser.
+
+| Game | What it is |
+|---|---|
+| **REDLINE** `#/play` | the night race (below) |
+| **ITO 糸** `#/arcade/ito` | 3D swing traversal in a comic-book city: three timed delivery runs with medals and a ghost, plus free roam |
+| **NEON KUMITE 組手** `#/arcade/kumite` | a versus fighter: four fighters, three stages, arcade ladder, 1P vs CPU or 2P on one keyboard, training and move list |
+| **KAZE 風** `#/arcade/kaze` | ink-wash duels: five chapters, standoffs, parries, five bosses |
+| **MACHI 街** `#/arcade/machi` | a voxel block of Tokyo to rebuild: eight tools, walk mode, photo mode, three save slots |
+
+To take a game off the floor, set `hidden: true` on its entry in `src/src/games/registry.js` and rebuild. The cabinet pictures are `media/arcade/<game>.jpg`.
+
 ## REDLINE
 A night drive through an original Midnight-Tokyo-style megacity. Five data shards open one case file; ten files end the run at the lookout, and whoever is in front at that moment wins.
 
