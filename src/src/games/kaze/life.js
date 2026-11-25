@@ -293,7 +293,7 @@ export class Life {
     g.setTransform(1, 0, 0, 1, 0, 0);
     for (const it of this.fgItems) {
       const F = this.fg[it.kind], sx = W / 2 + (it.x - camX) * k * 1.8; if (sx < -F.w * 1.5 || sx > W + F.w * 1.5) continue;
-      const cx = Math.abs(sx - W / 2) / (W / 2), a = 0.85 * fade * (0.3 + 0.7 * clamp(cx * 1.6 - 0.2, 0, 1));
+      const cx = Math.abs(sx - W / 2) / (W / 2), a = 0.85 * fade * clamp(cx * 7 - 4.2, 0, 1); if (a < 0.05) continue; // near-camera shapes stay at the edges: a half-faded one read as a ghost
       g.globalAlpha = a;
       if (F.bottom) g.drawImage(F.c, sx - F.w / 2, H - F.h + H * 0.015, F.w, F.h);
       else if (it.v) { g.save(); g.translate(sx + F.w / 2, -H * 0.02); g.scale(-1, 1); g.drawImage(F.c, 0, 0, F.w, F.h); g.restore(); } else g.drawImage(F.c, sx - F.w / 2, -H * 0.02, F.w, F.h);
