@@ -6,18 +6,21 @@ import { buildScene, paintSky, bamboo, torii, pine, rock, TW, REDP, paintRedSky 
 import { CHAPTERS, groundH, ATK, BOSSES, HAIKU, BOSS_LINES, DIFF, OPENINGS, DEATH_LINES, SHRINE_LINE } from './data.js';
 import { makePlates, plateStep, HINT } from './plates.js';
 import { poseFor, drawFigure, newFig, stepScarf, LOOKS, POSE, lerpPose, BOSSLOOK, drawFoxFig, walkLegs, brushLine } from './figures.js';
-import { P as PT, standoffPose } from './sim.js';
+import { P as PT, standoffPose, standoffPass } from './sim.js';
+import { makeRag, stepRag, ragPose } from './ragdoll.js';
 import { InkFx } from './inkfx.js'; import { floraFor, floraProps, drawGrass } from './flora.js'; import { Life } from './life.js'; // [inkfx] ink effects + ambient life (owned by the ink-effects engineer)
 // the parry: the ronin's blade meets the incoming one at a clear angle, locks, sends it past, and he coils to strike
 const PARRY_K = {
-  high: Object.assign({}, POSE.guard, { grip: [24, -86], sw: -2.72, lean: -0.08, head: -0.1, ff: [20, 0], fb: [-32, 0], hy: -44 }), // the blade a clear diagonal over the head
+  high: Object.assign({}, POSE.guard, { grip: [22, -72], sw: -1.0, lean: -0.08, head: -0.1, ff: [20, 0], fb: [-32, 0], hy: -44 }), // the blade a clear diagonal over the head
   low: Object.assign({}, POSE.guard, { grip: [26, -40], sw: 0.95, lean: 0.22, head: 0.15, ff: [24, 0], fb: [-32, 0], hy: -40 }),
-  turn: Object.assign({}, POSE.guard, { grip: [8, -64], sw: -1.95, lean: -0.2, head: 0.05, hx: 6, ff: [6, 0], fb: [-30, 0], hy: -44 }),
+  turn: Object.assign({}, POSE.guard, { grip: [20, -66], sw: -0.85, lean: -0.2, head: 0.05, hx: 6, ff: [6, 0], fb: [-30, 0], hy: -44 }),
 };
 const COIL = Object.assign({}, POSE.guard, { grip: [-4, -60], sw: -2.55, lean: 0.24, head: 0.12, ff: [26, 0], fb: [-26, 0], hy: -42 });
 const DEFLECT_K = Object.assign({}, POSE.guard, { grip: [20, -66], sw: -1.55, lean: -0.12, head: -0.05, ff: [16, 0], fb: [-26, 0], hy: -45 });
 const VIC_BREATH = Object.assign({}, POSE.guard, { grip: [16, -50], sw: 0.7, lean: -0.04, head: -0.12, hy: -50, ff: [10, 0], fb: [-14, 0] }); // a still breath, the blade lowered
-const TUCK = Object.assign({}, POSE.guard, { grip: [14, -44], sw: 0.4, lean: 0.55, head: 0.2, ff: [8, -12], fb: [-6, -16], hy: -40 }); // tucked for rolls and somersaults
+// the standoff extreme: past him, back to him, front knee deep, the blade out to the side and a little up
+const ZAN_X = Object.assign({}, POSE.iai, { grip: [58, -64], sw: -0.18, lean: 0.3, head: -0.1, ff: [40, 0], fb: [-38, -2], hy: -30, sheath: 0 });
+const TUCK = Object.assign({}, POSE.guard, { grip: [16, -40], sw: 0.4, lean: 0.85, head: 0.3, ff: [6, -24], fb: [-2, -26], hy: -38 }); // a tight ball: knees to the chest, chin down // tucked for rolls and somersaults
 const KNEEL_X = Object.assign({}, POSE.knee, { grip: [46, -30], sw: 0.18, lean: 0.22, head: 0.2 });
 const SLIDE_X = Object.assign({}, POSE.dSlide, { grip: [44, -26], sw: 0.12, lean: 0.3, head: 0.25 });
 const WHEEL_W = Object.assign({}, POSE.guard, { grip: [-26, -44], sw: 2.9, lean: -0.05, head: -0.15, ff: [22, 0], fb: [-26, 0], hy: -40 });
@@ -149,7 +152,7 @@ export class Renderer {
     if (this.flash > 0 && !this.reduced) { g.globalAlpha = this.flash * 0.35; g.fillStyle = C.paper; g.fillRect(0, 0, W, H); g.globalAlpha = 1; }
     // standoff: a cooler, desaturated held breath; the cut floods it red for an instant
     if (this.cool > 0.01) { g.globalAlpha = this.cool * 0.55; g.globalCompositeOperation = 'saturation'; g.fillStyle = '#808080'; g.fillRect(0, 0, W, H); g.globalCompositeOperation = 'multiply'; g.globalAlpha = this.cool * 0.22; g.fillStyle = '#6f84a0'; g.fillRect(0, 0, W, H); g.globalCompositeOperation = 'source-over'; g.globalAlpha = 1; }
-    if (this.redPulse > 0.01) { g.globalCompositeOperation = 'multiply'; g.globalAlpha = this.redPulse * 0.7; g.fillStyle = '#c8321f'; g.fillRect(0, 0, W, H); g.globalCompositeOperation = 'source-over'; g.globalAlpha = 1; }
+    if (this.redPulse > 0.01 && !this.fx) { g.globalCompositeOperation = 'multiply'; /* [inkfx] replaced by an accent wash at the edges (InkFx moment) */ g.globalAlpha = this.redPulse * 0.7; g.fillStyle = '#c8321f'; g.fillRect(0, 0, W, H); g.globalCompositeOperation = 'source-over'; g.globalAlpha = 1; }
     // the ink frame: one frame of bare paper and black ink on a perfect parry or the killing stroke
     if (this.inkFrame > 0) { this.inkFrame--; this.drawInkFrame(g); }
     if (this.hurtT > 0) { this.hurtT -= dt; this.drawHurt(g, this.hurtT); }
@@ -184,13 +187,14 @@ export class Renderer {
     // the wash bleeds up from the horizon: reveal it bottom-first as it floods in
     const top = H * (1 - Math.min(1, e * 1.25));
     g.globalAlpha = Math.min(1, e * 1.1); g.drawImage(this.redSkyC, 0, top, W, H - top, 0, top, W, H - top);
+    if (top > 1) for (let j = 1; j <= 8; j++) { const hh = H * 0.018, y0 = Math.max(0, top - j * hh); g.globalAlpha = Math.min(1, e * 1.1) * (1 - j / 9); g.drawImage(this.redSkyC, 0, y0, W, hh, 0, y0, W, hh); } // [inkfx grade] the wash's rising edge is wet and soft, not a ruled line
     g.globalAlpha = e * 0.85; g.drawImage(this.redSkyC, 0, 0); g.globalAlpha = 1;
     if (this.red2 > 0.01) { g.globalAlpha = this.red2 * 0.4 * e; g.fillStyle = P.top; g.fillRect(0, 0, W, H); g.globalAlpha = 1; }
     // the pale disc behind the duel, larger in the second phase, ringed with the chapter's own colour
     const cx = clamp(this.worldToScreenX(this.bossX || this.v.camX) - 60 * k, W * 0.3, W * 0.7), cy = H * 0.36, rad = k * 70 * (1 + 0.3 * this.red2) * (0.85 + 0.15 * e);
     g.save(); g.globalAlpha = e * 0.5; const ring = g.createRadialGradient(cx, cy, rad * 0.9, cx, cy, rad * 1.7); ring.addColorStop(0, rgba(P.ring, 0.6)); ring.addColorStop(1, rgba(P.ring, 0)); g.fillStyle = ring; g.fillRect(cx - rad * 2, cy - rad * 2, rad * 4, rad * 4);
     if (this.fx && this.fx.discBloom) { g.restore(); this.fx.discBloom(g, cx, cy, rad, P.disc, e); } /* [inkfx] the disc blooms into the wet red wash */ else { g.globalAlpha = e * 0.95; g.fillStyle = P.disc; g.shadowColor = P.disc; g.shadowBlur = 10 * k; g.beginPath(); g.arc(cx, cy, rad, 0, 6.2832); g.fill(); g.restore(); }
-    this.discX = cx; this.discY = cy;
+    this.discX = cx; this.discY = cy; this.discR = rad;
   }
   drawInkFrame(g) {
     const { W, H } = this.v, C = CHAPTERS[this.ch];
@@ -217,8 +221,8 @@ export class Renderer {
     if (fig.pfx) { const X = fig.pfx; if (this.hitstop <= 0) X.t += dt;
       if (X.t > (X.kind === 'deflect' ? 0.3 : 0.6) || !(p.st === 'guard' || p.st === 'idle' || p.st === 'move')) fig.pfx = null;
       else { const C = X.kind === 'deflect' ? DEFLECT_K : PARRY_K[X.kind], E2 = (u) => u * u * (3 - 2 * u), P2 = lerpPose(pose, pose, 0, {});
-        if (X.t < 0.05) lerpPose(pose, C, E2(X.t / 0.05), P2); else if (X.kind === 'deflect') lerpPose(C, pose, E2(clamp((X.t - 0.1) / 0.2, 0, 1)), P2);
-        else if (X.t < 0.26) lerpPose(C, COIL, E2((X.t - 0.05) / 0.21), P2); else lerpPose(COIL, pose, E2(clamp((X.t - 0.45) / 0.15, 0, 1)), P2);
+        if (X.t < 0.05) lerpPose(C, C, 0, P2); // the contact pose from the hit frame: the blades meet at once else if (X.kind === 'deflect') lerpPose(C, pose, E2(clamp((X.t - 0.1) / 0.2, 0, 1)), P2);
+        else if (X.t < 0.26) lerpPose(C, COIL, E2((X.t - 0.05) / 0.21), P2); else { lerpPose(COIL, pose, E2(clamp((X.t - 0.45) / 0.15, 0, 1)), P2); const br = Math.sin(clamp((X.t - 0.26) / 0.34, 0, 1) * Math.PI); P2.hy += 2.5 * br; P2.lean += 0.04 * br; P2.grip = [P2.grip[0], P2.grip[1] + 2 * br]; }
         return { pose: P2, whirl: -p.face * (X.big ? 9 : 5) * Math.max(0, 1 - X.t / 0.25) }; } }
     const near = s.foes.filter((f) => f.st !== 'dead' && f.st !== 'enter' && Math.abs(f.x - p.x) < 150), ahead = near.filter((f) => (f.x - p.x) * p.face > 0);
     const tgt = ahead.sort((a, b) => Math.abs(a.x - p.x) - Math.abs(b.x - p.x))[0];
@@ -236,7 +240,7 @@ export class Renderer {
         if (Math.abs(fig.lvxStart ?? 0) > 150) opts.push('leap');
         if (tgt && tgt.hp <= 2 && tgt.st !== 'ready') opts.push('finisher');
         if (near.length >= 2) opts.push('spin');
-      } else if (p.st === 'dodge' && near.some((f) => (f.x - p.x) * (p.dodgeDir || p.face) > 0 && Math.abs(f.x - p.x) < 95)) opts.push('overflip'); // a somersault over the foe
+      } else if (p.st === 'dodge' && p.vault) { opts.push('overflip'); fig.lastFl = null; } // the sim vaults him over the foe: a tucked forward somersault, every time
       else if (p.st === 'dodge' && (p.dodgeDir || p.face) === p.face && !near.length && last !== 'droll') opts.push('droll'); // every other open-ground dodge is a forward roll
       else if (p.st === 'dodge' && near.some((f) => (f.x - p.x) * (p.dodgeDir || p.face) < 0 && Math.abs(f.x - p.x) < 120)) { fig.shieldKick = near.some((f) => f.shield && Math.abs(f.x - p.x) < 90); opts.push('flip'); }
       kind = opts.find((k) => k !== last) || null;
@@ -247,14 +251,14 @@ export class Renderer {
     // a landing roll after a long fall at speed
     if (p.y > 0) { fig.airVy = p.vy; fig.wasAir = true; } else if (fig.wasAir) { fig.wasAir = false; if ((fig.airVy || 0) < -330 && Math.abs(p.vx) > 110 && (p.st === 'move' || p.st === 'idle') && !fig.fl) { fig.fl = { kind: 'roll', t: 0 }; fig.lastFl = 'roll'; } }
     if (fig.fl && fig.fl.kind === 'roll' && !(p.st === 'move' || p.st === 'idle')) fig.fl = null;
-    if (fig.fl && fig.fl.kind === 'roll') { fig.fl.t += dt; const u = clamp(fig.fl.t / 0.42, 0, 1), P2 = lerpPose(pose, TUCK, Math.min(1, Math.sin(Math.PI * u) * 2.2), {}); if (u >= 1) { fig.fl = null; return null; } return { pose: P2, rot: p.face * Math.PI * 2 * u * u * (3 - 2 * u), lift: 38 * Math.sin(Math.PI * u), cy: 44 }; }
+    if (fig.fl && fig.fl.kind === 'roll') { fig.fl.t += dt; const u = clamp(fig.fl.t / 0.42, 0, 1), P2 = lerpPose(pose, TUCK, Math.min(1, Math.sin(Math.PI * u) * 2.2), {}); if (pose.sheath) { P2.sheath = 1; P2.grip = pose.grip.slice(); P2.sw = pose.sw; } if (u >= 1) { fig.fl = null; return null; } return { pose: P2, rot: p.face * Math.PI * 2 * u * u * (3 - 2 * u), lift: 38 * Math.sin(Math.PI * u), cy: 44 }; }
     // a vault: running over a fallen foe (once per body)
     if (!fig.fl && p.st === 'move' && Math.abs(p.vx) > 150) { const c = (this.corpses || []).find((c) => c.landed && c !== fig.vaulted && (c.x - p.x) * p.face > 8 && (c.x - p.x) * p.face < 46); if (c) { fig.vaulted = c; fig.fl = { kind: 'vault', t: 0 }; fig.lastFl = 'vault'; } }
     if (fig.fl && fig.fl.kind === 'vault') { // a short hop over the body, knees tucked, the hakama lifting
       fig.fl.t += dt; const u = clamp(fig.fl.t / 0.36, 0, 1), P2 = lerpPose(pose, pose, 0, {}), h = Math.sin(Math.PI * u);
       if (u >= 1 || p.st !== 'move') { fig.fl = null; return null; }
       P2.ff = [P2.ff[0] * 0.6 + 6, -14 * h]; P2.fb = [P2.fb[0] * 0.6 - 4, -18 * h]; P2.lean += 0.18 * h;
-      return { pose: P2, lift: 26 * h };
+      return { pose: P2, lift: 44 * h };
     }
     // between fights: stance switches (high guard, side guard), and the sword rests on the shoulder while walking
     const calm = p.drawn && !near.length && !fig.fl;
@@ -268,6 +272,7 @@ export class Renderer {
     }
     fig.stK = 0;
     const F = fig.fl; if (!F) return null;
+    const keepSheath = (P2) => { if (pose.sheath) { P2.sheath = 1; P2.grip = pose.grip.slice(); P2.sw = pose.sw; } return P2; };
     const A = p.st === 'slash' ? PT.slash[p.combo || 0] : p.st === 'heavy' ? PT.heavy : null, tt = p.stt;
     const P2 = lerpPose(pose, pose, 0, {}), E2 = (u) => u * u * (3 - 2 * u);
     switch (F.kind) {
@@ -305,12 +310,12 @@ export class Renderer {
         return { pose: P2, rot: (p.dodgeDir && p.dodgeDir !== p.face ? -1 : 1) * p.face * Math.PI * 2 * E2(u), lift: (fig.shieldKick ? 52 : 34) * Math.sin(Math.PI * u) }; // a somersault away (higher off a shield), or a back flip when dodging backwards
       }
       case 'droll': { // a forward roll along the ground: down onto the shoulder, over, and up into guard
-        const u = clamp((p.stt - 0.06) / 0.32, 0, 1), P2 = lerpPose(pose, TUCK, Math.min(1, Math.sin(Math.PI * u) * 2.2), {});
+        const u = clamp((p.stt - 0.06) / 0.32, 0, 1), P2 = keepSheath(lerpPose(pose, TUCK, Math.min(1, Math.sin(Math.PI * u) * 2.2), {}));
         return { pose: P2, rot: p.face * Math.PI * 2 * E2(u), lift: 38 * Math.sin(Math.PI * u), cy: 44 };
       }
       case 'overflip': { // a forward somersault clean over the foe, tucked, landing facing on
-        const u = clamp(p.stt / 0.4, 0, 1), P2 = lerpPose(pose, TUCK, Math.min(1, Math.sin(Math.PI * u) * 2.2), {});
-        return { pose: P2, rot: (p.dodgeDir || p.face) * Math.PI * 2 * E2(u), lift: 92 * Math.sin(Math.PI * u) };
+        const u = clamp(p.stt / 0.4, 0, 1), P2 = keepSheath(lerpPose(pose, TUCK, Math.min(1, Math.sin(Math.PI * u) * 2.2), {}));
+        return { pose: P2, rot: (p.dodgeDir || p.face) * Math.PI * 2 * E2(u), lift: 64 * Math.sin(Math.PI * u) };
       }
       case 'aircut': case 'divecut': case 'airspin': { // in the air: a rising cut tucked, a diving cut pitched forward, or a full spin with the blade flat
         const W = A.wind + A.act, u = clamp(tt / (W + 0.08), 0, 1), P2 = lerpPose(pose, pose, 0, {}); P2.ff = [P2.ff[0] * 0.5 + 6, -12]; P2.fb = [P2.fb[0] * 0.5 - 6, -16];
@@ -369,7 +374,7 @@ export class Renderer {
     const dir = Math.sign(f.x - s.p.x) || 1; let v = c.boss ? 'boss' : c.how === 'riposte' ? 'kneel' : c.how === 'heavy' || c.how === 'counter' || c.how === 'arrow' ? 'back' : 'stagger';
     if (v === this.lastVar && !c.boss) v = { kneel: 'stagger', stagger: 'back', back: 'kneel' }[v]; this.lastVar = v;
     const look = f.boss ? BOSSLOOK[f.boss] : f.type;
-    this.corpses.push({ look, x: f.x, face: f.face, fig, variant: v, t: 0, dir, landed: false, al: 1 });
+    this.corpses.push({ look, x: f.x, face: f.face, fig, variant: v, t: 0, dir, landed: false, al: 1, geo: fig.lastGeo });
     const geo = fig.lastGeo; const w = LOOKS[look] ? LOOKS[look].weapon : 'katana';
     if (geo) this.drops.push({ x: geo.G[0], y: geo.G[1], vx: dir * (60 + Math.random() * 60), vy: -220 - Math.random() * 80, rot: Math.atan2(geo.dy, geo.dx), vr: dir * (7 + Math.random() * 5), kind: w, t: 0, rest: false, len: w === 'spear' || w === 'naginata' ? 140 : w === 'bow' ? 120 : w === 'club' ? 60 : w === 'odachi' ? 70 : 56 });
     this.hitstop = Math.max(this.hitstop, c.boss ? 6 : 4); this.zan = c.boss ? 0.7 : 0.32; if (!this.reduced) this.push = c.boss ? 0.1 : 0.05; this.nudge.x += dir * (c.boss ? 6 : 4);
@@ -379,22 +384,28 @@ export class Renderer {
     for (let i = this.corpses.length - 1; i >= 0; i--) {
       const c = this.corpses[i]; c.t += this.hitstop > 0 ? 0 : dt; const t = c.t, fig = c.fig, tgt = fig.target;
       if (!c.k0) c.k0 = lerpPose(fig.pose.ff ? fig.pose : P.guard, fig.pose.ff ? fig.pose : P.guard, 0, {});
-      let land = 1.1, K, xoff = 0;
+      let land = 1.1, K, xoff = 0; const ragAt = { kneel: 0.72, back: 0.08, stagger: 0.3, boss: 1.5 }[c.variant] ?? 0.7;
       if (c.variant === 'kneel') K = [[0, c.k0], [0.08, P.snap], [0.42, P.knee], [0.72, P.knee], [1.1, P.deadFwd]];
-      else if (c.variant === 'back') { K = [[0, c.k0], [0.08, P.snap], [0.28, P.lift], [0.7, P.downBack]]; land = 0.7; if (t > 0.16 && !c.spun) { c.spun = true; c.face = -c.face; } }
+      else if (c.variant === 'back') { K = [[0, c.k0], [0.08, P.snap], [0.28, P.lift], [0.7, P.downBack]]; land = 0.7; }
       else if (c.variant === 'stagger') { K = [[0, c.k0], [0.08, P.snap], [0.3, P.catchStep], [0.55, P.snap], [0.95, P.deadFwd]]; land = 0.95; xoff = c.dir * 34 * Math.sin(Math.min(1, t / 0.6) * Math.PI / 2); }
       else if (c.variant === 'boss') { K = [[0, c.k0], [0.1, P.snap], [0.55, P.knee], [1.5, P.knee], [1.95, P.deadFwd]]; land = 1.95; }
       else { K = [[0, c.k0], [0.7, c.k0], [1.1, P.knee], [1.5, P.deadFwd]]; land = 1.5; } // standoff: frozen upright, then down
       let seg = K.length - 1; for (let j = 1; j < K.length; j++) if (t <= K[j][0]) { seg = j; break; }
       const u = clamp((t - K[seg - 1][0]) / (K[seg][0] - K[seg - 1][0]), 0, 1), last = seg === K.length - 1;
       lerpPose(K[seg - 1][1], K[seg][1], last ? u * u : u * u * (3 - 2 * u), tgt); // the final fall accelerates
+      // the ragdoll: from the pose at that moment, pushed along the cut and away from the ronin
+      const gyf = (xx) => -groundH(this.ch, xx);
+      if (!c.rag && t >= ragAt && c.geo && c.geo.legs) { const sc2 = c.geo.sc || 1, away = c.dir; c.rag = makeRag(c.geo, c.face, sc2, c.variant === 'back' ? [away * 260, -220] : c.variant === 'kneel' ? [away * 90, 40] : [away * 200, -140]); }
+      if (c.rag) { if (this.hitstop <= 0) stepRag(c.rag, dt, gyf); lerpPose(ragPose(c.rag, c.x + xoff, -groundH(this.ch, c.x + xoff), c.k0, lerpPose), ragPose(c.rag, c.x + xoff, -groundH(this.ch, c.x + xoff), c.k0, lerpPose), 0, tgt); land = c.rag.touched ? Math.min(t, c.landT ?? t) : 99; if (c.rag.touched && c.landT == null) c.landT = t; if (c.landT != null) land = c.landT; }
+      // never let the ronin walk through a body: he vaults it at speed, otherwise it sinks into its ink pool before he reaches it
+      if (this.lastP && c.rag && Math.abs(this.lastP.x - (c.rag.p[0][0] + c.rag.p[1][0]) / 2) < 44 && !(this.pfig.fl && this.pfig.fl.kind === 'vault')) c.fade = true;
       if (t >= land && !c.landed) { c.landed = true; fig.sqv = 7; fig.cv = c.dir * 60; for (let j = 0; j < 10; j++) this.spawn(MOTE, c.x + xoff + (Math.random() - 0.5) * 40, -groundH(this.ch, c.x) - 3, (Math.random() - 0.5) * 70, -14 - Math.random() * 10, 0.9, 3 + Math.random() * 3, INK); }
       const still = land + (c.variant === 'boss' || c.variant === 'standoff' ? 1.4 : 0.9);
-      c.al = clamp(1 - (t - still) / 1.1, 0, 1);
+      if (c.fade) c.fadeT = (c.fadeT || 0) + dt; c.al = Math.min(clamp(1 - (t - still) / 1.1, 0, 1), c.fade ? clamp(1 - c.fadeT / 0.25, 0, 1) : 1);
       if (t > still && Math.random() < 0.5) this.spawn(MOTE, c.x + xoff + (Math.random() - 0.5) * 40, -groundH(this.ch, c.x) - Math.random() * 20, wind * 30, -12, 1.5, 3 + Math.random() * 4, INK);
       if (c.al <= 0) { this.corpses.splice(i, 1); continue; }
       fig.t += dt; const x = c.x + xoff, y = -groundH(this.ch, x);
-      this.fig(g, x, y, c.look, tgt, fig, { face: c.face, alpha: c.al, wind, vx: 0, dt, boilN: this.boilN, reduced: this.reduced, noWeapon: true, shield: false, still: true });
+      c.geo = this.fig(g, x, y, c.look, tgt, fig, { groundY: y, face: c.face, alpha: c.al, wind, vx: 0, dt, boilN: this.boilN, reduced: this.reduced, noWeapon: true, shield: false, still: true });
     }
     for (let i = this.drops.length - 1; i >= 0; i--) {
       const d = this.drops[i]; if (this.hitstop <= 0) { d.t += dt; if (!d.rest) { d.vy += 1300 * dt; d.x += d.vx * dt; d.y += d.vy * dt; d.rot += d.vr * dt; const gy = -groundH(this.ch, d.x) - 2; if (d.y > gy) { d.y = gy; d.vy *= -0.28; d.vx *= 0.45; d.vr *= 0.4; if (Math.abs(d.vy) < 40) { d.rest = true; d.rot = Math.round(d.rot / Math.PI) * Math.PI; } } } }
@@ -453,18 +464,18 @@ export class Renderer {
         case 'cut': { const fg = this.figs.get(c.id); const dir = Math.sign(c.x - s.p.x) || 1; if (fg) { fg.sqv = 5; fg.kick = dir * (c.dmg > 1 ? 9 : 5); } this.hitstop = Math.max(this.hitstop, c.dmg > 1 ? 3 : 2); this.nudge.x += dir * (c.dmg > 1 ? 4 : 2); }
           /* [inkfx] spatter is InkFx.burst */ this.shake = Math.max(this.shake, c.dmg > 1 ? 0.6 : 0.3); break;
         case 'riposte': this.hitstop = 4; this.nudge.x += Math.sign(c.x - s.p.x) * 5; if (s.arena && s.arena.boss && !this.reduced) this.inkFrame = 2; /* [inkfx] spatter is InkFx.burst */ this.shake = 0.8; this.flash = 0.6; break;
-        case 'kill': { this.killT = this.time; this.killed(s, c); if (c.boss) this.fallLine = { t0: this.time, boss: c.boss }; if (c.boss && !this.reduced) this.inkFrame = 3; const fig = this.figs.get(c.id); if (fig) fig.dieT = this.time; this.dissolveAt(c.x, gy(c.x), INK, c.boss ? 70 : 34); /* [inkfx] ink, not accent dots */ if (c.boss) { this.flash = 1; this.shake = 1; } break; }
+        case 'kill': { this.killT = this.time; this.killed(s, c); if (c.boss) this.fallLine = { t0: this.time, boss: c.boss }; if (c.boss && !this.reduced) this.inkFrame = 3; const fig = this.figs.get(c.id); if (fig) fig.dieT = this.time; /* [inkfx] the kill's ink is InkFx (burst, strands, pool) */ if (c.boss) { this.flash = 1; this.shake = 1; } break; }
         case 'parry': case 'reflect': this.expr = { k: 'wide', t: 0.7 };
           { const fo = s.foes.find((q) => q.id === c.id), atk = fo && fo.atk ? fo.atk : '', last = this.pfig.lastParry; let kind = atk === 'sweep' ? 'low' : atk === 'overhead' || atk === 'cut2' ? 'high' : last === 'turn' ? 'high' : 'turn'; if (kind === last && atk !== 'sweep' && atk !== 'overhead') kind = kind === 'high' ? 'turn' : 'high';
             this.pfig.pfx = { t: 0, kind, big: c.k === 'parry' }; this.pfig.lastParry = kind; } this.hitstop = 3; { const fg = this.figs.get(c.id); if (fg) fg.kick = Math.sign(c.x - s.p.x) * 6; this.pfig.kick = -s.p.face * 4; } if (this.red > 0.5 && !this.reduced) this.inkFrame = 1; /* [inkfx] the parry mark is InkFx.parryAt */ this.flash = Math.max(this.flash, 0.5); break;
-        case 'deflect': case 'clash': this.sparks(c.x, gy(c.x) - 62, 7); this.shake = Math.max(this.shake, 0.25);
+        case 'deflect': case 'clash': if (this.fx) this.fx.parryAt(c.x, gy(c.x) - 62, Math.sign(c.x - s.p.x) || s.p.face, true); /* [inkfx] */ this.shake = Math.max(this.shake, 0.25);
           // a plain block is felt: two frames of stop, the guard jolted back and up, a small clash mark
-          if (c.k === 'deflect') { this.pfig.pfx = { t: 0, kind: 'deflect', big: false }; this.hitstop = Math.max(this.hitstop, 2); this.pfig.kick = -s.p.face * 5; this.pfig.recoil = 0.24; this.clashes.push({ x: c.x, y: -groundH(this.ch, c.x) - 62, t: 0, small: 1 }); }
+          if (c.k === 'deflect') { this.pfig.pfx = { t: 0, kind: 'deflect', big: false }; this.hitstop = Math.max(this.hitstop, 2); this.pfig.kick = -s.p.face * 5; this.pfig.recoil = 0.24; }
           // [combat cue] a foe blocked the ronin: sparks and a ring that grow as his guard meter fills, both recoil
-          if (c.k === 'clash') { const k = c.max ? c.gm / c.max : 0.5, fg = this.figs.get(c.id); this.sparks(c.x, gy(c.x) - 62, 4 + Math.round(10 * k)); this.ring(c.x, gy(c.x) - 62, 0.6 + k); this.hitstop = Math.max(this.hitstop, 3); this.pfig.kick = -s.p.face * 6; this.pfig.recoil = 0.24; if (fg) fg.kick = s.p.face * 5; this.clashes.push({ x: c.x, y: -groundH(this.ch, c.x) - 62, t: 0 }); }
+          if (c.k === 'clash') { const k = c.max ? c.gm / c.max : 0.5, fg = this.figs.get(c.id); this.hitstop = Math.max(this.hitstop, 3); this.pfig.kick = -s.p.face * 6; this.pfig.recoil = 0.24; if (fg) fg.kick = s.p.face * 5; }
           break;
-        case 'guardbreak': this.sparks(c.x, gy(c.x) - 60, 16); this.splash(c.x, gy(c.x) - 50, 10, INK, s.p.face); this.shake = 0.7;
-          { const fg = this.figs.get(c.id); if (fg) fg.kick = s.p.face * 9; this.ring(c.x, gy(c.x) - 60, 2); this.hitstop = Math.max(this.hitstop, 4); } break; // [combat cue] the guard shatters
+        case 'guardbreak': if (this.fx) this.fx.parryAt(c.x, gy(c.x) - 60, s.p.face, false); /* [inkfx] */ this.shake = 0.7;
+          { const fg = this.figs.get(c.id); if (fg) fg.kick = s.p.face * 9; this.hitstop = Math.max(this.hitstop, 4); } break; // [combat cue] the guard shatters
         case 'guardup': { const fg = this.figs.get(c.id), G = fg && fg.lastGeo && fg.lastGeo.G; if (G) this.arcs.push({ ring: 1, x: G[0], y: G[1], r: 6, t: 0, life: 0.3, col: INK, w: 2 }); break; } // [combat cue] a small tick at the hands: his guard is up
         case 'surprise': this.hitstop = Math.max(this.hitstop, 4); break; // [combat cue] caught unready: a held beat on the cut
         case 'drawtell': break; // [inkfx] the tell is drawn by InkFx.tell (tell.js): drop, drain, tendrils, splash and ring
@@ -478,7 +489,7 @@ export class Renderer {
         case 'sodraw': this.ofig.tell = { t0: this.time, red: false }; break;
         case 'sofeint': this.ofig.flick = this.time; break;
         case 'blessing': case 'secret': case 'charm': if (c.k === 'blessing') this.shrineT = 3; for (let i = 0; i < 26; i++) this.spawn(SMOKE, s.p.x + (Math.random() - 0.5) * 30, gy(s.p.x) - 30 - Math.random() * 30, (Math.random() - 0.5) * 10, -20 - Math.random() * 20, 2 + Math.random() * 2, 4 + Math.random() * 4, INK); if (c.k !== 'blessing') this.dissolveAt(s.p.x, gy(s.p.x), acc, 30, true); break;
-        case 'death': { const hd = this.pfig.lastHd || [c.x, -groundH(this.ch, c.x) - 110]; this.hat = { x: hd[0], y: hd[1] - 6, vx: -s.p.face * 70, vy: -170, rot: 0, vr: -s.p.face * 5, rest: false, face: s.p.face, t: 0 }; } this.splash(c.x, gy(c.x) - 50, 40, acc, 1); break;
+        case 'death': { const hd = this.pfig.lastHd || [c.x, -groundH(this.ch, c.x) - 110]; this.hat = { x: hd[0], y: hd[1] - 6, vx: -s.p.face * 70, vy: -170, rot: 0, vr: -s.p.face * 5, rest: false, face: s.p.face, t: 0 }; } /* [inkfx] his ink is InkFx.burst */ break;
         case 'phase2': this.ring(c.x, gy(c.x) - 60, 3); this.dissolveAt(c.x, gy(c.x), INK, 24); this.shake = 0.6; break;
         case 'boss': this.bossCard = { t0: this.time, boss: c.boss }; break;
         case 'step': if (C.key === 'snow') for (let i = 0; i < 3; i++) this.spawn(SNOW, c.x + (Math.random() - 0.5) * 10, gy(c.x) - 2, (Math.random() - 0.5) * 40, -30 - Math.random() * 30, 0.6, 1.5, C.paper); else if (c.run) this.spawn(MOTE, c.x, gy(c.x) - 2, -s.p.face * 10, -6, 0.6, 3, INK); break;
@@ -496,7 +507,7 @@ export class Renderer {
   }
   splash(x, y, n, acc, dir) {
     if (this.reduced) n = Math.ceil(n * 0.6);
-    for (let i = 0; i < n; i++) { const a = -Math.PI / 2 + (Math.random() - 0.5) * 2.4 + dir * 0.6, sp = 80 + Math.random() * 260; this.spawn(DROP, x + (Math.random() - 0.5) * 12, y + (Math.random() - 0.5) * 16, Math.cos(a) * sp * (dir || 1) * (Math.random() < 0.3 ? -0.4 : 1), Math.sin(a) * sp, 1.4, 1.2 + Math.random() * 3.2, Math.random() < 0.42 ? acc : INK); }
+    for (let i = 0; i < n; i++) { const a = -Math.PI / 2 + (Math.random() - 0.5) * 2.4 + dir * 0.6, sp = 80 + Math.random() * 260; this.spawn(DROP, x + (Math.random() - 0.5) * 12, y + (Math.random() - 0.5) * 16, Math.cos(a) * sp * (dir || 1) * (Math.random() < 0.3 ? -0.4 : 1), Math.sin(a) * sp, 1.4, 1.2 + Math.random() * 3.2, INK); /* [inkfx] no accent dots */ }
   }
   sparks(x, y, n) { for (let i = 0; i < n; i++) { const a = Math.random() * 6.28, sp = 120 + Math.random() * 220; this.spawn(SPARK, x, y, Math.cos(a) * sp, Math.sin(a) * sp, 0.22 + Math.random() * 0.12, 6 + Math.random() * 6, INK, a); } }
   ring(x, y, big = 1) { this.arcs.push({ ring: 1, x, y, r: 16 * big, t: 0, life: 0.45 * big, col: INK, w: 4 }); }
@@ -581,6 +592,13 @@ export class Renderer {
       let pose = fig.pose;
       if (this.hitstop <= 0 || !fig.pose.ff) {
         pose = poseFor(fig, f, look, t, false, { dt, rec: DIFF[s.diff] ? DIFF[s.diff].rec : 1 });
+        { const Ts = f.stunT || 0.9, heavy = f.st === 'stagger' && Ts >= 0.85 && look !== 'brute' && look !== 'hyoe' && !f.boss;
+          if (heavy && f.stt >= 0.06 && fig.lastGeo && fig.lastGeo.legs) { const gyf = (xx) => -groundH(this.ch, xx), away = Math.sign(f.x - s.p.x) || 1;
+            if (!fig.rag) fig.rag = makeRag(fig.lastGeo, f.face, fig.lastGeo.sc, [away * 230, -230]);
+            const up = Ts - 0.42; if (f.stt < up) { stepRag(fig.rag, dt, gyf); pose = ragPose(fig.rag, fx, fy, pose, lerpPose); fig.ragRest = pose; }
+            else { const u = (f.stt - up) / 0.42, R0 = fig.ragRest || pose, gP = lerpPose(pose, pose, 0, {});
+              pose = u < 0.4 ? lerpPose(R0, POSE.knee, (u / 0.4) * (u / 0.4) * (3 - 2 * u / 0.4), {}) : u < 0.75 ? lerpPose(POSE.knee, POSE.rise, (u - 0.4) / 0.35, {}) : lerpPose(POSE.rise, gP, (u - 0.75) / 0.25, {}); } }
+          else if (f.st !== 'stagger') { fig.rag = null; fig.ragRest = null; } }
         if (look === 'archer' && Math.abs(f.vx) > 5 && pose.kneel) { pose.kneel = 0; pose.hy = -49; pose.ff = [12, 0]; pose.fb = [-14, 0]; } // he stands to move
         const u = walkLegs(pose, fig.walk || 0, Math.abs(f.vx), f.st, look); fig.gaitU = u;
         // Shizu twirls the naginata once round her back through the wind-up
@@ -595,7 +613,7 @@ export class Renderer {
       if (f.st !== 'act') fig.slammed = false;
       const geo = this.fig(g, fx, fy, look, pose, fig, o); fig.lastGeo = geo;
       // telegraph: brush flick over the head, glint on the weapon (red = unblockable)
-      this.trail(g, fig, o._tip, f.st === 'act' || (f.st === 'rec' && f.stt < 0.03), 8, dt);
+      this.trail(g, fig, o._tip, f.st === 'act' || (f.st === 'rec' && f.stt < 0.03), 8, dt, { foe: 1, stopX: s.p.x }); // [inkfx] a foe's arc is lighter, ends at the ronin, dries in 2-3 frames
       if (look === 'hyoe' && this.red > 0.2 && Math.random() < 0.35) this.spawn(GOLD, geo.N[0] - f.face * 14, geo.N[1] - 40, 0, -30, 2.5, 1 + Math.random() * 1.4, '#ffb46a');
       if (fig.tell && (f.st === 'wind' || f.st === 'act')) this.drawTell(g, fig.tell, o._tip || geo.G, geo.Hd, f.face);
       if (f.st === 'opened') this.drawOpened(g, geo.Hd, f.stt);
@@ -638,6 +656,16 @@ export class Renderer {
       else if (fig.skid && Math.abs(p.vx) < 20) { fig.skid = false; fig.sqv = (fig.sqv || 0) + 3; }
     }
     const fx = this.flourish(s, p, fig, pose, dt); if (fx && fx.pose) pose = fx.pose;
+    { const PS = s.so && standoffPass(s.so); if (PS && p.st === 'iai') { const E2 = (u) => u * u * (3 - 2 * u);
+        if (PS.phase === 'dash') pose = lerpPose(POSE.iai, ZAN_X, E2(clamp(PS.k * 1.3 - 0.3, 0, 1)), {});
+        else if (PS.phase === 'hold') { pose = lerpPose(ZAN_X, ZAN_X, 0, {}); pose.hy += 1.2 * Math.sin(PS.k * Math.PI); } // held, breathing
+        else pose = PS.k < 0.7 ? lerpPose(ZAN_X, POSE.sheathing, E2(PS.k / 0.7), {}) : lerpPose(POSE.sheathing, POSE.stand, E2((PS.k - 0.7) / 0.3), {}); } } // the slow noto
+    this.lastP = { x: px };
+    // the ronin's death: the scripted beat (to the knees, thrown back, or spun), then the ragdoll takes him down
+    if (p.st === 'dead' && s.phase === 'dead') { const v = (fig.vars && fig.vars.death) || 0, at = [0.62, 0.1, 0.35][v], gyf = (xx) => -groundH(this.ch, xx);
+      if (!fig.rag && s.pt >= at && fig.lastGeoP && fig.lastGeoP.legs) fig.rag = makeRag(fig.lastGeoP, p.face, fig.lastGeoP.sc, v === 1 ? [-p.face * 240, -200] : [p.face * 120, -30]);
+      if (fig.rag) { if (this.hitstop <= 0) stepRag(fig.rag, dt, gyf); pose = ragPose(fig.rag, px, py, pose, lerpPose); } }
+    else fig.rag = null;
     if (fig.recoil > 0) { const k = Math.sin(Math.PI * Math.min(1, (0.24 - fig.recoil) / 0.24 * 1.6 + 0.15)) * clamp(fig.recoil / 0.12, 0, 1); pose = Object.assign({}, pose, { lean: pose.lean - 0.16 * k, grip: [pose.grip[0] - 6 * k, pose.grip[1] - 5 * k], sw: pose.sw - 0.22 * k, hy: pose.hy + 2 * k }); if (this.hitstop <= 0) fig.recoil -= dt; }
     const roll = 0;
     fig.kick = (fig.kick || 0) * Math.exp(-dt * 10);
@@ -653,19 +681,20 @@ export class Renderer {
     if (p.y > 4) o.tuck = 1; // in the air the hakama wraps each leg
     // at full sprint, a few broken dry-brush streaks in the air behind him (ink, never cartoon lines)
     if (Math.abs(p.vx) > 230 && p.st === 'move' && !this.reduced) { const k = clamp((Math.abs(p.vx) - 230) / 30, 0, 1); for (let j = 0; j < 3; j++) { const yy = py - 34 - j * 22 + Math.sin(this.time * 7 + j * 2) * 3, x0 = px - p.face * (26 + j * 9), L2 = 46 + j * 14, pts = []; for (let q = 0; q <= 6; q++) pts.push([x0 - p.face * L2 * q / 6, yy + Math.sin(q + j) * 1.2]); this.windStroke(g, pts, 2.2, 0.16 * k, j * 1.7 + this.time); } }
-    const geo = this.fig(g, px + (fig.kick || 0), py, 'ronin', pose, fig, o); fig.lastHd = geo.Hd;
+    const geo = this.fig(g, px + (fig.rag ? 0 : fig.kick || 0), py, 'ronin', pose, fig, o); fig.lastHd = geo.Hd; fig.lastGeoP = geo;
+    if (fig.pfx && fig.pfx.t < 0.12) { fig.parryX = geo.G[0] + geo.dx * 34 * geo.sc; fig.parryY = geo.G[1] + geo.dy * 34 * geo.sc; fig.crossPt = [fig.parryX, fig.parryY]; } else { fig.parryX = fig.parryY = null; fig.crossPt = null; } // where the blades cross: for the ink burst
     stepScarf(fig, geo.N[0] - p.face * 2, geo.N[1] + 2, p.face, wind + this.gustAt(px) * 1.4, p.vx, dt, !fig.scarf.inited);
     const A0 = p.st === 'slash' ? PT.slash[p.combo || 0] : p.st === 'heavy' ? PT.heavy : p.st === 'counter' ? PT.counter : null;
     this.trail(g, fig, o._tip, !!A0 && p.stt > A0.wind * 0.85 && p.stt < A0.wind + A0.act + 0.03, p.st === 'slash' ? 9 : 13, dt);
-    if (p.st === 'guard' && p.stt < 0.2) { g.globalAlpha = (0.2 - p.stt) * 3; g.strokeStyle = INK; g.lineWidth = 1.2; g.beginPath(); g.arc(px + p.face * 22, py - 70, 10 + p.stt * 60, 0, 6.3); g.stroke(); g.globalAlpha = 1; }
+    // (the guard is read from the pose itself: no ring)
     if (dead) { /* body lies; the dissolve happens in the dead overlay */ }
   }
   // the cut stroke: one loaded stroke of soft warm black ink along the blade tip's real arc. A sharp entry, a full
   // belly as thick as a forearm, a dry split-bristle tail; a faint wet halo where it bleeds into the paper; droplets
   // thrown off the tip. It dries over about 8 frames, the belly last; heavy cuts are broader and dry slower; a kill
   // stroke is the boldest, with a fleck of vermilion.
-  trail(g, fig, tip, live, w, dt) {
-    const T = fig.trailPts || (fig.trailPts = []), heavy = w > 9, dry = heavy ? 0.22 : 0.15;
+  trail(g, fig, tip, live, w, dt, fo = null) {
+    const T = fig.trailPts || (fig.trailPts = []), heavy = w > 9, dry = fo ? 0.05 : heavy ? 0.22 : 0.15;
     if (live && tip) {
       if (!fig.trailLive) { T.length = 0; fig.trailFade = 0; fig.trailKill = false; }
       const last = T[T.length - 1]; const sp = last ? Math.hypot(tip[0] - last[0], tip[1] - last[1]) : 0;
@@ -687,7 +716,12 @@ export class Renderer {
       for (let i = 0; i < m - 1; i++) { const a0 = P(i - 1), a1 = P(i), a2 = P(i + 1), a3 = P(i + 2);
         for (let j = 0; j < 4; j++) { const t = j / 4, t2 = t * t, t3 = t2 * t; for (let c = 0; c < 2; c++) pts.push(0.5 * (2 * a1[c] + (-a0[c] + a2[c]) * t + (2 * a0[c] - 5 * a1[c] + 4 * a2[c] - a3[c]) * t2 + (-a0[c] + 3 * a1[c] - 3 * a2[c] + a3[c]) * t3)); } }
       pts.push(raw[raw.length - 2], raw[raw.length - 1]); }
-    const kill = fig.trailKill, W = w * 2.1 * (kill ? 1.25 : 1), ink = '#221c17';
+    if (fo) { // [inkfx] a foe's cut ends where it meets the ronin's body, thick at the start and dry and thin at the end
+      const side = Math.sign(pts[0] - fo.stopX) || 1; for (let i = 2; i < pts.length; i += 2) if ((pts[i] - fo.stopX) * side < 14) { pts.length = i; break; }
+      if (pts.length < 6) return;
+      const kf = fig.trailFade / dry, Wf = w * 1.5; ribbon(g, pts, (u) => Wf * (1 - 0.88 * Math.pow(u, 0.8)), '#221c17', 0.82 * Math.pow(1 - kf, 1.2), 0.5);
+      g.globalAlpha = 1; return; }
+    const kill = fig.trailKill, W = Math.min(w * 1.55, 16) * (kill ? 1.2 : 1), ink = '#221c17';
     // one loaded sweep: a firm entry a third of the belly's width, swelling to the belly mid-arc, thinning to a dry split tail
     const prof = (u) => (u < 0.5 ? 0.3 + 0.7 * Math.pow(Math.sin(Math.PI * 0.5 * u / 0.5), 1.6) : 1 - 0.72 * Math.pow((u - 0.5) / 0.5, 1.1));
     // the wet halo
@@ -744,7 +778,7 @@ export class Renderer {
     if (pose === 'walk' || pose === 'next') { lerpPose(look === 'spear' ? POSE.thw : POSE.stand, POSE.stand, 0, tgt); }
     else if (pose === 'feint') { lerpPose(gp, gp, 0, tgt); tgt.lean -= 0.07; tgt.head = (tgt.head || 0) - 0.06; tgt.grip = [tgt.grip[0] - 2, tgt.grip[1] - 3]; } // a feint: only a shoulder twitch
     else if (pose === 'tell') { lerpPose(gp, gp, 0, tgt); tgt.hx = (tgt.hx || 0) + 4; tgt.hy -= 2.5; tgt.lean += 0.1; tgt.head = (tgt.head || 0) + 0.12; tgt.ff = [tgt.ff[0] + 2, 0]; tgt.grip = [tgt.grip[0] + 3, tgt.grip[1] + 2]; tgt.hand = [7, -8]; tgt.handK = 1; } // about to draw: weight onto the front leg, the head lowers, the hand closes on the hilt
-    else if (pose === 'strike') lerpPose(gp, look === 'spear' ? POSE.tha : POSE.s1a, clamp(so.ts / 0.25, 0, 1) * 0.6, tgt);
+    else if (pose === 'strike') { lerpPose(gp, look === 'spear' ? POSE.tha : POSE.s1a, clamp(so.ts / 0.25, 0, 1) * 0.6, tgt); tgt.hy -= 6; tgt.rk = 0; } // the hips rise as the steel comes out
     else if (pose === 'cut') { if (so.t < 0.6) lerpPose(POSE.s1a, POSE.stun, so.t / 0.6, tgt); else lerpPose(POSE.stun, POSE.dead, clamp((so.t - 0.6) / 0.4, 0, 1), tgt); }
     else if (pose === 'fail') lerpPose(POSE.s1w, POSE.s1a, clamp(so.t / 0.12, 0, 1), tgt);
     else { lerpPose(gp, gp, 0, tgt); if (pose === 'wait' && look !== 'spear') { tgt.lean -= 0.08; tgt.hx = (tgt.hx || 0) - 3; tgt.handK = 0; } }
@@ -758,7 +792,7 @@ export class Renderer {
     const geo = this.fig(g, x, y, look, P, fig, o);
     if (pose === 'feint' && fig.flick && t - fig.flick < 0.3) { const age = t - fig.flick; ribbon(g, [geo.Hd[0] + 4, geo.Hd[1] - 22, geo.Hd[0] - 2, geo.Hd[1] - 30, geo.Hd[0] - 10, geo.Hd[1] - 34], (u) => 3.2 * (1 - u) + 0.3, INK, clamp(1 - age / 0.3, 0, 1) * 0.8, 0); }
     // the left thumb pushes the guard out of the scabbard mouth: a sliver of bright blade
-    if ((pose === 'tell' || pose === 'strike') && look !== 'spear' && geo.H) { const sc2 = geo.sc || 1, bl = pose === 'strike' ? 24 : 7, m0 = [geo.H[0] + face * 6 * sc2, geo.H[1] - 6 * sc2], dx = face * Math.cos(0.45), dy = -Math.sin(0.45); g.globalAlpha = 0.95; g.strokeStyle = '#f4efe2'; g.lineWidth = 1.6 * sc2; g.lineCap = 'round'; g.beginPath(); g.moveTo(m0[0], m0[1]); g.lineTo(m0[0] + dx * bl * sc2, m0[1] + dy * bl * sc2); g.stroke(); g.globalAlpha = 1; } // on the strike a hand's length of bare blade: the one white thing on the plate
+    if ((pose === 'tell' || pose === 'strike') && look !== 'spear' && geo.H) { const sc2 = geo.sc || 1, bl = pose === 'strike' ? 30 : 7, m0 = [geo.H[0] + face * 6 * sc2, geo.H[1] - 6 * sc2], dx = face * Math.cos(0.45), dy = -Math.sin(0.45); g.globalAlpha = 0.95; g.strokeStyle = '#f4efe2'; g.lineWidth = 1.6 * sc2; g.lineCap = 'round'; g.beginPath(); g.moveTo(m0[0], m0[1]); g.lineTo(m0[0] + dx * bl * sc2, m0[1] + dy * bl * sc2); g.stroke(); g.globalAlpha = 1; } // on the strike a hand's length of bare blade: the one white thing on the plate
     if (pose === 'strike' && fig.tell) this.drawTell(g, fig.tell, o._tip || geo.G, geo.Hd, face);
     // the cut: one long horizontal stroke across the frame
     if (this.cutFx) { const c = this.cutFx; c.t += dt; const k = clamp(c.t / 0.12, 0, 1), fade = clamp(1 - (c.t - 0.3) / 0.9, 0, 1); if (fade <= 0) this.cutFx = null; else { const yy = y - 64, x0 = x - 260, x1 = x0 + 520 * k; ribbon(g, [x0, yy + 6, (x0 + x1) / 2, yy - 2, x1, yy - 6], (u) => Math.sin(u * Math.PI) * 9 * fade + 0.5, INK, 0.9 * fade, 0.3); } }
@@ -819,7 +853,7 @@ export class Renderer {
         }
         case DROP: {
           p.vy += 900 * dt; p.x += p.vx * dt; p.y += p.vy * dt; const gy = -groundH(this.ch, p.x);
-          if (p.y >= gy) { p.on = 0; if (this.decals.length < 90) this.decals.push({ x: p.x, y: gy + 1 + Math.random() * 3, r: p.size * (0.8 + Math.random()), a: 0.6, col: p.col, t: 0 }); break; }
+          if (p.y >= gy) { p.on = 0; if (this.decals.length < 90) this.decals.push({ x: p.x, y: gy + 1 + Math.random() * 3, r: p.size * (0.8 + Math.random()), a: 0.6, col: INK, t: 0 }); /* [inkfx] ink only */ break; }
           drop(g, p.x, p.y, p.size, p.col, 0.9);
           break;
         }
@@ -910,7 +944,7 @@ export class Renderer {
     if (p.hp < this.hudHp) for (let i = p.hp; i < this.hudHp; i++) this.hudLost[i] = this.time;
     if (p.hp > this.hudHp) for (let i = this.hudHp; i < p.hp; i++) this.hudLost[i] = 0;
     this.hudHp = p.hp;
-    const dark = Math.max(this.red, this.scene.night ? 0.85 : 0);
+    const dark = (this.scene.night ? 0.85 : 0) * (1 - this.red), hudInk = this.red > 0.5 ? '#f0e2d0' : INK; // [inkfx] on the red: no glow, pale ink
     if (dark > 0.05) { const bw = Math.max(p.hpMax * step, s.resMax * 15 * u) + 44 * d, bh = 84 * u, cx = x0 + bw / 2 - 24 * d, cy = y0 + 20 * u;
       g.save(); g.translate(cx, cy); g.scale(1, bh / bw); const gr = g.createRadialGradient(0, 0, 0, 0, 0, bw * 0.62);
       gr.addColorStop(0, rgba(C.paper, 0.8)); gr.addColorStop(0.4, rgba(C.paper, 0.62)); gr.addColorStop(0.75, rgba(C.paper, 0.22)); gr.addColorStop(1, rgba(C.paper, 0)); g.globalAlpha = dark; g.fillStyle = gr; g.fillRect(-bw, -bw, bw * 2, bw * 2); g.restore(); }
@@ -918,17 +952,17 @@ export class Renderer {
       const x = x0 + i * step, on = i < p.hp, yy = y0 + 10 * u + (i % 2 ? 0.5 : -0.4) * u, L = 18 * u;
       const prof = (q) => Math.pow(Math.sin(Math.PI * Math.min(1, q * 0.9 + 0.1)), 0.45);
       if (on) {
-        ribbon(g, [x, yy + 0.8 * u, x + L * 0.35, yy - 0.2 * u, x + L * 0.7, yy + 0.3 * u, x + L, yy - 0.5 * u], (q) => 5.6 * u * prof(q), INK, 0.9, 0);
+        ribbon(g, [x, yy + 0.8 * u, x + L * 0.35, yy - 0.2 * u, x + L * 0.7, yy + 0.3 * u, x + L, yy - 0.5 * u], (q) => 5.6 * u * prof(q), hudInk, 0.9, 0);
         // dry-brush: paper showing through where the bristles ran out
-        g.globalAlpha = 0.55; g.strokeStyle = C.paper; g.lineWidth = 0.55 * u; g.lineCap = 'round'; g.beginPath();
+        g.globalAlpha = 0.55; g.strokeStyle = this.red > 0.5 ? '#7a2a1c' : C.paper; g.lineWidth = 0.55 * u; g.lineCap = 'round'; g.beginPath();
         g.moveTo(x + (7 + i % 3) * u, yy - 1 * u); g.lineTo(x + L + 0.5 * u, yy - 1.3 * u); g.moveTo(x + (11 + i % 2 * 2) * u, yy + 1.2 * u); g.lineTo(x + L + 0.5 * u, yy + 1 * u); g.stroke(); g.globalAlpha = 1;
         continue;
       }
       const age = this.hudLost[i] ? this.time - this.hudLost[i] : 9, k = this.reduced ? 1 : clamp(age / 0.7, 0, 1), sep = (1 + 2 * k) * u;
       // cracked in two, the halves drifting a hair apart, and a blot soaking out where it broke
       const fa = 0.9 - 0.7 * k;
-      ribbon(g, [x - sep * 0.3, yy + 0.8 * u, x + L * 0.25, yy + 0.1 * u, x + L * 0.45 - sep * 0.3, yy + 0.4 * u], (q) => 4.4 * u * prof(q), INK, fa, 0);
-      ribbon(g, [x + L * 0.55 + sep * 0.3, yy + 0.2 * u - k * 0.6 * u, x + L * 0.8, yy - 0.2 * u, x + L + sep * 0.3, yy - 0.6 * u + k * 0.5 * u], (q) => 4.2 * u * prof(q), INK, fa, 0);
+      ribbon(g, [x - sep * 0.3, yy + 0.8 * u, x + L * 0.25, yy + 0.1 * u, x + L * 0.45 - sep * 0.3, yy + 0.4 * u], (q) => 4.4 * u * prof(q), hudInk, fa, 0);
+      ribbon(g, [x + L * 0.55 + sep * 0.3, yy + 0.2 * u - k * 0.6 * u, x + L * 0.8, yy - 0.2 * u, x + L + sep * 0.3, yy - 0.6 * u + k * 0.5 * u], (q) => 4.2 * u * prof(q), hudInk, fa, 0);
       const br = (2.2 + 3.2 * k) * u; g.globalAlpha = 0.14 + 0.36 * (1 - k); g.drawImage(SOFT, x + L * 0.5 - br, yy - br, br * 2, br * 2); g.globalAlpha = 1;
     }
     for (let i = 0; i < s.resMax; i++) {
@@ -941,21 +975,22 @@ export class Renderer {
     if (boss && s.arena && s.arena.boss) {
       const B = BOSSES[boss.boss], bw = this.portrait ? W * 0.42 : Math.min(W * 0.42, 420 * d), bx = this.portrait ? W - bw - 22 * d : (W - bw) / 2, by = top + (this.portrait ? 36 : 32) * d;
       const intro = this.bossCard ? this.time - this.bossCard.t0 : 9;
-      if (intro < 3.6) { const a = clamp(intro / 0.6, 0, 1) * clamp((3.6 - intro) / 0.6, 0, 1); g.save(); g.globalAlpha = a; g.textAlign = 'center'; g.fillStyle = INK; g.font = `700 ${Math.round(H * 0.07)}px ${JP}`; g.shadowColor = rgba(C.paper, 0.9); g.shadowBlur = 12 * d; g.fillText(B.jp, W / 2, H * 0.36); g.font = `italic ${Math.round(Math.max(13 * d, H * 0.026))}px ${SERIF}`; g.fillText(B.name, W / 2, H * 0.36 + H * 0.06); g.restore(); }
+      if (intro < 3.6) { const a = clamp(intro / 0.6, 0, 1) * clamp((3.6 - intro) / 0.6, 0, 1); g.save(); g.globalAlpha = a; g.textAlign = 'center'; g.textBaseline = 'middle'; const mx = this.discX || W / 2, my = this.discY || H * 0.36, mr = this.discR || H * 0.12, fsz = Math.round(Math.min(H * 0.07, (mr * 1.55) / Math.max(2, [...B.jp].length))); /* [inkfx] the name sits inside the moon */
+        g.fillStyle = INK; g.font = `700 ${fsz}px ${JP}`; g.fillText(B.jp, mx, my); g.font = `italic ${Math.round(Math.max(13 * d, H * 0.024))}px ${SERIF}`; g.fillStyle = this.red > 0.5 ? '#f0e2d0' : INK; g.fillText(B.name, mx, my + mr * 1.12 + 8 * d); g.restore(); }
       g.save();
-      if (dark > 0.05) { const cx = bx + bw / 2, cy = by - 6 * d, rx = bw * 0.62; g.translate(cx, cy); g.scale(1, (44 * d) / rx); const gr = g.createRadialGradient(0, 0, 0, 0, 0, rx); gr.addColorStop(0, rgba(C.paper, 0.62)); gr.addColorStop(0.45, rgba(C.paper, 0.4)); gr.addColorStop(0.8, rgba(C.paper, 0.12)); gr.addColorStop(1, rgba(C.paper, 0)); g.globalAlpha = dark; g.fillStyle = gr; g.fillRect(-rx, -rx, rx * 2, rx * 2); g.setTransform(1, 0, 0, 1, 0, 0); }
+      if (dark > 0.05 && this.red < 0.05) { const cx = bx + bw / 2, cy = by - 6 * d, rx = bw * 0.62; g.translate(cx, cy); g.scale(1, (44 * d) / rx); const gr = g.createRadialGradient(0, 0, 0, 0, 0, rx); gr.addColorStop(0, rgba(C.paper, 0.62)); gr.addColorStop(0.45, rgba(C.paper, 0.4)); gr.addColorStop(0.8, rgba(C.paper, 0.12)); gr.addColorStop(1, rgba(C.paper, 0)); g.globalAlpha = dark; g.fillStyle = gr; g.fillRect(-rx, -rx, rx * 2, rx * 2); g.setTransform(1, 0, 0, 1, 0, 0); }
       const fr = clamp(boss.hp / boss.hpMax, 0, 1);
       if (this.bossFr == null || this.bossFor !== boss) { this.bossFr = fr; this.bossFor = boss; }
       this.bossFr += (fr - this.bossFr) * Math.min(1, (this.reduced ? 1 : 0.06));
       // the ghost of the whole stroke, very faint, so the length he had is still legible
-      ribbon(g, [bx, by, bx + bw / 2, by - 1 * d, bx + bw, by], (q) => 3 * d * Math.sin(Math.PI * Math.min(1, q * 0.95 + 0.03)), INK, 0.1, 0);
+      ribbon(g, [bx, by, bx + bw / 2, by - 1 * d, bx + bw, by], (q) => 3 * d * Math.sin(Math.PI * Math.min(1, q * 0.95 + 0.03)), hudInk, 0.16, 0);
       // the drying stretch between what he had a moment ago and what he has now: thin broken bristle lines
-      if (this.bossFr > fr + 0.002) { const xa = bx + bw * fr, xb = bx + bw * this.bossFr; g.strokeStyle = INK; g.lineCap = 'round';
+      if (this.bossFr > fr + 0.002) { const xa = bx + bw * fr, xb = bx + bw * this.bossFr; g.strokeStyle = hudInk; g.lineCap = 'round';
         for (let j = 0; j < 4; j++) { g.globalAlpha = 0.35 - j * 0.06; g.lineWidth = (0.9 - j * 0.12) * d; g.beginPath(); const yy = by - 2 * d + j * 1.4 * d; g.moveTo(xa, yy); g.lineTo(xa + (xb - xa) * (1 - j * 0.18), yy - 0.4 * d); g.stroke(); } }
-      if (fr > 0) { const xe = bx + bw * fr; ribbon(g, [bx, by + 0.5 * d, bx + bw * fr * 0.5, by - 1 * d, xe, by + 0.3 * d], (q) => (6.2 - q * 2.2) * d * Math.pow(Math.sin(Math.PI * Math.min(1, q * 0.55 + 0.06)), 0.4), INK, 0.88, 0.3);
+      if (fr > 0) { const xe = bx + bw * fr; ribbon(g, [bx, by + 0.5 * d, bx + bw * fr * 0.5, by - 1 * d, xe, by + 0.3 * d], (q) => (6.2 - q * 2.2) * d * Math.pow(Math.sin(Math.PI * Math.min(1, q * 0.55 + 0.06)), 0.4), hudInk, 0.88, 0.3);
         // the dry tail: bristles splitting at the end of the stroke
-        g.strokeStyle = INK; g.lineCap = 'round'; for (let j = 0; j < 3; j++) { g.globalAlpha = 0.5 - j * 0.12; g.lineWidth = 0.8 * d; g.beginPath(); const yy = by - 1.8 * d + j * 1.8 * d; g.moveTo(xe - 6 * d, yy); g.lineTo(xe + (5 + j * 3) * d, yy + (j - 1) * 0.5 * d); g.stroke(); } }
-      g.globalAlpha = 0.85; g.textAlign = 'center'; g.textBaseline = 'alphabetic'; g.fillStyle = INK; g.font = `700 ${Math.round(13 * d)}px ${JP}`; g.fillText(B.jp, bx + bw / 2, by - 10 * d);
+        g.strokeStyle = hudInk; g.lineCap = 'round'; for (let j = 0; j < 3; j++) { g.globalAlpha = 0.5 - j * 0.12; g.lineWidth = 0.8 * d; g.beginPath(); const yy = by - 1.8 * d + j * 1.8 * d; g.moveTo(xe - 6 * d, yy); g.lineTo(xe + (5 + j * 3) * d, yy + (j - 1) * 0.5 * d); g.stroke(); } }
+      g.globalAlpha = 0.85; g.textAlign = 'center'; g.textBaseline = 'alphabetic'; g.fillStyle = hudInk; g.font = `700 ${Math.round(13 * d)}px ${JP}`; g.fillText(B.jp, bx + bw / 2, by - 10 * d);
       g.restore();
     }
   }
@@ -963,7 +998,7 @@ export class Renderer {
   // middle, prompts by the thing. On a phone held upright the lines sit above the thumbs, never under them.
   drawPlate(g, P, ui) {
     const { W, H } = this.v, d = this.dpr, lab = ui.labels || {}, lbH = H * 0.1 * this.lb, small = P.kind === 'fight' || P.kind === 'prompt';
-    let x = W / 2, y = H - lbH - (small ? 26 : 46) * d;
+    let x = W / 2, y = H - lbH - (small ? 26 : 46) * d; if (this.lb > 0.3 && lbH > 30 * d) y = H - lbH * 0.5; // [inkfx] in a duel the line sits in the letterbox, clear of the fighters
     if (P.pos === 'mid') y = H * 0.5;
     else if (P.pos === 'near' && P.near) { const e = this.lastS && this.lastS.ev[P.near.ev]; if (e) { const ex = e.t === 'fox' ? e.path[e.path.length - 1] : e.x; x = this.worldToScreenX(ex); y = this.worldToScreenY(-groundH(this.ch, ex) - 92); } }
     if (ui.touch && P.pos !== 'near' && P.pos !== 'mid') y = this.portrait ? lbH + (small ? 120 : 96) * d : Math.min(y, H - lbH - (small ? 18 : 34) * d);
@@ -981,17 +1016,17 @@ export class Renderer {
     g.font = `italic 600 ${Math.round(12.5 * d)}px ${SERIF}`; const kw = key ? (chars ? sealW + 12 * d : g.measureText(key).width + 14 * d) : 0;
     const room = W - 2 * 22 * d - kw - 30 * d; if (tw > room) { fs = Math.max(Math.round(12 * d), Math.floor(fs * room / tw)); g.font = `italic ${fs}px ${SERIF}`; tw = g.measureText(text).width; }
     const w = tw + kw + 30 * d, h = (o.small ? 28 : 34) * d, x0 = Math.round(clamp(x - w / 2, 22 * d, W - w - 22 * d)), y0 = Math.round(y - h / 2);
-    const ga = g.globalAlpha, cx = x0 + w / 2, cy = y0 + h / 2, rx = w / 2 + 34 * d;
-    g.translate(cx, cy); g.scale(1, (h * 1.25) / rx); const gr = g.createRadialGradient(0, 0, 0, 0, 0, rx);
+    const inBox = this.lb > 0.3 && this.v.H * 0.1 * this.lb > 30 * d && y > this.v.H * 0.85, tight = this.lb > 0.3, ga = g.globalAlpha, cx = x0 + w / 2, cy = y0 + h / 2, rx = w / 2 + (tight ? 10 : 34) * d; // [inkfx] in a duel the wash hugs the words
+    g.translate(cx, cy); g.scale(1, (h * (tight ? 0.8 : 1.25)) / rx); const gr = g.createRadialGradient(0, 0, 0, 0, 0, rx);
     gr.addColorStop(0, rgba(C.paper, 0.88)); gr.addColorStop(0.6, rgba(C.paper, 0.78)); gr.addColorStop(0.85, rgba(C.paper, 0.3)); gr.addColorStop(1, rgba(C.paper, 0));
-    g.globalAlpha = ga; g.fillStyle = gr; g.fillRect(-rx, -rx, rx * 2, rx * 2); g.setTransform(1, 0, 0, 1, 0, 0);
-    g.textBaseline = 'middle'; g.textAlign = 'left'; g.fillStyle = INK;
+    g.globalAlpha = ga; g.fillStyle = gr; if (!inBox) g.fillRect(-rx, -rx, rx * 2, rx * 2); g.setTransform(1, 0, 0, 1, 0, 0); // [inkfx] in the letterbox: no wash, pale words on the dark band
+    g.textBaseline = 'middle'; g.textAlign = 'left'; const txt = inBox ? '#eadfcd' : INK; g.fillStyle = txt;
     if (chars) {
       const sx = x0 + 15 * d, sy = cy - sealH / 2; g.save(); g.translate(sx + sealW / 2, cy); g.rotate(-0.04); g.globalAlpha = ga * 0.86; g.fillStyle = RED;
       g.beginPath(); g.moveTo(-sealW / 2, -sealH / 2 + 1 * d); g.lineTo(sealW / 2 - 1 * d, -sealH / 2); g.lineTo(sealW / 2, sealH / 2 - 1 * d); g.lineTo(-sealW / 2 + 1 * d, sealH / 2); g.closePath(); g.fill();
       g.globalAlpha = ga * 0.95; g.fillStyle = C.paper; g.textAlign = 'center'; g.font = `700 ${Math.round(11.5 * d)}px ${JP}`; chars.forEach((c, i) => g.fillText(c, -sealW / 2 + 4 * d + 6 * d + i * 12 * d, 0.5 * d)); g.restore();
-      g.fillStyle = INK; g.textAlign = 'left'; void sy;
-    } else if (key) { g.globalAlpha = ga * 0.9; g.fillText(key, x0 + 15 * d, cy); ribbon(g, [x0 + 15 * d, cy + 8.5 * d, x0 + 15 * d + kw - 14 * d, cy + 9 * d], (u) => 2 * d * Math.sin(Math.PI * Math.min(1, u * 1.1 + 0.05)), INK, ga * 0.8, 0); }
+      g.fillStyle = txt; g.textAlign = 'left'; void sy;
+    } else if (key) { g.globalAlpha = ga * 0.9; g.fillText(key, x0 + 15 * d, cy); ribbon(g, [x0 + 15 * d, cy + 8.5 * d, x0 + 15 * d + kw - 14 * d, cy + 9 * d], (u) => 2 * d * Math.sin(Math.PI * Math.min(1, u * 1.1 + 0.05)), txt, ga * 0.8, 0); g.fillStyle = txt; }
     g.globalAlpha = ga * (o.small ? 0.85 : 0.92); g.font = `italic ${fs}px ${SERIF}`; g.fillText(text, x0 + 15 * d + kw, cy + 0.5 * d);
     g.restore();
   }

@@ -8,7 +8,7 @@
 //  waiting  : a slow heartbeat of ink at the frame edges.
 // Reads the sim's `drawtell` / `drawwin` / `feinttell` cues when present; otherwise derives the same beats from the
 // standoff state (strikeAt, `sofeint`, `sodraw`, `sofail`). Reduced motion keeps the drop and the ring, no flash or drain.
-import { clamp, makeCanvas, rgba } from './brush.js';
+import { clamp, makeCanvas, rgba, stroke } from './brush.js';
 import { CHAPTERS, groundH } from './data.js';
 
 const INKW = '#1d1813';
@@ -25,7 +25,7 @@ export class Tell {
   pre(s, r, fx) {
     const so = s.so, ch = r.ch;
     const mid = () => { const x = so ? (s.p.x + so.oppX) / 2 : s.p.x; return [x, -groundH(ch, x)]; }, opp = mid; // one event, one place: the drop lands between them and the ring is its splash
-    const taken = s.cues.some((c) => c.k === 'socut');
+    const taken = s.cues.some((c) => c.k === 'socut'); if (taken && !r.reduced) this.passCut(s, r);
     for (const c of s.cues) {
       const k = c.k;
       if (k === 'drawtell' || k === 'drawwin' || k === 'feinttell') this.usingCues = true;
@@ -41,7 +41,7 @@ export class Tell {
   }
   begin(kind, at, dur) { this.st = kind; this.t = 0; this.dur = Math.max(0.2, dur); this.at = at; }
   open(at, r, fx) {
-    this.st = 'win'; this.t = 0; this.at = at; this.ring = { t: 0, x: at[0], y: at[1] };
+    this.st = 'win'; this.t = 0; this.at = at; this.ring = { t: 0, x: at[0], y: at[1], seed: Math.random() * 9 };
     this.flash = r.reduced ? 0 : 2; // frames of bare paper behind the duellists
     if (fx) { fx.burst(at[0], at[1] - 3, -1, 0.7, r.reduced, true); fx.burst(at[0], at[1] - 3, 1, 0.7, r.reduced, true); fx.stain(at[0], at[1], 22, 6); } // the drop splashes where it lands
   }
@@ -49,30 +49,53 @@ export class Tell {
   ground(g, s, dt, r) {
     if (this.flash > 0) { this.flash--; g.save(); g.setTransform(1, 0, 0, 1, 0, 0); g.globalAlpha = 0.94; g.fillStyle = CHAPTERS[r.ch].paper; g.fillRect(0, 0, r.v.W, r.v.H); g.restore(); }
     const R = this.ring;
-    if (R.t < 0.5) {
-      R.t += dt; const u = Math.min(1, R.t / 0.5), e = 1 - Math.pow(1 - u, 3), rad = 18 + e * 430;
-      g.strokeStyle = INKW; g.globalAlpha = 0.95 * (1 - u); g.lineWidth = 4.5 * (1 - u) + 0.8;
-      g.beginPath(); g.ellipse(R.x, R.y, rad, rad * 0.16, 0, 0, 6.2832); g.stroke();
-      g.globalAlpha = 0.35 * (1 - u); g.lineWidth = 1.2; g.beginPath(); g.ellipse(R.x, R.y, rad * 0.82, rad * 0.13, 0, 0, 6.2832); g.stroke();
+    if (R.t < 0.36) {
+      // the splash ring as a dry-brush stroke: uneven weight round the ellipse, bristle gaps that open as it spreads, gone as it grows
+      R.t += dt; const u = Math.min(1, R.t / 0.36), e = 1 - Math.pow(1 - u, 3), rad = 18 + e * 330, N = 36, sd = R.seed || 1;
+      g.strokeStyle = INKW; g.lineCap = 'round';
+      for (let i = 0; i < N; i++) {
+        const n1 = Math.sin(i * 1.7 + sd) * 0.5 + Math.sin(i * 0.53 + sd * 2.3) * 0.5; if (n1 < -0.55 + u * 0.9) continue; // dry gaps, more as it fades
+        const a0 = (i / N) * 6.2832, a1 = ((i + 0.85) / N) * 6.2832, wgt = 0.5 + 0.5 * (n1 + 1) * (Math.sin(a0) > 0 ? 1.15 : 0.8); // heavier on the near side
+        g.globalAlpha = 0.9 * Math.pow(1 - u, 1.5); g.lineWidth = (5.5 * (1 - u * 0.75)) * wgt;
+        g.beginPath(); g.ellipse(R.x, R.y, rad, rad * 0.16, 0, a0, a1); g.stroke();
+      }
       g.globalAlpha = 1;
     }
   }
   // the falling drop: a fixed vertical path in the clear sky between the two men, landing on the window-open frame
   air(g, s, dt, r) {
+    this.airPass(g, dt);
     if (this.st !== 'tell' && this.st !== 'feint') return;
     if (!this.D) { this.D = dropSprite(false); this.G = dropSprite(true); }
     this.t += dt; const grey = this.st === 'feint';
-    const fall = grey ? 0.5 : this.dur, u = Math.min(1, this.t / fall), [hx, hy] = this.at;
+    const so = s.so, byClock = !grey && so && so.strikeAt > so.tellAt && (so.st === 'hold' || so.st === 'strike');
+    // the drop is the clock: it runs on standoff time (so.t from tellAt to strikeAt), so it touches the ground on the window frame even when the teaching standoff slows time
+    const fall = grey ? 0.5 : this.dur, u = byClock ? clamp((so.t - so.tellAt) / (so.strikeAt - so.tellAt), 0, 1) : Math.min(1, this.t / fall), [hx, hy] = this.at;
     const top = r.v.camY - 100 - r.v.cy / (r.v.k * r.v.zoom) - 30; // just above the top of the frame, in world units
     const land = grey ? hy - 150 : hy; // a feint's drop never reaches the ground: it hangs, wobbles and is gone
     let y = top + (land - top) * u * u, sc = grey ? 0.45 : 1, a = 1;
     if (u >= 1) {
       if (grey) { const w = this.t - fall; sc = 0.45 * (1 + Math.sin(w * 26) * 0.14 * Math.max(0, 1 - w * 3)) * Math.max(0, 1 - w / 0.35); a = Math.max(0, 1 - w / 0.35); if (w > 0.35) { this.st = 'idle'; return; } }
-      else { this.st = 'landed'; return; } // the window cue takes over on this frame
+      else { if (!so || so.st !== 'hold') { this.st = 'landed'; return; } y = land; } // touches down as the window opens; the window cue takes over on that frame
     }
     const S = grey ? this.G : this.D, w = 32 * sc, h = 54 * sc * (u < 1 ? 1 + 0.35 * u : 1);
     if (u > 0.04) { g.strokeStyle = grey ? '#6c6760' : INKW; g.lineCap = 'round'; g.globalAlpha = 0.3 * a; g.lineWidth = 3.4 * sc; g.beginPath(); g.moveTo(hx, y - h * 0.8); g.lineTo(hx, y - h * 0.8 - 80 * u * sc); g.stroke(); } // the streak of its fall
     g.globalAlpha = a; g.drawImage(S, hx - w / 2, y - h * 0.82, w, h); g.globalAlpha = 1;
+  }
+  // the standoff cut is a pass: one long brush arc along his path through the opponent, with a paper-white edge
+  passCut(s, r) {
+    const so = s.so; if (!so) return; const ch = r.ch, x0 = Math.min(s.p.x, so.x - 150) - 10, x1 = so.oppX + 150, sc = 2, pad = 30;
+    const yA = -groundH(ch, x0) - 62, yB = -groundH(ch, x1) - 70, top = Math.min(yA, yB) - pad - 24, h = Math.abs(yA - yB) + pad * 2 + 40;
+    const c = makeCanvas((x1 - x0 + pad * 2) * sc, h * sc), g = c.getContext('2d'); g.setTransform(sc, 0, 0, sc, (pad - x0) * sc, -top * sc);
+    const P = []; for (let i = 0; i <= 16; i++) { const u = i / 16, x = x0 + (x1 - x0) * u; P.push([x, yA + (yB - yA) * u - Math.sin(u * Math.PI) * 22, u < 0.15 ? 0.4 + u * 4 : 1 - 0.85 * Math.pow((u - 0.15) / 0.85, 1.4)]); }
+    stroke(g, P, { w: 9, alpha: 0.95, dry: 0.35, seed: 77, edge: 0.6, taper: [0.08, 0.6], tip: 0.05, color: INKW });
+    stroke(g, P.map((q) => [q[0], q[1] - 3.2, q[2] * 0.9]), { w: 2.2, alpha: 0.95, dry: 0.2, seed: 78, edge: 0, taper: [0.1, 0.7], tip: 0.05, color: CHAPTERS[ch].paper });
+    this.pass = { c, x: x0 - pad, y: top, w: (x1 - x0 + pad * 2), h, t: 0 };
+  }
+  airPass(g, dt) {
+    const A = this.pass; if (!A) return; A.t += dt; if (A.t > 0.7) { this.pass = null; return; }
+    const e = Math.min(1, A.t / 0.08), a = A.t < 0.25 ? 1 : 1 - (A.t - 0.25) / 0.45;
+    g.globalAlpha = a; g.drawImage(A.c, 0, 0, A.c.width * e, A.c.height, A.x, A.y, A.w * e, A.h); g.globalAlpha = 1;
   }
   // the frame: drain, tendrils along the ground, the heartbeat and the flood
   screen(g, s, dt, r, wash) {

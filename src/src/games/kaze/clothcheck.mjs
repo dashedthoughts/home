@@ -3,6 +3,7 @@
 // every frame. Usage: node clothcheck.mjs   (also run from test.mjs)
 import { poseFor, drawFigure, newFig, walkLegs, POSE, lerpPose, STAND_H, LOOKS } from './figures.js';
 import { checkGarment } from './cloth.js';
+import { makeRag, stepRag, ragPose, checkRag } from './ragdoll.js';
 import { P as PT } from './sim.js';
 import { ATK, BOSSES, FOES } from './data.js';
 
@@ -13,7 +14,7 @@ export const mockCtx = new Proxy({}, { get: (t, k) => (k in t ? t[k] : k === 'sc
 // standing, walking, running and guard animations: these keep the body's full height
 const TALL = /^(idle|idle-drawn|walk|run|run-start|run-stop|turn|guard|parry|sheathe|reduced-run|gust)$|^(?!archer).*:(approach|ready)$/;
 // poses that are meant to be low or wide: crouches, rolls, kneels, falls
-const LOW = /dead|death|knockdown|stagger|heal|kneel|sit|dodge|bow|focus|draw|stun|opened|jump/;
+const LOW = /rag|dead|death|knockdown|stagger|heal|kneel|sit|dodge|bow|focus|draw|stun|opened|jump/;
 
 const DT = 1 / 60;
 function run(name, look, isPlayer, frames, fails, counts) {
@@ -101,6 +102,21 @@ export function runClothCheck(log = console.log) {
     F('knockdown-getup', seq('stagger', 1.3, { e: { ...K, stunT: 1.25 }, kind, face: -1 }));
     F('opened', seq('opened', 1.3, { e: K, kind, face: -1 }));
     F('dead', seq('dead', 1.4, { e: K, kind, face: -1 }));
+  }
+  // ---- the ragdoll: twelve different falls, every frame checked (bones, joints, ground) and drawn through the figure checks ----
+  const FALLS = [['ronin', 'guard', [-260, -200]], ['ronin', 's1a', [240, -120]], ['ronin', 'hit', [-320, -300]], ['ronin', 'knee', [140, 0]], ['ronin', 'focus', [200, -160]], ['bandit', 'hasso', [300, -240]],
+    ['bandit', 's1a', [-200, -60]], ['spear', 'thw', [260, -300]], ['duelist', 'waki', [-180, -260]], ['gonroku', 'katsugi', [220, -180]], ['shizu', 'jodan', [-260, -120]], ['master', 'iaigoshi', [160, -320]]];
+  let ragFrames = 0;
+  for (const [look, pn, imp] of FALLS) {
+    const name = `rag-${look}-${pn}`, fig = newFig(false, 9), P0 = lerpPose(POSE[pn], POSE[pn], 0, {}); let geo, n = 0;
+    for (let k = 0; k < 4; k++) { fig.t += DT; geo = drawFigure(mockCtx, 0, 0, look, P0, fig, { face: 1, dt: DT, groundY: 0 }); }
+    const r = makeRag(geo, 1, geo.sc, imp), gy = () => 0;
+    for (let i = 0; i < 210; i++) { stepRag(r, DT, gy); const b = checkRag(r, gy); const P = ragPose(r, 0, 0, P0, lerpPose); fig.t += DT;
+      SCALES.n = 0; const g2 = drawFigure(mockCtx, 0, 0, look, P, fig, { face: 1, dt: DT, groundY: 0 }); b.push(...checkGarment(fig.garment, {}).filter((m) => !/hem covers the grounded foot|tent|pinches|shrinks toward/.test(m)));
+      if (SCALES.n) b.push('scaled'); const hh = g2.chin - g2.headTop; if (hh < 12 * geo.sc) b.push(`head flattened ${hh.toFixed(1)}`);
+      if (g2.headTop < -200) b.push('flew off'); n++; ragFrames++; if (b.length) fails.push(`${name} f${n}: ${b[0]}${b.length > 1 ? ` (+${b.length - 1})` : ''}`); }
+    if (!r.settled) fails.push(`${name}: never came to rest in 3.5 s`);
+    counts.push([name, n]);
   }
   const total = counts.reduce((a, c) => a + c[1], 0);
   log(`cloth: ${counts.length} animations, ${total} frames checked, ${fails.length} failing frames`);

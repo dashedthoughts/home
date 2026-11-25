@@ -103,13 +103,13 @@ export function hakamaTargets(q) {
   const legLen = 62 * sc, dA = Math.hypot(legs[0].fx - legs[1].fx, legs[0].fy - legs[1].fy), spread = q.kneel ? 0 : Math.min(1, Math.max(0, (dA / legLen - 0.4) / 0.15));
   // split legs are trousers, not bell-bottoms: about 1.6 legs wide at the knee, gently flared to about 1.4x that at the hem
   // the split eases in and out over about 0.15 s, so a garment never pops between a skirt and two trouser legs
-  let spl = Math.max(st, spread); if (q.prevSplit != null && !q.reduced) spl = q.prevSplit + Math.max(-q.dt * 7, Math.min(q.dt * 7, spl - q.prevSplit)); wk += (15 * sc * Math.max(1, Math.sqrt(bulk)) - wk) * spl; hemW += (Math.min(hemW, (hl >= 0.8 ? 0.165 : 0.11) * Bh) - hemW) * spl;
+  let spl = q.rag ? 1 : Math.max(st, spread); if (q.prevSplit != null && !q.reduced) spl = q.prevSplit + Math.max(-q.dt * 7, Math.min(q.dt * 7, spl - q.prevSplit)); wk += (15 * sc * Math.max(1, Math.sqrt(bulk)) - wk) * spl; hemW += (Math.min(hemW, (hl >= 0.8 ? 0.165 : 0.11) * Bh) - hemW) * spl;
   const out = { Bh, wW, wk, hemW, Wb, Wf, Hb, Hf, legs: [], r: 2.5 * sc, stride: st, split: spl, legLen, dA };
   for (const l of legs) {
     const K = [l.kx, l.ky], A = [l.fx, l.fy], J = [l.hx, l.hy];
     let tx = K[0] - J[0], ty = K[1] - J[1]; const tl = Math.hypot(tx, ty) || 1; tx /= tl; ty /= tl;
     const ring = [[K[0] - ty * wk / 2, K[1] + tx * wk / 2], [K[0] + ty * wk / 2, K[1] - tx * wk / 2], [K[0] + tx * wk * 0.32, K[1] + ty * wk * 0.32]];
-    const lift = q.kneel ? 0 : Math.max(0, Math.min(1, (groundY - A[1] - 2 * sc) / (10 * sc)));
+    const lift = q.rag ? 1 : q.kneel ? 0 : Math.max(0, Math.min(1, (groundY - A[1] - 2 * sc) / (10 * sc))); // a fallen body: each leg's cloth wraps its own shin
     const hlF = Math.min(1, hl);
     const hemYg = K[1] + (groundY - 5.5 * sc - K[1]) * hlF, hemYl = Math.min(K[1] + 27 * sc * hlF, groundY - 4 * sc);
     // the floor of the hem: a grounded full-length leg keeps its hem above the foot so the sandal shows
@@ -209,7 +209,7 @@ export function checkGarment(G, o = {}) {
       const hit = [['gusset', G.gusset], ...G.legs.map((l, i) => ['shin' + i, l.poly]), ...G.legs.map((l, i) => ['thigh' + i, l.thigh])].find(([, P]) => P && insideConvex(P, p, 0)); if (hit) bad.push(`cloth stretched between the legs (a tent: ${hit[0]})`); } }
   G.legs.forEach((l, i) => {
     const hc = [(l.hem[0][0] + l.hem[3][0]) / 2, (l.hem[0][1] + l.hem[3][1]) / 2];
-    const hx = l.hem[3][0] - l.hem[0][0], hy = l.hem[3][1] - l.hem[0][1], hl2 = Math.hypot(hx, hy) || 1, sp = G.HG && G.HG.split > 0.5, ws = sp ? legWidths(l.poly, l.K, [l.K[0] + (hc[0] - l.K[0]) * 0.75, l.K[1] + (hc[1] - l.K[1]) * 0.75], 8) : legWidths(l.poly, W, hc, 8, [hx / hl2, hy / hl2]), tol = 1.5 * sc;
+    const hx = l.hem[3][0] - l.hem[0][0], hy = l.hem[3][1] - l.hem[0][1], hl2 = Math.hypot(hx, hy) || 1, sp = G.HG && G.HG.split > 0.5 && !G.kneel, ws = sp ? legWidths(l.poly, l.K, [l.K[0] + (hc[0] - l.K[0]) * 0.75, l.K[1] + (hc[1] - l.K[1]) * 0.75], 8) : legWidths(l.poly, W, hc, 8, [hx / hl2, hy / hl2]), tol = 1.5 * sc;
     // a hanging leg widens monotonically to the hem; a split leg is a tube on its own axis and must not pinch
     if (sp && G.full) { let mx = 0; for (let j = 0; j < ws.length; j++) { if (ws[j] < 0.85 * mx - tol) { bad.push(`leg${i}: split leg pinches (${ws.map((v) => v.toFixed(1)).join(' ')})`); break; } mx = Math.max(mx, ws[j]); } }
     else if (!sp && !(l.wrap > 0.3)) for (let j = 1; j < ws.length; j++) if (ws[j] < ws[j - 1] - tol) { bad.push(`leg${i}: width shrinks toward the hem (${ws.map((v) => v.toFixed(1)).join(' ')})`); break; }

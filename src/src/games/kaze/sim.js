@@ -123,6 +123,15 @@ function stepPlay(s, I) {
   triggers(s);
   if (s.phase !== 'play') return;
   updatePlayer(s, I);
+  // the boss's words: the two stand apart (introGap) until he has spoken, then the duel begins and he closes in
+  if (s.bossIntro > 0) {
+    const b = s.foes.find((f) => f.boss && f.st !== 'dead');
+    if (!b) s.bossIntro = 0;
+    else {
+      const side = p.x <= b.x ? -1 : 1, lim = b.x + side * COMBAT.introGap; if (side < 0 ? p.x > lim : p.x < lim) { p.x = lim; p.vx = 0; }
+      s.bossIntro -= DT; if (s.bossIntro <= 0) { s.bossIntro = 0; b.engaged = true; if (b.st === 'enter') setF(s, b, 'ready'); b.readyT = 0.5 + rnd(s) * 0.4; cue(s, 'duel', { boss: b.boss }); }
+    }
+  }
   for (const f of s.foes) updateFoe(s, f);
   s.foes = s.foes.filter((f) => !(f.st === 'dead' && f.stt > 2.2));
   updateArrows(s);
@@ -178,7 +187,7 @@ function startFight(s, e) {
   const boss = e.t === 'boss';
   const x0 = e.x - (boss ? 420 : 380), x1 = e.x + (boss ? 400 : 440);
   s.arena = { ev: e.i, x0, x1, boss, clearT: 0 };
-  if (boss) { const f = makeFoe(s, null, e.x + 330, e.boss); f.tx = e.x + 160; s.foes.push(f); cue(s, 'boss', { boss: e.boss }); s.bossIntro = 0; }
+  if (boss) { const f = makeFoe(s, null, e.x + 330, e.boss); f.tx = e.x + 160; s.foes.push(f); cue(s, 'boss', { boss: e.boss }); s.bossIntro = COMBAT.bossIntro; }
   else e.foes.forEach((type, i) => {
     const left = i === 2 || (i === 1 && e.foes.length === 2 && type !== 'archer' && s.ch >= 2);
     const fx = left ? x0 - 40 : x1 + 40 + i * 60;
@@ -213,7 +222,7 @@ function updatePlayer(s, I) {
       const tv = dir * sp; p.vx += (tv - p.vx) * Math.min(1, DT * (p.y > 0 ? 5 : 14));
       if (dir) p.face = dir;
       if (p.y <= 0) p.st = Math.abs(p.vx) > 8 ? 'move' : 'idle';
-      if (p.buf === 'dodge') { p.buf = null; setP(p, 'dodge'); p.dodgeDir = dir || p.face; p.ifr = Math.max(p.ifr, P.dodgeIfr); cue(s, 'dodge', { x: p.x }); break; }
+      if (p.buf === 'dodge') { p.buf = null; startDodge(s, dir || p.face); break; }
       if (p.buf === 'parry' || (I.parry && p.y <= 0 && p.st !== 'air' && p.buf === null && !s.prev.parry)) { p.buf = null; startGuard(s); break; }
       if (I.parry && p.y <= 0 && s.prev.parry && p.stt > 0.05) { startGuard(s, true); break; }
       if (p.buf === 'heavy' && p.recoil <= 0) { p.buf = null; p.cid++; setP(p, 'heavy'); break; }
@@ -227,12 +236,21 @@ function updatePlayer(s, I) {
       p.vx += (dir * P.guardWalk - p.vx) * Math.min(1, DT * 10);
       // a tapped parry still holds the guard long enough to catch the blow it was meant for
       if (!I.parry && s.t - (p.parryAt ?? -9) >= COMBAT.parryHold) { p.lastRel = s.t; setP(p, 'idle'); }
-      else if (p.buf === 'dodge') { p.buf = null; setP(p, 'dodge'); p.dodgeDir = dir || p.face; p.ifr = Math.max(p.ifr, P.dodgeIfr); cue(s, 'dodge', { x: p.x }); }
+      else if (p.buf === 'dodge') { p.buf = null; startDodge(s, dir || p.face); }
       break;
     }
     case 'dodge': {
+      const V = p.vault;
+      if (V) { // the forward flip over a foe: an eased arc from take-off to landing, high enough to clear him
+        const u = Math.min(1, p.stt / P.dodgeT), e = u * u * (3 - 2 * u), nx = V.from + (V.to - V.from) * e;
+        p.vx = (nx - p.x) / DT; p.x = nx; p.y = COMBAT.vaultH * Math.sin(Math.PI * u); p.vy = 0;
+        if (p.stt >= P.dodgeT) { p.y = 0; p.vx = 0; p.face = -p.dodgeDir; p.vault = null; setP(p, 'idle'); cue(s, 'land', { x: p.x }); }
+        break;
+      }
       const k = 1 - p.stt / P.dodgeT; p.vx = p.dodgeDir * P.dodgeV * Math.max(0.15, k * k + 0.1);
-      if (p.stt >= P.dodgeT) { setP(p, 'idle'); p.vx *= 0.3; }
+      // no room to land beyond him (his back to the wall): the roll stops short of his hip instead of sliding into him
+      if (p.dodgeStop != null && (p.x - p.dodgeStop) * p.dodgeDir >= 0) { p.x = p.dodgeStop; p.vx = 0; }
+      if (p.stt >= P.dodgeT) { setP(p, 'idle'); p.vx *= 0.3; p.dodgeStop = null; }
       break;
     }
     case 'slash': {
@@ -262,7 +280,7 @@ function updatePlayer(s, I) {
     case 'dead': p.vx *= 0.9; break;
   }
   // physics
-  if (p.y > 0 || p.vy > 0) { p.vy -= P.grav * DT; p.y += p.vy * DT; if (p.y <= 0) { p.y = 0; p.vy = 0; if (p.st === 'air') p.st = 'idle'; cue(s, 'land', { x: p.x }); } }
+  if (!p.vault && (p.y > 0 || p.vy > 0)) { p.vy -= P.grav * DT; p.y += p.vy * DT; if (p.y <= 0) { p.y = 0; p.vy = 0; if (p.st === 'air') p.st = 'idle'; cue(s, 'land', { x: p.x }); } }
   const lo = s.arena ? s.arena.x0 : 30, hi = s.arena ? s.arena.x1 : s.len - 20;
   p.x = Math.max(lo, Math.min(hi, p.x + p.vx * DT));
   // foes are solid: no walking through bodies (dodging through is allowed: the roll goes under)
@@ -277,6 +295,22 @@ function updatePlayer(s, I) {
   }
   if ((p.st === 'move') && Math.abs(p.vx) > 40) { p.stepAcc = (p.stepAcc || 0) + Math.abs(p.vx) * DT; if (p.stepAcc > 58) { p.stepAcc = 0; cue(s, 'step', { x: p.x, run: Math.abs(p.vx) > 200 }); } }
   if (p.st === 'idle' && !s.arena) s.idle += DT; else s.idle = 0;
+}
+// A dodge whose path would cross a live foe becomes a forward flip over him, landing past him facing back (cue 'vault';
+// the figure engineer plays the somersault). It keeps the dodge's invulnerability. With no room to land, it stops short.
+function startDodge(s, dir) {
+  const p = s.p; setP(p, 'dodge'); p.dodgeDir = dir; p.ifr = Math.max(p.ifr, P.dodgeIfr); p.vault = null; p.dodgeStop = null;
+  const lo = s.arena ? s.arena.x0 : 30, hi = s.arena ? s.arena.x1 : s.len - 20;
+  let over = null;
+  for (const f of s.foes) { if (f.st === 'dead' || f.st === 'enter') continue; const d = (f.x - p.x) * dir; if (d > 0 && d < COMBAT.vaultReach && (!over || d < (over.x - p.x) * dir)) over = f; }
+  if (over) {
+    const to = over.x + dir * COMBAT.vaultPast;
+    if (to >= lo && to <= hi && !s.foes.some((g) => g !== over && g.st !== 'dead' && g.st !== 'enter' && Math.abs(g.x - to) < COMBAT.bodyMin)) {
+      p.vault = { from: p.x, to, over: over.id }; cue(s, 'vault', { x: p.x, to, id: over.id, dir }); return;
+    }
+    p.dodgeStop = over.x - dir * COMBAT.bodyMin;
+  }
+  cue(s, 'dodge', { x: p.x });
 }
 function setP(p, st, keepCombo) { p.st = st; p.stt = 0; p.hitDone = false; if (!keepCombo && st !== 'slash') p.combo = 0; }
 function startGuard(s, held) {
@@ -419,7 +453,7 @@ function updateFoe(s, f) {
     case 'enter': {
       const to = f.tx - f.x; mv = Math.sign(to) * Math.min(Math.abs(to) / DT, F.speed * 1.3); f.face = Math.sign(to) || f.face;
       // walking in he stops when he meets the ronin instead of walking through him
-      if (Math.abs(to) < 4 || f.stt > 4 || (dist < (f.w + 26) / 2 + 24 && Math.sign(to) === Math.sign(dx))) { setF(s, f, 'ready'); f.readyT = f.boss ? 1.6 + rnd(s) * 0.4 : 0.5 + rnd(s) * 0.5; } // a boss holds his stance before the first cut
+      if (Math.abs(to) < 4 || f.stt > 4 || (dist < (f.boss && s.bossIntro > 0 ? COMBAT.introGap + 4 : (f.w + 26) / 2 + 24) && Math.sign(to) === Math.sign(dx))) { setF(s, f, 'ready'); f.readyT = f.boss ? 1.6 + rnd(s) * 0.4 : 0.5 + rnd(s) * 0.5; } // a boss holds his stance before the first cut
       break;
     }
     case 'ready': case 'approach': {
@@ -440,6 +474,7 @@ function updateFoe(s, f) {
       f.st = want > 0 && !shuffle ? 'approach' : 'ready';
       if (f.st === 'ready' && f.turnT === 0 && foeGuardMax(f) > 0) { const was = f.guard; f.guard = Math.min(1, f.guard + DT / (F.settle || 0.3)); if (was < 1 && f.guard >= 1) cue(s, 'guardup', { x: f.x, id: f.id }); }
       else f.guard = 0;
+      if (f.boss && s.bossIntro > 0) { mv = 0; f.st = 'ready'; break; } // he stands and speaks
       f.readyT -= DT * d.aggr;
       const inRange = keep ? dist < 640 : dist <= Math.max(F.range, hold) + COMBAT.reachIn; // he steps in during the windup to close the rest
       if (f.readyT <= 0 && inRange && !s.token && s.tokenCD <= 0 && p.st !== 'dead' && s.phase === 'play') {
@@ -618,6 +653,13 @@ function standoffWin(s) {
   const so = s.so; if (!so.closed) { so.closed = true; cue(s, 'drawwin', { open: 0 }); }
   so.st = 'cut'; so.t = 0; so.slowK = 1; so.result = 'win'; s.stats.standoffWins++; cue(s, 'socut', {}); s.slow = 0.6;
 }
+// the pass, for the figure engineer (extreme pose, then sheathe) and the ink engineer (the long arc from .from to .to)
+export function standoffPass(so) {
+  if (!so || so.st !== 'cut' || !so.pass) return null; const C = COMBAT, t = so.t;
+  if (t < C.passDash) return { phase: 'dash', k: t / C.passDash, from: so.pass.from, to: so.pass.to };
+  if (t < C.passDash + C.passHold) return { phase: 'hold', k: (t - C.passDash) / C.passHold, from: so.pass.from, to: so.pass.to };
+  return { phase: 'sheathe', k: Math.min(1, (t - C.passDash - C.passHold) / C.passSheathe), from: so.pass.from, to: so.pass.to };
+}
 export function standoffPose(so) {
   if (!so) return 'none';
   if (so.st === 'hold') { for (const ft of so.feints) if (so.t >= ft && so.t < ft + 0.32) return 'feint'; return so.tellAt != null && so.t >= so.tellAt ? 'tell' : 'wait'; }
@@ -643,11 +685,10 @@ function stepStandoff(s, I) {
       p.st = 'focus';
       const pose = standoffPose(so);
       if (pose === 'feint' && !so.fcue) { so.fcue = true; cue(s, 'sofeint', {}); cue(s, 'feinttell', { x: so.oppX }); } else if (pose !== 'feint') so.fcue = false;
-      if (pose === 'tell' && !so.told) { so.told = true; cue(s, 'drawtell', { x: so.oppX, lead: COMBAT.drawTell }); if (so.teach) { so.slowK = COMBAT.drawTeachSlow; s.hintsSeen.drawteach = 1; s.hint = null; delete s.hintsSeen.now; hint(s, 'now'); } }
+      if (pose === 'tell' && !so.told) { so.told = true; cue(s, 'drawtell', { x: so.oppX, lead: COMBAT.drawTell }); if (so.teach) { so.slowK = COMBAT.drawTeachSlow; s.hintsSeen.drawteach = 1; } }
       // a release a hair before the window (drawGrace) still counts; earlier than that is too early (a feint, or a guess)
-      // (the teaching duel accepts a release anywhere after the tell)
-      if (!I.focus) { if (so.told && (so.teach || so.t >= so.strikeAt - COMBAT.drawGrace)) { standoffWin(s); break; } so.st = 'fail'; so.t = 0; so.slowK = 1; so.result = 'early'; cue(s, 'sofail', { early: 1, feint: pose === 'feint' ? 1 : 0 }); break; }
-      if (so.t >= so.strikeAt) { so.st = 'strike'; so.ts = 0; cue(s, 'sodraw', {}); cue(s, 'drawwin', { open: 1, win: so.win }); }
+      if (!I.focus) { if (so.told && so.t >= so.strikeAt - COMBAT.drawGrace) { standoffWin(s); break; } so.st = 'fail'; so.t = 0; so.slowK = 1; so.result = 'early'; cue(s, 'sofail', { early: 1, feint: pose === 'feint' ? 1 : 0 }); break; }
+      if (so.t >= so.strikeAt) { so.st = 'strike'; so.ts = 0; cue(s, 'sodraw', {}); cue(s, 'drawwin', { open: 1, win: so.win }); if (so.teach) { s.hint = null; delete s.hintsSeen.now; hint(s, 'now'); } } // the window is the draw: "Now" on that frame
       break;
     }
     case 'strike': {
@@ -659,10 +700,13 @@ function stepStandoff(s, I) {
     }
     case 'cut': {
       // the ronin crosses past the opponent in one stroke
-      if (so.t < 0.25) { p.st = 'iai'; p.x += (so.oppX + 60 - p.x) * Math.min(1, DT * 20); }
+      // the one-stroke pass: a dash to well past him (sopass), the extreme held, then a slow sheathe while he falls
+      if (!so.pass) { so.pass = { from: p.x, to: so.oppX + COMBAT.passPast }; cue(s, 'sopass', { from: so.pass.from, to: so.pass.to, x: so.oppX }); }
+      { const P2 = standoffPass(so); p.st = 'iai'; p.face = 1; p.x = so.pass.from + (so.pass.to - so.pass.from) * (P2.phase === 'dash' ? 1 - Math.pow(1 - P2.k, 3) : 1); p.passPhase = P2.phase; }
       if (so.t > 1.5) {
         so.idx++;
         if (so.idx >= so.n) { const e = s.ev[so.ev]; e.done = true; s.phase = 'play'; s.pt = 0; s.so = null; p.st = 'idle'; p.res = Math.min(s.resMax, p.res + 1); cue(s, 'sowon', {}); return; }
+        so.pass = null; p.passPhase = null;
         so.type = s.ev[so.ev].foes[so.idx]; so.st = 'next'; so.t = 0; so.oppX = p.x + 700; so.oppOX = so.oppX; so.x = p.x + 150;
       }
       break;

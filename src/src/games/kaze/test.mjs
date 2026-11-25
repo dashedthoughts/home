@@ -7,7 +7,7 @@
 // 12 parry timing (early/on-time/late presses at 60/30/20 fps, taps and holds); 13 a learner beats Ono in a few tries.
 // 11 combat honesty: unready foes cannot block, a raised guard always blocks visibly (clash cue, counter), guard meters
 // break within 4 hits, bosses take damage from every landed quick cut, and no block in real play comes without a raised guard.
-import { createSim, step, DT, blankInput, standoffPose, digest, foeGuarded, foeGuardMax } from './sim.js';
+import { createSim, step, DT, blankInput, standoffPose, standoffPass, digest, foeGuarded, foeGuardMax } from './sim.js';
 import { makeBot, botInput, makePersona, personaInput } from './bot.js';
 import { DIFF, ATK, CHAPTERS, HAIKU, FOES, BOSSES, COMBAT } from './data.js';
 import { makeStore, DEFAULT_PROGRESS } from './save.js';
@@ -123,10 +123,13 @@ console.log(`  windows: story ${DIFF.story.standoff}s, blade ${DIFF.blade.stando
   }
   ok(feintCues > 20, `feint tells were exercised (${feintCues})`);
   // the teaching beat: the first standoff of chapter 1 slows its clock from the tell and prompts "Now" as the window opens
-  { const s = standoffAt(0, 0, 'blade', 2); let slowed = false, now = false, realT0 = null, realOpen = null;
+  { const s = standoffAt(0, 0, 'blade', 2); let slowed = false, now = false, earlyNow = false, realT0 = null, realOpen = null;
     for (let i = 0; i < 60 * 30 && s.phase === 'standoff'; i++) { const I = blankInput(); I.focus = !(s.so.st === 'strike' && s.so.ts > s.so.win / 2); step(s, I);
       for (const c of s.cues) { if (c.k === 'drawtell') realT0 = s.t; if (c.k === 'drawwin' && c.open) realOpen = s.t; } s.cues.length = 0;
-      if (s.so && s.so.slowK < 1) slowed = true; if (s.hint && s.hint.id === 'now') now = true; if (s.so && s.so.result) break; }
+      if (s.so && s.so.slowK < 1) slowed = true; if (s.hint && s.hint.id === 'now') { now = true; if (!(s.so && (s.so.st === 'strike' || s.so.result))) earlyNow = true; } if (s.so && s.so.result) break; }
+    ok(!earlyNow, '"Now" never shows before the window opens');
+    // the teaching duel has the same rule as every other: releasing on the tell, before the draw, is early
+    { const t2 = standoffAt(0, 0, 'blade', 2); let r = null; for (let i = 0; i < 60 * 30 && t2.phase === 'standoff' && !r; i++) { const I = blankInput(); I.focus = !(t2.so.told && t2.so.t >= t2.so.tellAt + 0.1); step(t2, I); t2.cues.length = 0; r = t2.so && t2.so.result; } ok(r === 'early', `teaching duel: releasing on the tell is early (${r})`); }
     ok(slowed && now && realOpen - realT0 > 0.8, `first standoff teaches the tell (slowed ${slowed}, "Now" ${now}, tell to window ${(realOpen - realT0).toFixed(2)}s real time)`); }
   console.log(`  ${duels} duel chains: tell leads the window by ${Math.min(...leads).toFixed(2)}..${Math.max(...leads).toFixed(2)}s; ${feintCues} feint tells, none with drawtell; releases from ${COMBAT.drawGrace}s before to ${COMBAT.drawGrace}s after the window all win`);
 }
@@ -267,7 +270,7 @@ console.log('11. combat honesty');
     const e = s.ev.find((q) => q.t === (BOSSES[type] ? 'boss' : 'fight'));
     for (const q of s.ev) if (q !== e) q.done = true;
     if (!BOSSES[type]) e.foes = [type];
-    s.p.x = s.p.ox = e.x - 80; step(s, blankInput()); s.cues.length = 0;
+    s.p.x = s.p.ox = e.x - 80; step(s, blankInput()); s.cues.length = 0; s.bossIntro = 0; // (these tests start mid-duel)
     const f = s.foes[0]; s.p.face = 1; f.face = -1; f.x = f.ox = s.p.x + (o.dist ?? 70);
     f.st = o.st ?? 'ready'; f.stt = 0.5; f.readyT = 99; f.engaged = o.engaged ?? true; f.guard = o.guard ?? 0;
     if (o.turned) f.face = 1;
@@ -362,7 +365,7 @@ console.log('11. combat honesty');
     const s = createSim({ seed, difficulty: 'blade', chapter: ch }); const m = makePersona(kind, seed);
     for (let i = 0; i < 60 * 60 * 3; i++) {
       step(s, personaInput(s, m)); s.cues.length = 0;
-      for (const f of s.foes) { if (f.st === 'dead' || f.st === 'enter' || s.p.st === 'dodge') continue; const d = Math.abs(f.x - s.p.x); closest = Math.min(closest, d); if (f.st === 'ready' && f.type !== 'archer' && (s.p.st === 'idle' || s.p.st === 'move')) rest.push(d); }
+      for (const f of s.foes) { if (f.st === 'dead' || f.st === 'enter' || s.p.st === 'dodge') continue; const d = Math.abs(f.x - s.p.x); closest = Math.min(closest, d); if (f.st === 'ready' && f.type !== 'archer' && !(s.bossIntro > 0) && (s.p.st === 'idle' || s.p.st === 'move')) rest.push(d); }
       const h = s.hint; if (h && h.src != null) { hints++; const f = s.foes.find((q) => q.id === h.src); if (!f || f.st === 'dead' || (h.id === 'riposte' && f.st !== 'opened') || ((h.id === 'parry' || h.id === 'dodge') && f.st !== 'wind' && f.st !== 'act')) stale++; }
     }
   }
@@ -376,7 +379,50 @@ console.log('11. combat honesty');
     for (let i = 0; i < 40; i++) { const I = blankInput(); I.parry = i === 30; step(s, I); s.cues.length = 0; }
     const had = s.hint && s.hint.id === 'riposte'; for (let i = 0; i < 30 && f.st !== 'dead'; i++) { const I = blankInput(); I.slash = i === 2; step(s, I); s.cues.length = 0; }
     ok(had && f.st === 'dead' && !(s.hint && s.hint.id === 'riposte'), `"Strike now" shown on the parry (${had}) and gone when he dies (${s.hint && s.hint.id})`); }
-  console.log(`  closest ${closest.toFixed(0)}px, rest median ${med.toFixed(0)}px; ${hints} hint frames checked, none stale`);
+  // walking forward into a squared-up bandit or spearman stops at the measure (space - 8)
+  const stops = [];
+  for (const type of ['bandit', 'spear']) { const s = createSim({ seed: 2, difficulty: 'blade', chapter: 0 }); const e = s.ev.find((q) => q.t === 'fight'); for (const q of s.ev) if (q !== e) q.done = true; e.foes = [type];
+    s.p.x = s.p.ox = e.x - 80; step(s, blankInput()); const f = s.foes[0]; f.st = 'ready'; f.x = s.p.x + 200; f.face = -1; f.engaged = true; f.guard = 1; f.readyT = 99; s.tokenCD = 99;
+    const I = blankInput(); I.right = true; let dmin = 1e9; for (let i = 0; i < 120; i++) { step(s, I); s.cues.length = 0; f.readyT = 99; dmin = Math.min(dmin, Math.abs(f.x - s.p.x)); }
+    stops.push(type + ' ' + dmin.toFixed(0)); ok(dmin >= COMBAT.space - 8 - 1, `walking into a squared-up ${type} stops at ${dmin.toFixed(0)}px (want >= ${COMBAT.space - 8})`); }
+  // a boss speaks from introGap away: the ronin is held back however he walks, the boss stops there, then the duel begins
+  for (const ch of [0, 1, 2, 3, 4]) { const s = createSim({ seed: 3, difficulty: 'blade', chapter: ch }); const e = s.ev.find((q) => q.t === 'boss'); for (const q of s.ev) if (q !== e) q.done = true;
+    s.p.x = s.p.ox = e.x - 120; const I = blankInput(); I.right = true; I.run = true; let dmin = 1e9, duel = false;
+    for (let i = 0; i < 60 * 3.2; i++) { step(s, I); for (const c of s.cues) if (c.k === 'duel') duel = true; s.cues.length = 0; const b = s.foes.find((f) => f.boss); if (b && s.bossIntro > 0) dmin = Math.min(dmin, Math.abs(b.x - s.p.x)); }
+    ok(dmin >= COMBAT.introGap - 5 && !duel, `ch${ch + 1} boss intro: ${dmin.toFixed(0)}px apart while he speaks`);
+    for (let i = 0; i < 60 * 2 && !duel; i++) { step(s, blankInput()); for (const c of s.cues) if (c.k === 'duel') duel = true; s.cues.length = 0; } ok(duel, `ch${ch + 1}: the duel begins after the words`); }
+  console.log(`  closest ${closest.toFixed(0)}px, rest median ${med.toFixed(0)}px; walk-in stops: ${stops.join(', ')}px; boss intros held at ${COMBAT.introGap}px; ${hints} hint frames checked, none stale`);
+}
+
+// ---- 11c. the dodge vault and the standoff pass ----
+{
+  const lines = [];
+  for (const [type, dist] of [['bandit', 120], ['spear', 100], ['brute', 130], ['duelist', 90]]) {
+    const s = createSim({ seed: 4, difficulty: 'blade', chapter: 0 }); const e = s.ev.find((q) => q.t === 'fight'); for (const q of s.ev) if (q !== e) q.done = true; e.foes = [type];
+    s.p.x = s.p.ox = e.x - 80; step(s, blankInput()); s.cues.length = 0; const f = s.foes[0]; f.st = 'ready'; f.x = s.p.x + dist; f.face = -1; f.readyT = 99; s.tokenCD = 99; const fx = f.x, ifr0 = [];
+    let vault = null, shared = 0; const I = blankInput(); I.right = true; I.dodge = true;
+    for (let i = 0; i < 40; i++) { step(s, i < 2 ? I : blankInput()); for (const c of s.cues) if (c.k === 'vault') vault = c; s.cues.length = 0; f.readyT = 99; if (i < 12) ifr0.push(s.p.ifr > 0); if (s.p.y < 20 && Math.abs(s.p.x - f.x) < COMBAT.bodyMin - 1) shared++; }
+    const past = (s.p.x - f.x);
+    ok(!!vault && past >= 100 && s.p.face === -1 && s.p.y === 0, `dodge at a ${type} ${dist}px away flips over him: vault ${!!vault}, lands ${past.toFixed(0)}px past, facing ${s.p.face}`);
+    ok(shared === 0, `the flip never shares ground with the ${type} (${shared} frames)`); ok(ifr0.slice(1, 12).every(Boolean), 'the flip keeps the dodge invulnerability');
+    lines.push(`${type} ${dist}px -> ${past.toFixed(0)}px past`);
+  }
+  // back to the wall: no room to land, the roll stops short of his hip
+  { const s = createSim({ seed: 4, difficulty: 'blade', chapter: 0 }); const e = s.ev.find((q) => q.t === 'fight'); for (const q of s.ev) if (q !== e) q.done = true; e.foes = ['bandit'];
+    s.p.x = s.p.ox = e.x - 80; step(s, blankInput()); const f = s.foes[0]; f.st = 'ready'; f.x = s.arena.x1 - 20; s.p.x = f.x - 120; f.face = -1; f.readyT = 99; s.tokenCD = 99;
+    const I = blankInput(); I.right = true; I.dodge = true; let minD = 1e9, vault = false; for (let i = 0; i < 40; i++) { step(s, i < 2 ? I : blankInput()); vault = vault || s.cues.some((c) => c.k === 'vault'); s.cues.length = 0; f.readyT = 99; minD = Math.min(minD, Math.abs(s.p.x - f.x)); }
+    ok(!vault && minD >= COMBAT.bodyMin - 1, `no room to land: the roll stops ${minD.toFixed(0)}px short of him`); }
+  // the standoff pass: the ronin ends 110 to 130px beyond the opponent, back to him, the extreme held 8 to 10 frames
+  for (const [ch, seed] of [[0, 1], [1, 2], [2, 3]]) {
+    const s = standoffAt(ch, 0, 'blade', seed); s.hintsSeen.drawteach = 1; if (s.so) s.so.teach = false; let opp = null, hold = 0, pass = null;
+    for (let i = 0; i < 60 * 30 && s.phase === 'standoff'; i++) { const I = blankInput(); I.focus = !(s.so.st === 'strike' && s.so.ts > s.so.win / 2); const ox = s.so.oppX; step(s, I);
+      for (const c of s.cues) if (c.k === 'sopass') { pass = c; opp = ox; } s.cues.length = 0;
+      if (s.so && s.so.st === 'cut') { const P2 = standoffPass(s.so); if (P2 && P2.phase === 'hold') hold++; if (P2 && P2.phase === 'sheathe') break; } }
+    const beyond = s.p.x - opp;
+    ok(!!pass && beyond >= 110 && beyond <= 130 && s.p.face === 1 && hold >= 8 && hold <= 10, `ch${ch + 1} standoff pass: ${beyond.toFixed(0)}px beyond him, back to him, extreme held ${hold} frames`);
+    lines.push(`pass ${beyond.toFixed(0)}px/${hold}f`);
+  }
+  console.log('  ' + lines.join('; '));
 }
 
 // ---- 12. parry: the window opens at the press, a little early counts, a tap holds, a held guard never swallows a press,
@@ -388,7 +434,7 @@ console.log('12. parry timing');
   const setup = (type = 'bandit', atk = 'cut', seed = 1) => {
     const s = createSim({ seed, difficulty: 'blade', chapter: type === 'ono' ? 1 : 0 });
     const e = s.ev.find((q) => q.t === (type === 'ono' ? 'boss' : 'fight')); for (const q of s.ev) if (q !== e) q.done = true; if (type !== 'ono') e.foes = [type];
-    s.p.x = s.p.ox = e.x - 80; step(s, blankInput()); s.cues.length = 0;
+    s.p.x = s.p.ox = e.x - 80; step(s, blankInput()); s.cues.length = 0; s.bossIntro = 0;
     const f = s.foes[0]; s.p.face = 1; f.face = -1; f.x = f.ox = s.p.x + 70; f.engaged = true; f.atk = atk; f.st = 'wind'; f.stt = 0; f.windT = 0.6; f.feinting = false; s.token = f.id;
     return { s, f };
   };

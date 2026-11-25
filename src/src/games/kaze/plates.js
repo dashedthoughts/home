@@ -44,11 +44,13 @@ export function plateStep(m, s, cues, input) {
   const a = m.act;
   if (a) {
     const age = s.t - a.t0, still = C.some((c) => c.key === a.key);
-    const ended = age > a.dur || !still || (input && age > 1 && a.kind !== 'fight') || (fight && !(a.kind === 'fight' || a.kind === 'boss' || a.kind === 'death'));
+    const released = a.key.startsWith('hint:now:') && !(s.so && s.so.st === 'strike'); // [inkfx] the teaching "Now" clears on the release
+    const ended = released || age > a.dur || !still || (input && age > 1 && a.kind !== 'fight') || (fight && !(a.kind === 'fight' || a.kind === 'boss' || a.kind === 'death'));
     if (ended || (best && best.key !== a.key && PRI[best.kind] > PRI[a.kind])) { m.done.add(a.key); m.act = null; }
   }
   if (!m.act && best && ok(best)) { const born = best.kind === 'story' && best.key.startsWith('shrine') ? m.shrine.t0 : best.kind === 'boss' && best.key.startsWith('fall') ? m.fall.t0 : s.t; const dur = best.dur || plateDur(best.text); if (s.t - born < dur) m.act = Object.assign({}, best, { t0: born, dur }); else m.done.add(best.key); }
   if (!m.act) return null;
-  const age = s.t - m.act.t0, alpha = Math.min(1, age / 0.25) * Math.min(1, Math.max(0, (m.act.dur - age) / 0.35));
+  const now = m.act.key.startsWith('hint:now:'); // [inkfx] the teaching "Now" is there at full strength on the window frame, no fade in
+  const age = s.t - m.act.t0, alpha = (now ? 1 : Math.min(1, age / 0.25)) * Math.min(1, Math.max(0, (m.act.dur - age) / 0.35));
   return Object.assign({}, m.act, { age, alpha });
 }

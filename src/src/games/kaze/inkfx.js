@@ -104,8 +104,11 @@ export class InkFx {
   liftColor(red) { if (!this.lifts) this.lifts = Array.from({ length: 11 }, (_, i) => mix('#2e2924', '#3d1914', i / 10)); return this.lifts[Math.round(clamp(red, 0, 1) * 10)]; }
   // the duel disc: a pale bloom with a pooled rim soaking into the red wash, not a hard disc
   discBloom(g, cx, cy, rad, col, e) {
-    const K = bloomKit(); if (!K) return; g.setTransform(1, 0, 0, 1, 0, 0);
-    K.draw(g, 1, col, cx, cy, rad * 1.18, 0.95 * e, 0.45 * e); K.draw(g, 1, col, cx, cy, rad * 1.02, 0.9 * e, 0); g.globalAlpha = 1;
+    // a round wet disc: dense core, a soft bleed past the edge, a faint pooled rim on the lower side where the pigment settled
+    g.setTransform(1, 0, 0, 1, 0, 0);
+    if (!this.discC || this.discCol !== col) { const S = 128, c = makeCanvas(S * 2, S * 2), q = c.getContext('2d'); const rg = q.createRadialGradient(S, S, 0, S, S, S); rg.addColorStop(0, rgba(col, 1)); rg.addColorStop(0.62, rgba(col, 0.96)); rg.addColorStop(0.7, rgba(col, 0.8)); rg.addColorStop(0.78, rgba(col, 0.3)); rg.addColorStop(1, rgba(col, 0)); q.fillStyle = rg; q.fillRect(0, 0, S * 2, S * 2);
+      q.strokeStyle = rgba(mix(col, '#3a0d08', 0.45), 0.35); q.lineWidth = 3; q.beginPath(); q.arc(S, S, S * 0.69, 0.35, 2.75); q.stroke(); this.discC = c; this.discCol = col; }
+    const w = rad * 2.85; g.globalAlpha = 0.95 * e; g.drawImage(this.discC, cx - w / 2, cy - w / 2, w, w); g.globalAlpha = 1;
   }
   // the strike: one dominant wet mass at the contact, a few long tapered streaks thrown along the cut, and droplets of
   // widely varied size (one or two heavy, many fine), all landing as stains. `splash`: a drop hitting the ground (no streaks).
@@ -146,12 +149,12 @@ export class InkFx {
         case 'cut': this.burst(c.x - s.p.face * 6, -groundH(ch, c.x) - 62, s.p.face, c.dmg > 1 ? 1.3 : 1, red); break;
         case 'riposte': this.burst(c.x - s.p.face * 6, -groundH(ch, c.x) - 64, s.p.face, 1.5, red); break;
         case 'guardbreak': this.burst(c.x - s.p.face * 10, -groundH(ch, c.x) - 58, s.p.face, 0.6, red); break;
-        case 'socut': if (s.so) this.burst(s.so.oppX - 6, -groundH(ch, s.so.oppX) - 64, 1, 1.6, red); break;
+        case 'socut': if (s.so) this.burst(s.so.oppX - 6, -groundH(ch, s.so.oppX) - 64, 1, 1.6, red); this.moment(CHAPTERS[ch].accent, 0.16, 2.4, 0); break; // the release: the plate's accent wash in the paper, not a film over the scene
         case 'hurt': this.burst(s.p.x + s.p.face * 4, -groundH(ch, s.p.x) - 60, -s.p.face, (c.dmg || 1) > 1 ? 1.1 : 0.85, red); break;
         case 'chip': this.burst(s.p.x + s.p.face * 4, -groundH(ch, s.p.x) - 60, -s.p.face, 0.45, red); break;
         case 'death': this.burst(s.p.x, -groundH(ch, s.p.x) - 56, -s.p.face, 1.3, red); this.stain(s.p.x, -groundH(ch, s.p.x), 26, 8); break;
         case 'kill': if (c.boss) this.moment(CHAPTERS[ch].accent, 0.16, 3.6, 1); this.burst(c.x - s.p.face * 6, -groundH(ch, c.x) - 60, s.p.face, c.boss ? 2 : 1.7, red, false, 1.3); if (!red) this.strandsAt(c.x - s.p.face * 6 + s.p.face * 14, -groundH(ch, c.x) - 60); if (s.p.drawn !== false) { this.dripQ = red ? 2 : 5; this.dripT = 0.25; } break;
-        case 'parry': case 'reflect': { this.parryAt(c.x, -groundH(ch, c.x) - 66, Math.sign(c.x - s.p.x) || s.p.face); const C = this.crack; C.t = 9; C.seed = (Math.random() * 1e4) | 0; break; }
+        case 'parry': case 'reflect': { this.parryPend = { x: c.x, y: -groundH(ch, c.x) - 92, dir: Math.sign(c.x - s.p.x) || s.p.face }; const C = this.crack; C.t = 9; /* placed after the figures are drawn, on the blades' crossing */ C.seed = (Math.random() * 1e4) | 0; break; }
         case 'step': {
           // walked through wet ink? leave a few prints
           let wet = false; for (const p of this.stains) if (p.on && !p.foot && p.t < p.life * 0.45 && Math.abs(p.x - c.x) < p.r * 1.2 + 6) { wet = true; break; }
@@ -317,6 +320,10 @@ export class InkFx {
       if (d.y >= gy) { d.on = 0; this.stain(d.x, gy, 4 + Math.random() * 3, 5); continue; }
       const st = clamp(d.vy / 300, 0.6, 2.4); g.globalAlpha = 0.85; g.beginPath(); g.ellipse(d.x, d.y, 1.4, 1.6 * st, 0, 0, 6.2832); g.fill();
     }
+    if (this.parryPend) { // the blades' crossing point, as the figure code exposes it this frame (head height otherwise)
+      const P = this.parryPend, X = r.crossPt || (r.pfig && (r.pfig.crossPt || r.pfig.cross)); this.parryPend = null;
+      if (X && isFinite(X[0]) && Math.abs(X[0] - P.x) < 160) this.parryAt(X[0], X[1], P.dir); else this.parryAt(P.x, P.y, P.dir);
+    }
     this.petals.air(g, s, dt, r); this.tell.air(g, s, dt, r);
     for (const m of this.motes) {
       if (!m.on) continue; m.t += dt; if (m.t >= m.life) { m.on = 0; continue; }
@@ -365,7 +372,7 @@ export class InkFx {
     if (!this.wash || this.washW !== W || this.washH !== H) { this.wash = edgeWash(W, H, 17); this.washW = W; this.washH = H; }
     // the wash is pre-scaled once to the frame (washF), so each frame is four unscaled edge blits; the breath is in the alpha
     if (!this.washF || this.washF.width !== W || this.washF.height !== H) { this.washF = makeCanvas(W, H); this.washF.getContext('2d').drawImage(this.wash, 0, 0, W, H); }
-    const br = r.reduced ? 0 : Math.sin(r.time * 1.6) * 0.05, F = this.washF, ty = Math.round(H * 0.2), lx = Math.round(W * 0.13);
+    const br = r.reduced ? 0 : Math.sin(r.time * 1.6) * 0.05, F = this.washF, ty = Math.round(H * 0.12), lx = Math.round(W * 0.08); // the extreme edges only
     g.setTransform(1, 0, 0, 1, 0, 0); g.globalAlpha = Math.min(0.6, this.low * (0.55 + br));
     g.drawImage(F, 0, 0, W, ty, 0, 0, W, ty); g.drawImage(F, 0, H - ty, W, ty, 0, H - ty, W, ty);
     g.drawImage(F, 0, ty, lx, H - 2 * ty, 0, ty, lx, H - 2 * ty); g.drawImage(F, W - lx, ty, lx, H - 2 * ty, W - lx, ty, lx, H - 2 * ty);

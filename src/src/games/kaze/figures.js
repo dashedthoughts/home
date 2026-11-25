@@ -9,7 +9,7 @@ import { hakamaTargets, hakamaPolys, stepChain, hull, soften, insideConvex } fro
 
 const E = { out: (t) => 1 - (1 - t) * (1 - t), inout: (t) => (t < 0.5 ? 2 * t * t : 1 - 2 * (1 - t) * (1 - t)), back: (t) => 1 + 2.2 * Math.pow(t - 1, 3) + 1.2 * Math.pow(t - 1, 2) };
 // a pose: hip offset, lean, head tilt, feet, grip (relative to hip), sword angle (0 = forward, -PI/2 = up)
-const mk = (o) => Object.assign({ hx: 0, hy: -49, lean: 0.06, head: 0, ff: [12, 0], fb: [-14, 0], grip: [16, -52], sw: -0.75, kneel: 0, roll: 0, sheath: 0, open: 0, hand: [9, -4], handK: 0 }, o);
+const mk = (o) => Object.assign({ hx: 0, hy: -49, lean: 0.06, head: 0, ff: [12, 0], fb: [-14, 0], grip: [16, -52], sw: -0.75, kneel: 0, roll: 0, sheath: 0, open: 0, hand: [9, -4], handK: 0, rag: 0, rk: 0 }, o);
 export const POSE = {
   stand: mk({ grip: [8, -50], sw: 0.9, sheath: 1, ff: [6, 0], fb: [-8, 0], hy: -51, lean: 0.03 }),
   guard: mk({ grip: [20, -58], sw: -0.62, lean: 0.14, head: 0.1, ff: [18, 0], fb: [-24, 0], hy: -46 }),
@@ -18,7 +18,7 @@ export const POSE = {
   s2w: mk({ grip: [16, -34], sw: 0.95, lean: 0.32, hy: -42, ff: [22, 0], fb: [-18, 0] }), s2a: mk({ grip: [28, -92], sw: -1.3, lean: -0.08, ff: [24, 0], fb: [-14, 0], hy: -47 }),
   s3w: mk({ grip: [-12, -92], sw: -2.9, lean: -0.2, ff: [16, 0], fb: [-22, 0] }), s3a: mk({ grip: [46, -42], sw: 0.72, lean: 0.26, head: 0.25, ff: [40, 0], fb: [-34, -4], hy: -37 }),
   hw: mk({ grip: [-4, -100], sw: -1.95, lean: -0.15, ff: [16, 0], fb: [-18, 0] }), ha: mk({ grip: [42, -36], sw: 1.0, lean: 0.26, head: 0.25, ff: [40, 0], fb: [-34, -4], hy: -36 }),
-  thw: mk({ grip: [-2, -52], sw: 0.02, lean: 0.0, ff: [16, 0], fb: [-20, 0] }), tha: mk({ grip: [44, -56], sw: 0.02, lean: 0.26, head: 0.15, ff: [40, 0], fb: [-34, -4], hy: -39 }),
+  thw: mk({ grip: [-22, -50], sw: 0.02, lean: -0.06, ff: [16, 0], fb: [-24, 0] }), tha: mk({ grip: [44, -56], sw: 0.02, lean: 0.26, head: 0.15, ff: [40, 0], fb: [-34, -4], hy: -39 }),
   swpw: mk({ grip: [-12, -40], sw: 2.7, lean: 0.25, ff: [16, 0], fb: [-20, 0], hy: -40 }), swpa: mk({ grip: [34, -30], sw: 0.25, lean: 0.4, ff: [30, 0], fb: [-22, 0], hy: -34 }),
   hit: mk({ grip: [8, -52], sw: -0.3, lean: -0.42, ff: [16, 0], fb: [-10, 0], hy: -47, head: -0.3 }),
   stun: mk({ grip: [4, -50], sw: 0.2, lean: -0.3, head: -0.2 }),
@@ -27,7 +27,7 @@ export const POSE = {
   bow: mk({ grip: [8, -50], sw: 0.9, sheath: 1, lean: 0.95, head: 0.3, ff: [6, 0], fb: [-6, 0], hy: -49 }),
   sit: mk({ grip: [10, -24], sw: 0.9, sheath: 1, lean: 0.05, hy: -24, kneel: 1, ff: [-14, 0], fb: [-14, 0] }),
   kneel: mk({ grip: [24, -6], sw: 0.0, sheath: 0, lean: 0.25, head: 0.35, hy: -24, kneel: 1, ff: [-14, 0], fb: [-14, 0] }),
-  focus: mk({ grip: [9, -38], sw: 0.95, sheath: 1, lean: 0.28, hx: -12, ff: [14, 0], fb: [-30, 0], hy: -30, head: -0.2 }),
+  focus: mk({ grip: [9, -36], sw: 0.95, sheath: 1, lean: 0.26, hx: -10, ff: [16, 0], fb: [-30, 0], hy: -28, head: -0.2, rk: 1 }),
   iai: mk({ grip: [50, -60], sw: 0.04, lean: 0.26, head: -0.15, ff: [42, 0], fb: [-40, -3], hy: -35 }),
   heal: mk({ grip: [10, -40], sw: 0.9, sheath: 1, lean: 0.25, hy: -30, head: 0.35, kneel: 1, ff: [-10, 0], fb: [-14, 0] }),
   dead: mk({ grip: [10, -8], sw: 0.1, lean: -1.45, head: -0.3, hy: -12, ff: [24, 0], fb: [18, 0] }),
@@ -120,7 +120,12 @@ POSE.lift = X(POSE.hit, { lean: -0.75, head: -0.5, hy: -58, ff: [16, -12], fb: [
 POSE.downBack = X(POSE.dead, { lean: -1.42, hy: -11, ff: [26, 0], fb: [18, -3] });
 POSE.deadFwd = mk({ grip: [26, -6], sw: 0.2, lean: 1.42, head: 0.25, hy: -10, ff: [-22, 0], fb: [-30, -2] });
 POSE.knee = mk({ grip: [18, -30], sw: 0.5, lean: 0.35, head: 0.4, hy: -27, kneel: 1, ff: [-14, 0], fb: [-14, 0] });
+POSE.parriedHit = X(POSE.s1a, { grip: [34, -70], sw: 0.78, lean: 0.12 }); // his blade forward and down where it met the parry
 POSE.openedA = X(POSE.opened, { lean: -0.62, head: -0.33, hx: -9, fb: [-22, -3], ff: [12, 0], grip: [-14, -96], sw: -2.6 });
+POSE.takeoff = X(POSE.guard, { hy: -38, lean: 0.24, head: -0.1, ff: [12, 0], fb: [-12, 0], grip: [16, -46], sw: -0.5 });
+POSE.stretch = X(POSE.guard, { hy: -54, lean: 0.04, head: -0.1, ff: [6, -2], fb: [-14, -8], grip: [18, -64], sw: -1.1 });
+POSE.apex = X(POSE.guard, { ff: [12, -24], fb: [-2, -22], hy: -50, lean: 0.2, head: -0.1, grip: [16, -58], sw: -0.9 });
+POSE.jumpReach = X(POSE.guard, { ff: [18, 2], fb: [-16, -6], hy: -50, lean: 0.02, head: -0.05, grip: [22, -62], sw: -1.0 });
 POSE.jumpUp = X(POSE.guard, { ff: [14, -16], fb: [-10, -9], hy: -50, lean: 0.12, head: -0.05, grip: [18, -60], sw: -0.9 });
 POSE.jumpFall = X(POSE.guard, { ff: [16, -4], fb: [-14, -2], hy: -48, lean: 0.05, grip: [20, -56], sw: -0.7 });
 POSE.rise = X(POSE.guard, { hy: -38, lean: 0.3, ff: [14, 0], fb: [-20, 0] });
@@ -171,7 +176,7 @@ export function poseFor(fig, e, kind, t, isPlayer, extra) {
       case 'take': lerpPose(P.stand, P.bow, Math.sin(clamp(tt / 1.0, 0, 1) * Math.PI) * 0.6, T); break;
       case 'focus': lerpPose(P.focus, P.focus, 0, T); break;
       case 'iai': strike(T, P.focus, 'focus', 'iai', tt + 0.001, 0.001, 0.1, 1.2, P.iai); break;
-      case 'air': keys(T, tt, [[0, base], [0.12, P.jumpUp, E.out], [0.42, P.jumpUp], [0.62, P.jumpFall, E.inout]]); T.sheath = base.sheath; if (base.sheath) { T.grip = base.grip.slice(); T.sw = base.sw; } break;
+      case 'air': keys(T, tt, [[0, P.takeoff], [0.05, P.takeoff], [0.11, P.stretch, E.out], [0.2, P.jumpUp, E.inout], [0.3, P.apex, E.inout], [0.4, P.apex], [0.5, P.jumpFall, E.inout], [0.62, P.jumpReach, E.inout]]); T.sheath = base.sheath; if (base.sheath) { T.grip = base.grip.slice(); T.sw = base.sw; } break;
       case 'kneel': lerpPose(P.stand, P.kneel, E.inout(clamp(tt / 1.2, 0, 1)), T); break;
       // the ronin's death: a hit, the knees go, a held moment, then a slow fall forward
       case 'dead': if (entry) V.death = pickVar(fig, 'death', 3);
@@ -189,6 +194,7 @@ export function poseFor(fig, e, kind, t, isPlayer, extra) {
       case 'wind': { const u = E.out(clamp(tt / (e.windT * 0.6), 0, 1)) * (e.feinting ? 0.55 : 1); lerpPose(g, P[ap[0]], u, T); T.hx = lerp(0, -4, u);
         // anticipation: a small dip and lean back as the windup begins, then a held pose before the strike
         const dip = Math.sin(Math.PI * clamp(tt / (e.windT * 0.4), 0, 1)); T.hy += 5 * dip; T.lean -= 0.14 * dip;
+        { const ld = clamp((tt - e.windT * 0.6) / (e.windT * 0.4), 0, 1); T.hx -= 3 * ld; T.lean -= 0.06 * ld; T.grip = [T.grip[0] - 4 * ld, T.grip[1] - 9 * ld]; T.fb = [T.fb[0] - 3 * ld, T.fb[1]]; } // loading: the weight goes back, the weapon keeps rising
         if (!e.feinting) { const ds = clamp((tt - (e.windT - 0.11)) / 0.11, 0, 1); if (ds > 0) { const Q = lerpPose(T, P[ap[1]], ds * ds * 0.45, {}); lerpPose(Q, Q, 0, T); } } break; }
       case 'act': strike(T, g, ap[0], ap[1], e.windT + tt, e.windT, A.act, A.rec * (extra.rec || 1), g); break;
       case 'rec': strike(T, g, ap[0], ap[1], e.windT + A.act + tt, e.windT, A.act, A.rec * (extra.rec || 1), g); break;
@@ -201,7 +207,7 @@ export function poseFor(fig, e, kind, t, isPlayer, extra) {
       }
       case 'block': keys(T, tt, [[0, g], [0.05, P.parry, E.out], [0.24, P.parry], [0.34, X(P.parry, { lean: -0.12, hx: -3 })]]); break;
       // parried: the weapon arm flung wide, a stagger step back, the guard open, then a recovery
-      case 'opened': keys(T, tt, [[0, P.parry], [0.07, P.openedA, E.out], [0.3, P.opened, E.inout], [0.7, P.opened], [1.2, g]]); break;
+      case 'opened': keys(T, tt, [[0, P.parriedHit], [0.04, P.parriedHit], [0.1, P.openedA, E.out], [0.3, P.opened, E.inout], [0.7, P.opened], [1.2, g]]); break;
       case 'shift': lerpPose(P.focus, g, E.inout(clamp((tt - 0.9) / 0.6, 0, 1)), T); break;
       case 'dead': keys(T, tt, [[0, P.snap], [0.4, P.knee, E.inout], [0.8, P.deadFwd, EI]]); break;
       case 'approach': case 'ready': { // the guard is raised as far as he has raised it (f.guard 0..1); walking in, the weapon rests lower
@@ -359,13 +365,14 @@ export function drawFigure(g, x, y, look, pose, fig, o) {
   // proportions: legs (hip to sole) about 3.6 heads, collar to obi about 1.6 heads, a neck that is always visible.
   // Standing, walking, running and guard poses keep the hips at 0.47 of standing height or more: nothing is pressed
   // down; only kneels, crouches, rolls, falls and the standoff crouch go lower.
-  const lift = pose.kneel || pose.hy > -30 ? 0 : 6 * clamp((-pose.hy - 30) / 18, 0, 1) + 3.5;
-  const upright = !pose.kneel && (pose.hy <= -38 || pose.gait) && Math.abs(lean) < 0.75;
+  const rg = clamp(pose.rag || 0, 0, 1); // 1: a ragdoll places the hips and hand exactly
+  const lift = pose.kneel || pose.hy > -30 || rg > 0.5 ? 0 : 6 * clamp((-pose.hy - 30) / 18, 0, 1) + 3.5;
+  const upright = !pose.kneel && rg < 0.5 && (pose.hy <= -38 || pose.gait) && Math.abs(lean) < 0.75;
   // the head turns at most about 19 degrees on the neck: the shoulders and hips take a recoil
   const hdT = clamp(pose.head || 0, -0.33, 0.33) + (L.hunch ? 0.2 : 0), na = lean + hdT * 0.5, ha = lean + hdT;
   let hyU = pose.hy - lift; if (upright) hyU = Math.min(hyU, -0.47 * STAND_H, -(0.945 * STAND_H - TORSO * Math.cos(lean) - NECK * Math.cos(na) - 9.6 * Math.cos(ha)));
   const rise = hyU - (pose.hy - lift); // how much the hips were lifted to keep the stance tall (units, <= 0)
-  const H = [x + f * pose.hx * sc, y + hyU * sc + breath * 0.4];
+  const H = [x + f * pose.hx * sc, lerp(y + hyU * sc + breath * 0.4, y + pose.hy * sc, rg)];
   const T = TORSO * sc, ax = Math.sin(lean) * f, ay = -Math.cos(lean);
   const N = [H[0] + ax * T, H[1] + ay * T + breath];
   const nfx = f * -ay, nfy = f * ax; // front normal of the torso
@@ -378,13 +385,16 @@ export function drawFigure(g, x, y, look, pose, fig, o) {
     const hx = H[0] - nfx * (back ? 3 : -3) * sc, hy = H[1];
     const F = [x + f * ft[0] * sc, y + ft[1] * sc];
     if (pose.kneel) { const knee = back ? [H[0] + f * 17 * sc, y - 3 * sc] : [H[0] + f * 20 * sc, y - 4 * sc]; legs.push({ hx, hy, kx: knee[0], ky: knee[1], fx: H[0] - f * 13 * sc, fy: y - 1, back }); }
+    else if (back && pose.rk > 0.5) { // the iai-goshi: the rear knee down on the ground, the shin and toes along it behind
+      const gyk = (o.groundY ?? y) - 2 * sc, Lt = LEG * sc, c = Math.min(1, Math.max(0.2, (gyk - hy) / Lt)), kx = hx - f * Lt * Math.sqrt(1 - c * c), ky = hy + Lt * c;
+      legs.push({ hx, hy, kx, ky, fx: kx - f * Lt * 0.96, fy: (o.groundY ?? y) - 1.5 * sc, back }); }
     else { ik(hx, hy, F[0], F[1], LEG * sc, LEG * sc, f > 0 ? -1 : 1, T4); legs.push({ hx, hy, kx: T4[0], ky: T4[1], fx: T4[2], fy: T4[3], back }); }
   }
   const [LB, LF] = legs, hl = L.hl;
   const groundY = o.groundY ?? y, Bh = 110 * sc;
   // ---- weapon geometry ----
   let sw = pose.sw, dx = Math.cos(sw) * f, dy = Math.sin(sw);
-  const G = [H[0] + f * pose.grip[0] * sc - f * pose.hx * sc, y + (pose.grip[1] - lift + rise) * sc + (pose.hy + 49) * 0.4 * sc];
+  const G0 = [H[0] + f * pose.grip[0] * sc - f * pose.hx * sc, y + (pose.grip[1] - lift + rise) * sc + (pose.hy + 49) * 0.4 * sc], G = [lerp(G0[0], H[0] + f * pose.grip[0] * sc, rg), lerp(G0[1], H[1] + pose.grip[1] * sc, rg)];
   const Sf = [N[0] + nfx * 2 * sc - ax * 6.5 * sc, N[1] + nfy * 2 * sc - ay * 6.5 * sc], Sb = [N[0] - nfx * 5 * sc - ax * 7.5 * sc, N[1] - nfy * 5 * sc - ay * 6 * sc];
   let hand2;
   if (L.weapon === 'spear' || L.weapon === 'naginata') hand2 = [G[0] - dx * 32 * sc, G[1] - dy * 32 * sc];
@@ -476,7 +486,7 @@ export function drawFigure(g, x, y, look, pose, fig, o) {
   // ---- hakama: ONE garment. Per leg a convex envelope around the leg (waist, a ring round the knee, a hem chain that
   // hangs from the knee and trails the motion), a gusset that fills between the thighs above the split, shins (bare
   // legs only) behind it, tabi and sandals below it. ----
-  const HG = hakamaTargets({ H, legs, f, nf: [nfx, nfy], dn: [-ax, -ay], sc, bulk, hl, groundY, kneel: !!pose.kneel, full: !L.shins, prevSplit: fig.hemSplit, dt: o.dt ?? 0.016, reduced: o.reduced, stride: o.running || o.tuck ? 1 : clamp((Math.abs(vx) - 120) / 110, 0, 1) * (o.walkPh != null ? 1 : 0) });
+  const HG = hakamaTargets({ H, legs, f, nf: [nfx, nfy], dn: [-ax, -ay], sc, bulk, hl, groundY, kneel: !!pose.kneel, full: !L.shins, rag: (pose.rag || 0) > 0.5, prevSplit: fig.hemSplit, dt: o.dt ?? 0.016, reduced: o.reduced, stride: o.running || o.tuck || (pose.rag || 0) > 0.5 || (L === LOOKS.ronin && !pose.sheath && !pose.kneel && pose.hy <= -40) ? 1 : clamp((Math.abs(vx) - 120) / 110, 0, 1) * (o.walkPh != null ? 1 : 0) });
   fig.hemSplit = HG.split;
   if (!fig.hem) fig.hem = { f, c: [{}, {}] };
   if (fig.hem.f !== f) { for (const c of fig.hem.c) if (c.p) { c.p.reverse(); c.v.reverse(); } fig.hem.f = f; }
@@ -651,7 +661,7 @@ export function drawFigure(g, x, y, look, pose, fig, o) {
   if (L.shield) {
     const out = o.shieldOut ? 12 : 0, SX = H[0] + f * (18 + out) * sc, SY = H[1] - 14 * sc, w = 9 * sc, h = 42 * sc;
     if (!o.shield) arm(Sf, H[0] + f * 13 * sc, H[1] - 6 * sc, 0, 3);
-    else mo([[SX - w, SY - h], [SX - w * 0.9, SY - h * 1.01], [SX + w * 0.9, SY - h * 1.01], [SX + w, SY - h], [SX + w, SY - h * 0.9], [SX + w * 1.02, SY + h * 0.9], [SX + w, SY + h], [SX + w * 0.9, SY + h * 1.01], [SX - w * 0.9, SY + h * 1.01], [SX - w, SY + h], [SX - w, SY + h * 0.9], [SX - w * 1.02, SY - h * 0.9]], '#6b5136', { k: 120, lw: 2.2 * sc, strokes: 4, inside: (q) => {
+    else mo([[SX - w, SY - h], [SX - w * 0.9, SY - h * 1.01], [SX + w * 0.9, SY - h * 1.01], [SX + w, SY - h], [SX + w, SY - h * 0.9], [SX + w * 1.02, SY + h * 0.9], [SX + w, SY + h], [SX + w * 0.9, SY + h * 1.01], [SX - w * 0.9, SY + h * 1.01], [SX - w, SY + h], [SX - w, SY + h * 0.9], [SX - w * 1.02, SY - h * 0.9]], '#6f675c', { k: 120, lw: 2.2 * sc, strokes: 4, inside: (q) => {
       for (const u of [-0.33, 0.33]) sweep(q, [[SX + w * u, SY - h], [SX + w * u, SY + h]], 0.9 * sc, INK, A * 0.6, seed + 121, 2);
       for (const v of [-0.6, 0.55]) { rib(q, [SX - w, SY + h * v, SX + w, SY + h * v], () => 3 * sc, '#1a1614', A, 0); for (const u of [-0.6, 0, 0.6]) dr(q, SX + w * u, SY + h * v, 1.1 * sc, '#cfc6b4', A * 0.9); } } });
     // the front hand on the shield's grip
@@ -659,7 +669,7 @@ export function drawFigure(g, x, y, look, pose, fig, o) {
   }
   if (!o.noWeapon) {
     // the blade tip never passes below the ground line: lift the angle until it clears
-    const reach = (L.weapon === 'odachi' ? 64 : L.weapon === 'katana' ? 50 : L.weapon === 'naginata' ? 106 : L.weapon === 'spear' ? 100 : 0) * sc;
+    const reach = (L.weapon === 'odachi' ? 64 : L.weapon === 'katana' ? 50 : L.weapon === 'naginata' ? 106 : L.weapon === 'spear' ? 100 : L.weapon === 'club' ? 58 : 0) * sc;
     if (reach && G[1] + dy * reach > y - 2) { const ny = clamp((y - 2 - G[1]) / reach, -1, 1); dy = ny; dx = Math.sign(dx || f) * Math.sqrt(1 - ny * ny); }
     drawWeapon(g, L, G, dx, dy, f, sc, A, pose, o, seed, H, cloth);
   }
@@ -671,7 +681,7 @@ export function drawFigure(g, x, y, look, pose, fig, o) {
   g.restore(); g.globalAlpha = 1;
   let top = 1e9, bot = -1e9; for (const q of headP) { top = Math.min(top, q[1]); bot = Math.max(bot, q[1]); }
   FLATC = null; SHADE = 0;
-  return { G, dx, dy, N, H, Hd, hand2, headTop: top, chin: bot, sc };
+  return { G, dx, dy, N, H, Hd, hand2, headTop: top, chin: bot, sc, ha, legs: legs.map((l) => [l.kx, l.ky, l.fx, l.fy]) };
 }
 const T4 = [0, 0, 0, 0], T4b = [0, 0, 0, 0];
 // the skull in head units (u forward, v down), and where each hat's brim sits on it (v)
