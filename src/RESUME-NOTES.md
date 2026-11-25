@@ -5,28 +5,31 @@ The meter is not readable from inside the session: estimate by agent-minutes (th
 integrator's own turns), so budget about 120 agent-minutes per window, then stop the agents, commit, and wait for the next reset.
 Never more than 3 agents at once, one Chromium each, always closed (the container restarted twice from browser load).
 
-## State
-- Live: REDLINE v3 (real C1 loop, TOKYO look), arcade hub, ITO r1, KUMITE r2, KAZE r1, MACHI r2. Release worktree: scratchpad/rel (commit eec8162).
-- Committed WIP (c4970eb, all suites pass, site builds): KAZE figures redrawn r2 + boss backdrop half done; KUMITE fighters redrawn r3 + art fixes
-  half done; ITO playability r2 nearly done (tests green, visual check pending) + story.js started.
-- Owner priorities, newest first: playability and story matter most; no 3D rebuild now; KAZE and KUMITE character design was "borderline shit" /
-  "sucks big time" (atmosphere fine); KAZE boss fights get a red backdrop with real cinematic weight; "a few character designs are still a bit off" in
-  KAZE: study what ronin really looked like and how ronin are drawn, then correct.
+## State (07:27 UTC 25 Nov, second planned pause)
+- Live: REDLINE v3 + difficulty retune (config.js DIFFICULTY: STREET density 0.5, trafficSpeed 1.15, lives 5), ITO r2 complete, KUMITE r3,
+  KAZE r4, MACHI r2, arcade hub with new captures. Release worktree: scratchpad/rel (kept in step with HEAD per game).
+- All suites green at HEAD. Nothing half-done is uncommitted.
+- Owner priorities, newest first: playability and story matter most; no 3D rebuild now; character design quality in KAZE and KUMITE;
+  realistic Cyberpunk Tokyo in REDLINE.
 
-## Resume each builder with SendMessage (context intact) and point it at the list below
-- KAZE a96e8e6fec773fc6e: (1) art director notes: lean 7.5-head figures, obi, long pleated hakama, near sleeve separated from torso, sword as the star,
-  pushed key poses, camera eases in for fights, tucked dodge roll; (2) RONIN REFERENCE pass (below); (3) red boss backdrop (was mid-way: lantern sparks,
-  then the five-boss contact sheet); (4) measuring table (solidity, limb weight, proportion, screen size, line, distinct cast, frames, contrast);
-  (5) playability personas (masher / learner / competent) and default difficulty tuning, self-teaching first fight and standoff, cheap death;
-  (6) story through-line, full script in the report.
-- KUMITE ad57f81de1bb8825d: (1) art director notes: heroic 7 to 7.5 heads, real stances not chair squats, hard-edged cel shadows and highlights,
-  3/4 faces with sharper jaws and lids, costume detail, full attack-pose redo with smears, close-range readability, sparks off faces (was finishing:
-  Ganji and Suzu values, Suzu air-chop recovery); (2) measuring table; (3) re-run masher numbers after the art; first-fight prompt; NORMAL default;
-  (4) arcade story for four fighters (intro card, per-matchup banter, rival beat, ending card), full script in the report.
-- ITO a3862812e6f0a0f5f: finish the playability round (persona numbers before/after; desktop + phone portrait + landscape check of run start and
-  mid-run), then the small delivery story (story.js exists), full script in the report.
-- Then: integrator looks at every model sheet and in-game frame BEFORE accepting; deploy per game as each passes (build from a clean worktree at a commit);
-  new cabinet captures for kaze/kumite/ito; REDLINE independent review if budget remains; final report.
+## Next round, in order (max 3 agents, one Chromium each)
+1. REDLINE fix round from the independent playtest (full report: scratchpad/crit-redline.txt; driver study scripts in scratchpad/w-crit-redline/,
+   reuse drivers.mjs / tune2.mjs as the yardstick). Done already: the STREET retune (clumsy driver now finishes 6 of 8, was 0 of 8). Still to do, ranked:
+   a. story layer (the critic's script: title line, dispatch plates per district/junction, KUROGANE lines, finale lines) using the existing pop slot
+      and the district/junction events; name each case file as it opens (it is a portfolio project) and list opened files as links on both results panels;
+   b. traffic ramp: spawnTraffic `esc` starts ~0.5 in sector 1; no car in the player's lane before S.dist > 600;
+   c. bends that matter + a bend sign that warns in time (corner speed vC, look-ahead speed*2.8 s, hold 1.5 s, target speed on the sign); only with (b);
+   d. Free Run = no lives, no police, light traffic, one full lap; Zen lighter with steering assist; the finale currently ends at Tanimachi so
+      Shibakoen / Tokyo Tower is never driven before the lookout: move the finale or let the lap complete;
+   e. landscape-phone pause/results panel opens scrolled (focus with preventScroll), two-column results;
+   f. radio player out of the race HUD (title and pause only; a one-line chip in the race);
+   g. pickups/boost glow toned down further, shard instances follow the road bend; facade ambient near zero at night, the grey road smear ahead-left
+      of the car, repeating neon hoarding, whiter tunnel lamps;
+   h. the lost `over` event when pausing on a slow frame (let over/complete through in any phase; update phaseRef in togglePause/start).
+2. KUMITE: idle stances still low in the knees; rim light reads as trouser piping; per-move pose pass.
+3. KAZE: ronin kinagashi + haori option, archer raises the bow before the draw, Shizu's naginata bolder at game scale, phone portrait check; a human play.
+4. MACHI: desktop polish (issue 8), lo-fi music toggle, light pools under shotengai lanterns.
+5. Final report for the owner (what shipped, evidence, what is not verified: audio, real GPU frame rate, human play; rollback: commit 1ad129b).
 
 ## RONIN REFERENCE (integrator's notes; verify and extend with a research pass at resume)
 One period print was retrieved before the image host rate-limited us: Utagawa Kuniyoshi, "Seichu gishi den" (the loyal retainers series, c. 1847,

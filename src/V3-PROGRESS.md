@@ -68,3 +68,9 @@ claude/vibrant-curie-0x7eb2 @ 1ad129b (main was published from it). Tag pushes a
 - Running: ronin reference research (a98e99e568783cc3f) -> forward its correction list to the KAZE builder (a96e8e6fec773fc6e); REDLINE v3 playtest critic (playability on the real loop, story, look in motion).
 - Budget this window so far: about 45 agent-minutes of ~120. Pause check fires 07:25.
 - Open: KUMITE idle stances still low in the knees, rim light reads as piping; KAZE ronin still in hakama (kinagashi + haori not done), needs a human play; MACHI desktop polish + music toggle; REDLINE fixes from its critic; final report.
+
+## 07:27 UTC — second planned pause (about 75% of the window by estimate)
+- DEPLOYED 07:13: KAZE round 4 (cast corrected against the period reference; bosses redrawn). DEPLOYED 07:25: REDLINE STREET retune from the
+  independent playtest (a clumsy first-timer finishes 6 of 8 runs, was 0 of 8; sim suite green).
+- REDLINE playtest report saved: scratchpad/crit-redline.txt (10 ranked issues + a story script). Next steps are in src/RESUME-NOTES.md.
+- No agents running. Waiting for the next reset (about 11:40 UTC) or the owner's word.
