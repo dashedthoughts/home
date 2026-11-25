@@ -103,22 +103,23 @@ export function hakamaTargets(q) {
   const legLen = 62 * sc, dA = Math.hypot(legs[0].fx - legs[1].fx, legs[0].fy - legs[1].fy), spread = q.kneel ? 0 : Math.min(1, Math.max(0, (dA / legLen - 0.4) / 0.15));
   // split legs are trousers, not bell-bottoms: about 1.6 legs wide at the knee, gently flared to about 1.4x that at the hem
   // the split eases in and out over about 0.15 s, so a garment never pops between a skirt and two trouser legs
-  let spl = q.rag ? 1 : Math.max(st, spread); if (q.prevSplit != null && !q.reduced) spl = q.prevSplit + Math.max(-q.dt * 7, Math.min(q.dt * 7, spl - q.prevSplit)); wk += (15 * sc * Math.max(1, Math.sqrt(bulk)) - wk) * spl; hemW += (Math.min(hemW, (hl >= 0.8 ? 0.165 : 0.11) * Bh) - hemW) * spl;
+  let spl = q.rag || (q.kneel && q.fk) ? 1 : Math.max(st, spread); if (q.prevSplit != null && !q.reduced) spl = q.prevSplit + Math.max(-q.dt * 7, Math.min(q.dt * 7, spl - q.prevSplit)); wk += (15 * sc * Math.max(1, Math.sqrt(bulk)) - wk) * spl; hemW += (Math.min(hemW, (hl >= 0.8 ? 0.165 : 0.11) * Bh) - hemW) * spl;
   const out = { Bh, wW, wk, hemW, Wb, Wf, Hb, Hf, legs: [], r: 2.5 * sc, stride: st, split: spl, legLen, dA };
   for (const l of legs) {
     const K = [l.kx, l.ky], A = [l.fx, l.fy], J = [l.hx, l.hy];
     let tx = K[0] - J[0], ty = K[1] - J[1]; const tl = Math.hypot(tx, ty) || 1; tx /= tl; ty /= tl;
     const ring = [[K[0] - ty * wk / 2, K[1] + tx * wk / 2], [K[0] + ty * wk / 2, K[1] - tx * wk / 2], [K[0] + tx * wk * 0.32, K[1] + ty * wk * 0.32]];
-    const lift = q.rag ? 1 : q.kneel ? 0 : Math.max(0, Math.min(1, (groundY - A[1] - 2 * sc) / (10 * sc))); // a fallen body: each leg's cloth wraps its own shin
+    const upKnee = q.kneel && q.fk && !l.back; // one knee up (the archer): this shin rises out of the cloth
+    const lift = q.rag || upKnee ? 1 : q.kneel ? 0 : Math.max(0, Math.min(1, (groundY - A[1] - 2 * sc) / (10 * sc))); // a fallen body: each leg's cloth wraps its own shin
     const hlF = Math.min(1, hl);
     const hemYg = K[1] + (groundY - 5.5 * sc - K[1]) * hlF, hemYl = Math.min(K[1] + 27 * sc * hlF, groundY - 4 * sc);
     // the floor of the hem: a grounded full-length leg keeps its hem above the foot so the sandal shows
     const floor = lift < 0.5 && hl >= 0.8 && !q.kneel ? Math.min(groundY, A[1]) - 3.9 * sc : groundY;
     // running, a lifted leg's cloth wraps the shin and its hem rises with the foot instead of hanging to the ground
-    const hemYr = hemYl + (Math.min(hemYl, A[1] - 1 * sc) - hemYl) * Math.max(st, out.split);
+    const hemYr = upKnee ? Math.min(K[1] + (A[1] - K[1]) * 0.45, groundY - 4 * sc) : hemYl + (Math.min(hemYl, A[1] - 1 * sc) - hemYl) * Math.max(st, out.split);
     let hemY = hemYg + (hemYr - hemYg) * lift; hemY = Math.min(Math.max(hemY, K[1] + 6 * sc), floor - 1.2);
     // on a stride each hem swings to its own side: the robe parts in a V
-    const out1 = l.back ? -1 : 1, cg = S(A) + out1 * (2.5 + 6 * st) * sc, kick = 0, cl = S(K) + kick, c = cg + (cl - cg) * lift * (1 - 0.6 * st) * (1 - out.split), hw = hemW / 2;
+    const out1 = l.back ? -1 : 1, cg = S(A) + out1 * (2.5 + 6 * st) * sc, kick = 0, cl = S(K) + kick, c = upKnee ? S(K) + (S(A) - S(K)) * 0.45 : cg + (cl - cg) * lift * (1 - 0.6 * st) * (1 - out.split), hw = hemW / 2 * (upKnee ? 0.62 : 1);
     let kf = -1e9; for (const r of ring) kf = Math.max(kf, S(r));
     let rearS = c - hw; if (lift > 0) rearS = Math.min(rearS, rearS + (S(Hb) - rearS) * lift * (1 - Math.max(st, out.split)));
     let frontS = Math.max(c + hw, kf + 1 * sc - (kf + 1 * sc - c - hw) * out.split); // a split leg is its own tube: its hem is not held in front of the knee if (frontS - rearS > 64 * sc) { const m = (frontS + rearS) / 2; rearS = m - 32 * sc; frontS = m + 32 * sc; }
@@ -214,7 +215,7 @@ export function checkGarment(G, o = {}) {
     if (sp && G.full) { let mx = 0; for (let j = 0; j < ws.length; j++) { if (ws[j] < 0.85 * mx - tol) { bad.push(`leg${i}: split leg pinches (${ws.map((v) => v.toFixed(1)).join(' ')})`); break; } mx = Math.max(mx, ws[j]); } }
     else if (!sp && !(l.wrap > 0.3)) for (let j = 1; j < ws.length; j++) if (ws[j] < ws[j - 1] - tol) { bad.push(`leg${i}: width shrinks toward the hem (${ws.map((v) => v.toFixed(1)).join(' ')})`); break; }
     const ax = hc[0] - W[0], ay = hc[1] - W[1], al = Math.hypot(ax, ay) || 1; let kw = chord(l.poly, l.K, [-ay / al, ax / al]);
-    if (sp && l.J) { const tx = l.K[0] - l.J[0], ty = l.K[1] - l.J[1], tl = Math.hypot(tx, ty) || 1, d2 = [-ty / tl, tx / tl]; kw = Math.max(chord(l.poly, l.K, d2), l.thigh ? chord(l.thigh, l.K, d2) : 0); }
+    if ((sp || G.kneel) && l.J) { const tx = l.K[0] - l.J[0], ty = l.K[1] - l.J[1], tl = Math.hypot(tx, ty) || 1, d2 = [-ty / tl, tx / tl]; kw = Math.max(chord(l.poly, l.K, d2), l.thigh ? chord(l.thigh, l.K, d2) : 0); }
     if (kw < 1.6 * 8 * sc) bad.push(`leg${i}: knee envelope ${kw.toFixed(1)} < 1.6x leg`);
     const hw = Math.hypot(l.hem[3][0] - l.hem[0][0], l.hem[3][1] - l.hem[0][1]);
     if (G.hl >= 0.8 && hw < 0.16 * Bh - 0.5) bad.push(`leg${i}: hem ${hw.toFixed(1)} < 0.16 body`);

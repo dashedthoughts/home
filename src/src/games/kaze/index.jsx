@@ -94,8 +94,8 @@ class Engine {
   }
   emit(force) {
     const s = this.s, hk = s.hk;
-    const sig = [this.screen, s.phase, hk ? hk.step + ':' + hk.done : '', s.near ? s.near.kind : '', s.so ? s.so.st : '', this.input.mode, s.ch, s.p.res, s.p.hp < s.p.hpMax].join('|');
-    if (sig !== this.sig || force) { this.sig = sig; this.onUi({ screen: this.screen, phase: s.phase, hk: hk ? { step: hk.step, done: hk.done, picks: hk.picks.slice(), ch: hk.ch } : null, near: s.near ? s.near.kind : null, so: s.so ? s.so.st : null, mode: this.input.mode, ch: s.ch, res: s.p.res, canHeal: s.p.res > 0 && s.p.hp < s.p.hpMax, t: Date.now() }); }
+    const sig = [this.screen, s.phase, hk ? hk.step + ':' + hk.done : '', s.near ? s.near.kind : '', s.so ? s.so.st : '', this.input.mode, s.ch, s.p.res, s.p.hp < s.p.hpMax, (s.phase === 'standoff' || (s.arena && s.arena.boss)) ? 'lb' : ''].join('|'); // [inkfx] duel letterbox flag for the touch layout
+    if (sig !== this.sig || force) { this.sig = sig; this.onUi({ screen: this.screen, lb: s.phase === 'standoff' || !!(s.arena && s.arena.boss), phase: s.phase, hk: hk ? { step: hk.step, done: hk.done, picks: hk.picks.slice(), ch: hk.ch } : null, near: s.near ? s.near.kind : null, so: s.so ? s.so.st : null, mode: this.input.mode, ch: s.ch, res: s.p.res, canHeal: s.p.res > 0 && s.p.hp < s.p.hpMax, t: Date.now() }); }
   }
   setSettings(patch) { Object.assign(this.settings, patch); this.store.saveSettings(this.settings); this.input.setMap(this.settings.keys); this.audio.setVolume(this.settings); this.emit(true); }
 }
@@ -286,7 +286,7 @@ function Touch({ E, ui }) {
   const end = () => { pid.current = null; T.left = T.right = T.run = T.up = false; if (knob.current) knob.current.style.transform = ''; };
   const hold = (k) => ({ onPointerDown: (e) => { e.preventDefault(); e.currentTarget.setPointerCapture && e.currentTarget.setPointerCapture(e.pointerId); T[k] = true; E.input.mode = 'touch'; E.audio.start(); if (k === 'ctx') E.touchCtx = true; }, onPointerUp: () => { T[k] = false; }, onPointerCancel: () => { T[k] = false; }, onPointerLeave: () => { T[k] = false; } });
   const ctxLabel = ui.phase === 'standoff' ? 'Focus' : ui.near === 'bow' ? 'Bow' : ui.near === 'sit' ? 'Sit' : ui.near === 'take' ? 'Take' : 'Wind';
-  return (<div className="kz-touch">
+  return (<div className={`kz-touch${ui.lb ? ' kz-touch--lb' : ''}`}> {/* [inkfx] buttons lift clear of the duel letterbox */}
     <div className="kz-stick" ref={stick} onPointerDown={(e) => { e.preventDefault(); pid.current = e.pointerId; e.currentTarget.setPointerCapture && e.currentTarget.setPointerCapture(e.pointerId); move(e); }} onPointerMove={(e) => { if (pid.current === e.pointerId) move(e); }} onPointerUp={end} onPointerCancel={end}><div className="kz-stick__knob" ref={knob} /></div>
     {ui.canHeal && <button type="button" className="kz-heal" {...hold('heal')} aria-label="Heal">Heal</button>}
     <div className="kz-pad">

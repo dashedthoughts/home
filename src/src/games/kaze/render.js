@@ -71,6 +71,7 @@ export class Renderer {
     const v = this.v, c = this.cam, p = s.p, px = lerp(p.ox, p.x, this.alpha);
     let tx = px + p.face * 90 + clamp(p.vx, -260, 260) * 0.3, zoom = 1;
     if (mode === 'title') { this.titleDrift += dt; tx = px - (this.portrait ? 0 : 150) + Math.sin(this.titleDrift * 0.08) * 40; zoom = 1; }
+    else if (s.phase === 'standoff' && s.so && this.portrait) { const so = s.so; tx = (px + lerp(so.oppOX, so.oppX, this.alpha)) / 2; zoom = Math.min(1, v.W / (v.k * (Math.abs(so.oppX - px) + 230))); } // [inkfx] portrait: both men and the drop fit, with a margin
     else if (s.phase === 'standoff' && s.so) { const so = s.so; tx = (px + lerp(so.oppOX, so.oppX, this.alpha)) / 2; zoom = so.st === 'hold' || so.st === 'strike' ? 1.36 + Math.min(0.08, so.t * 0.01) : so.st === 'ready' ? 1.26 : 1.12; }
     else if (s.phase === 'haiku') { tx = px + 210; zoom = 0.84; }
     else if (s.arena) {
@@ -123,6 +124,7 @@ export class Renderer {
     // back props (between the mid-ground and the path)
     this.drawProps(g, this.props.back, wind, 'back');
     g.setTransform(1, 0, 0, 1, 0, 0); bands[bands.length - 1].draw(g, v, budget);
+    if (this.portrait && this.red > 0.01) { const gy0 = this.worldToScreenY(-groundH(this.ch, v.camX)) + 6 * v.k, pg = g.createLinearGradient(0, gy0, 0, gy0 + 40 * v.k); pg.addColorStop(0, rgba('#d8b8a2', 0)); pg.addColorStop(1, rgba('#d8b8a2', 0.88 * this.red)); g.fillStyle = pg; g.fillRect(0, gy0, W, H - gy0); } // [inkfx] portrait duel: the lower block is warm paper, not a dark slab
     // moonlight: the snow is paper, but at night it should read blue-grey
     if (this.scene.night) { g.setTransform(1, 0, 0, 1, 0, 0); const ng = g.createLinearGradient(0, H * 0.25, 0, H); ng.addColorStop(0, 'rgba(70,84,110,0)'); ng.addColorStop(0.6, 'rgba(70,84,110,0.38)'); ng.addColorStop(1, 'rgba(70,84,110,0.5)'); g.globalCompositeOperation = 'multiply'; g.fillStyle = ng; g.fillRect(0, 0, W, H); g.globalCompositeOperation = 'source-over'; }
     this.drawProps(g, this.props.ground, wind, 'ground');
@@ -977,7 +979,7 @@ export class Renderer {
       const B = BOSSES[boss.boss], bw = this.portrait ? W * 0.42 : Math.min(W * 0.42, 420 * d), bx = this.portrait ? W - bw - 22 * d : (W - bw) / 2, by = top + (this.portrait ? 36 : 32) * d;
       const intro = this.bossCard ? this.time - this.bossCard.t0 : 9;
       if (intro < 3.6) { const a = clamp(intro / 0.6, 0, 1) * clamp((3.6 - intro) / 0.6, 0, 1); g.save(); g.globalAlpha = a; g.textAlign = 'center'; g.textBaseline = 'middle'; const mx = this.discX || W / 2, my = this.discY || H * 0.36, mr = this.discR || H * 0.12, fsz = Math.round(Math.min(H * 0.07, (mr * 1.55) / Math.max(2, [...B.jp].length))); /* [inkfx] the name sits inside the moon */
-        g.fillStyle = INK; g.font = `700 ${fsz}px ${JP}`; g.fillText(B.jp, mx, my); g.font = `italic ${Math.round(Math.max(13 * d, H * 0.024))}px ${SERIF}`; g.fillStyle = this.red > 0.5 ? '#f0e2d0' : INK; g.fillText(B.name, mx, my + mr * 1.12 + 8 * d); g.restore(); }
+        g.fillStyle = INK; g.font = `700 ${fsz}px ${JP}`; g.fillText(B.jp, mx, my); g.font = `italic ${Math.round(Math.max(13 * d, H * 0.024))}px ${SERIF}`; g.fillStyle = this.red > 0.5 ? '#f0e2d0' : INK; g.fillText(B.name, mx, this.portrait ? my + fsz * 0.95 + 4 * d : my + mr * 1.12 + 8 * d); /* [inkfx] portrait: above the moon, clear of the heads */ g.restore(); }
       g.save();
       if (dark > 0.05 && this.red < 0.05) { const cx = bx + bw / 2, cy = by - 6 * d, rx = bw * 0.62; g.translate(cx, cy); g.scale(1, (44 * d) / rx); const gr = g.createRadialGradient(0, 0, 0, 0, 0, rx); gr.addColorStop(0, rgba(C.paper, 0.62)); gr.addColorStop(0.45, rgba(C.paper, 0.4)); gr.addColorStop(0.8, rgba(C.paper, 0.12)); gr.addColorStop(1, rgba(C.paper, 0)); g.globalAlpha = dark; g.fillStyle = gr; g.fillRect(-rx, -rx, rx * 2, rx * 2); g.setTransform(1, 0, 0, 1, 0, 0); }
       const fr = clamp(boss.hp / boss.hpMax, 0, 1);
@@ -1002,7 +1004,7 @@ export class Renderer {
     let x = W / 2, y = H - lbH - (small ? 26 : 46) * d; if (this.lb > 0.3 && lbH > 30 * d) y = H - lbH * 0.5; // [inkfx] in a duel the line sits in the letterbox, clear of the fighters
     if (P.pos === 'mid') y = H * 0.5;
     else if (P.pos === 'near' && P.near) { const e = this.lastS && this.lastS.ev[P.near.ev]; if (e) { const ex = e.t === 'fox' ? e.path[e.path.length - 1] : e.x; x = this.worldToScreenX(ex); y = this.worldToScreenY(-groundH(this.ch, ex) - 92); } }
-    if (ui.touch && P.pos !== 'near' && P.pos !== 'mid') y = this.portrait ? lbH + (small ? 120 : 96) * d : Math.min(y, H - lbH - (small ? 18 : 34) * d);
+    if (ui.touch && P.pos !== 'near' && P.pos !== 'mid' && !(this.lb > 0.3 && lbH > 30 * d && !this.portrait)) y = this.portrait ? lbH + (small ? 120 : 96) * d : Math.min(y, H - lbH - (small ? 18 : 34) * d);
     g.globalAlpha = P.alpha; this.plate(g, x, y, P.keys ? P.keys.map((k) => lab[k] || k).join(' / ') : P.label, P.text, { seal: !P.keys && !!P.label, small }); g.globalAlpha = 1;
   }
   worldToScreenX(x) { const v = this.v; return v.W / 2 + (x - v.camX) * v.k * v.zoom; }
