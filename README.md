@@ -56,7 +56,7 @@ A night lap of the real Shuto Expressway Inner Circular Route (C1) in Tokyo: 13.
 - **The look:** TOKYO is the default: a near-black sky with a sodium glow on the horizon, lit office grids, white and amber road lamps, thin tail-light streaks. DUSK, NEON BLUE, DAWN and OUTRUN are optional stylised moods.
 - **Modes:** Race (against KUROGANE), Road Brawl (bike), Zen Race (no damage, no police), Free Run.
 - **The rival:** launches past you off the line, makes attack runs, blocks your lane, sprints over the last two files. Whip him with X; he parries for a few seconds after a hit.
-- **Crashes:** severity follows closing speed; a truck barely moves. Four hits on STREET, and every file you open repairs one. The last hit is a spin-out.
+- **Crashes:** severity follows closing speed; a truck barely moves. Five hits on STREET, and every file you open repairs one. The last hit is a spin-out.
 - **Police:** sustained top speed and crashes build a wanted level; each full star brings a cruiser. Outrun them, outlast them or whip them back.
 - **Rain:** less grip, longer braking, aquaplaning flat out. Tunnels are dry.
 - **Garage:** the Vanta GT and the Tsubame bike, liveries, underglow (off by default), time of day, weather, three difficulties, radio (YouTube Mix or the built-in synth). Keyboard, touch and gamepad.
