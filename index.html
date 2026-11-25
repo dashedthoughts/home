@@ -1984,14 +1984,12 @@ html.is-gaming, html.is-gaming body { overflow: hidden; overscroll-behavior: non
 }
 
 /* KAZE: ink on paper. The game draws on canvas; this styles the DOM layers (menus, haiku, touch). */
-.kz { --kz-paper: #efe8d5; --kz-ink: #17130f; --kz-ink2: #3d362e; --kz-red: #b8321e; --kz-serif: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, "Times New Roman", serif; --kz-jp: "Yu Mincho", "YuMincho", "Hiragino Mincho ProN", "Noto Serif JP", "Noto Serif CJK JP", "MS Mincho", "Noto Sans JP", serif;
+.kz { --kz-paper: #e6dac0; --kz-ink: #2a2622; --kz-ink2: #5b5145; --kz-red: #b8321e; --kz-serif: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, "Times New Roman", serif; --kz-jp: "Yu Mincho", "YuMincho", "Hiragino Mincho ProN", "Noto Serif JP", "Noto Serif CJK JP", "MS Mincho", "Noto Sans JP", serif;
   position: absolute; inset: 0; overflow: hidden; background: var(--kz-paper); color: var(--kz-ink); font-family: var(--kz-serif); touch-action: none; user-select: none; -webkit-user-select: none; }
 .kz__cv { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
 .kz button { font: inherit; color: inherit; }
-.kz-btn { display: block; width: 100%; text-align: left; background: rgba(239, 232, 213, 0.55); border: 0; border-left: 2px solid transparent; padding: 9px 14px; font-size: 1.02rem; letter-spacing: 0.01em; cursor: pointer; color: var(--kz-ink); transition: background 0.2s, border-color 0.2s, padding 0.2s; }
-.kz-btn:hover { background: rgba(239, 232, 213, 0.92); border-left-color: var(--kz-ink); padding-left: 18px; }
+.kz-btn { display: block; width: 100%; text-align: left; background: transparent; border: 0; position: relative; padding: 7px 14px 7px 34px; font-size: 1.02rem; font-style: italic; letter-spacing: 0.01em; cursor: pointer; color: var(--kz-ink); }
 .kz-btn:focus-visible, .kz-opt:focus-visible, .kz-key:focus-visible, .kz-seg button:focus-visible, .kz-pausebtn:focus-visible, .kz input:focus-visible { outline: 2px solid var(--kz-red); outline-offset: 2px; }
-.kz-btn--p { font-weight: 700; border-left-color: var(--kz-red); background: rgba(239, 232, 213, 0.85); }
 .kz-btn:disabled { opacity: 0.4; cursor: default; }
 .kz-title { position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: center; padding: 4vh 5vw; gap: 18px; max-width: 520px; background: linear-gradient(90deg, rgba(239, 232, 213, 0.8) 0%, rgba(239, 232, 213, 0.55) 70%, rgba(239, 232, 213, 0) 100%); }
 .kz-title__brand { display: grid; grid-template-columns: auto 1fr; align-items: center; column-gap: 18px; }
@@ -2002,9 +2000,9 @@ html.is-gaming, html.is-gaming body { overflow: hidden; overscroll-behavior: non
 .kz-title__note { margin: 0; font-size: 0.88rem; font-style: italic; color: var(--kz-ink2); max-width: 36ch; }
 .kz-rotate { display: none; margin: 0; font-size: 0.85rem; color: var(--kz-ink2); }
 .kz-veil { position: absolute; inset: 0; display: grid; place-items: center; background: rgba(239, 232, 213, 0.72); padding: 16px; overflow-y: auto; }
-.kz-panel { background: rgba(244, 239, 226, 0.97); box-shadow: 0 0 0 1px rgba(23, 19, 15, 0.25), 0 18px 50px rgba(23, 19, 15, 0.18); padding: 22px 24px 20px; width: min(420px, 100%); display: flex; flex-direction: column; gap: 12px; max-height: calc(100% - 8px); overflow-y: auto; }
+.kz-panel { background: none; padding: 22px 24px 20px; width: min(420px, 100%); display: flex; flex-direction: column; gap: 12px; max-height: calc(100% - 8px); overflow-y: auto; }
 .kz-panel--wide { width: min(640px, 100%); }
-.kz-h { margin: 0 0 4px; font: 400 1.35rem / 1.2 var(--kz-serif); display: flex; align-items: baseline; gap: 12px; }
+.kz-h { margin: 0 0 4px; font: italic 400 1.35rem / 1.2 var(--kz-serif); display: flex; align-items: baseline; gap: 12px; }
 .kz-h span { font: 700 1.6rem / 1 var(--kz-jp); }
 .kz-muted { margin: 0; font-size: 0.9rem; color: var(--kz-ink2); font-style: italic; }
 .kz-stack { display: flex; flex-direction: column; gap: 2px; }
@@ -2014,28 +2012,28 @@ html.is-gaming, html.is-gaming body { overflow: hidden; overscroll-behavior: non
 .kz-row input[type=range] { width: 52%; accent-color: var(--kz-ink); }
 .kz-row input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--kz-ink); }
 .kz-seg { display: flex; gap: 2px; }
-.kz-seg button { border: 1px solid rgba(23, 19, 15, 0.35); background: transparent; padding: 5px 10px; cursor: pointer; font-size: 0.92rem; }
-.kz-seg button.is-on { background: var(--kz-ink); color: var(--kz-paper); }
+.kz-seg button { border: 0; border-bottom: 1px solid rgba(42, 38, 34, 0.25); background: transparent; padding: 5px 10px; cursor: pointer; font-size: 0.92rem; font-style: italic; }
+.kz-seg button.is-on { border-bottom: 2px solid var(--kz-ink); }
 .kz-chapters { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
 .kz-chapters span { font-family: var(--kz-jp); margin-right: 6px; }
 .kz-ctl { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 22px; }
 .kz-ctl__r { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 0.94rem; border-bottom: 1px solid rgba(23, 19, 15, 0.1); padding: 3px 0; }
-.kz-key { min-width: 64px; border: 1px solid rgba(23, 19, 15, 0.5); background: var(--kz-ink); color: var(--kz-paper) !important; padding: 3px 8px; cursor: pointer; font-size: 0.85rem; }
-.kz-key.is-wait { background: var(--kz-red); }
+.kz-key { background: transparent; cursor: pointer; }
+.kz-key.is-wait { color: var(--kz-red) !important; }
 .kz-scroll { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 14px; }
-.kz-poem { margin: 0; padding: 12px 14px; border-left: 2px solid var(--kz-red); background: rgba(239, 232, 213, 0.6); }
+.kz-poem { margin: 0; padding: 10px 14px; border-left: 1px solid rgba(42, 38, 34, 0.3); background: transparent; }
 .kz-poem figcaption { font: 700 1.1rem / 1.2 var(--kz-jp); margin-bottom: 6px; }
 .kz-poem p { margin: 0; font-style: italic; line-height: 1.5; }
 .kz-poem small { display: block; margin-top: 6px; font-size: 0.78rem; color: var(--kz-ink2); }
-.kz-pausebtn { position: absolute; top: 12px; right: 12px; width: 40px; height: 40px; border: 1px solid rgba(23, 19, 15, 0.4); background: rgba(239, 232, 213, 0.75); font: 700 0.95rem / 1 var(--kz-serif); letter-spacing: 0.08em; cursor: pointer; z-index: 3; }
-.kz-haiku { position: absolute; right: 4vw; top: 50%; transform: translateY(-50%); width: min(440px, calc(100% - 32px)); background: rgba(244, 239, 226, 0.95); box-shadow: 0 0 0 1px rgba(23, 19, 15, 0.22), 0 18px 50px rgba(23, 19, 15, 0.15); padding: 20px 22px; display: flex; flex-direction: column; gap: 12px; animation: kz-in 0.9s ease both; }
+.kz-pausebtn { position: absolute; top: 12px; right: 12px; width: 40px; height: 40px; border: 0; background: transparent; font: 700 0.95rem / 1 var(--kz-serif); letter-spacing: 0.08em; cursor: pointer; z-index: 3; }
+.kz-haiku { position: absolute; right: 4vw; top: 50%; transform: translateY(-50%); width: min(440px, calc(100% - 32px)); padding: 20px 22px; display: flex; flex-direction: column; gap: 12px; animation: kz-in 0.9s ease both; }
 .kz-haiku__poem { min-height: 4.8em; font-size: 1.18rem; font-style: italic; line-height: 1.55; }
 .kz-haiku__poem p { margin: 0; animation: kz-in 0.8s ease both; }
 .kz-haiku__blank { opacity: 0.4; }
 .kz-haiku__opts { display: flex; flex-direction: column; gap: 4px; }
-.kz-opt { display: flex; gap: 12px; align-items: baseline; text-align: left; border: 0; background: rgba(239, 232, 213, 0.7); padding: 8px 12px; cursor: pointer; font-size: 1.02rem; font-style: italic; }
-.kz-opt:hover { background: rgba(23, 19, 15, 0.08); }
-.kz-opt b { font-style: normal; font-size: 0.8rem; min-width: 1.4em; height: 1.4em; display: inline-grid; place-items: center; background: var(--kz-ink); color: var(--kz-paper); }
+.kz-opt { display: flex; gap: 12px; align-items: baseline; text-align: left; border: 0; background: transparent; padding: 8px 12px; cursor: pointer; font-size: 1.02rem; font-style: italic; }
+.kz-opt:hover { text-decoration: underline; text-underline-offset: 4px; text-decoration-thickness: 1px; }
+.kz-opt b { font-style: italic; font-weight: 400; font-size: 0.85rem; min-width: 1.4em; color: var(--kz-ink2); }
 .kz-narr { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; background: rgba(239, 232, 213, 0.9); padding: 24px; text-align: center; animation: kz-in 1.2s ease both; }
 .kz-narr p { margin: 0; max-width: 34ch; font-size: clamp(1.15rem, 3.2vh, 1.6rem); font-style: italic; line-height: 1.5; animation: kz-in 1.6s 0.4s ease both; }
 .kz-narr small { font-size: 0.8rem; color: var(--kz-ink2); animation: kz-in 1s 1.6s ease both; }
@@ -2077,6 +2075,115 @@ html.is-gaming, html.is-gaming body { overflow: hidden; overscroll-behavior: non
   .kz-tb--ctx { right: 0; bottom: 108px; width: 44px; height: 44px; }
   .kz-stick { width: 104px; height: 104px; bottom: 10px; left: 10px; }
 }
+
+/* ---- UI pass 3: almost no interface. Italic serif words in soft ink, one sliding ink dash as the cursor,
+   paper washes with no edges, a small red seal; touch controls are quiet ink circles. ---- */
+.kz { --kz-wash: 236, 226, 203; --kz-it: Georgia, "Times New Roman", "Iowan Old Style", Palatino, serif; }
+.kz-menu { position: relative; gap: 0; max-width: 320px; }
+.kz-menu .kz-btn { padding: 6px 12px 6px 34px; font-family: var(--kz-it); font-size: 1.06rem; color: rgba(42, 38, 34, 0.78); letter-spacing: 0.01em; transition: color 0.25s ease; }
+.kz-menu .kz-btn:hover, .kz-menu .kz-btn:focus-visible, .kz-menu .kz-btn--p { color: var(--kz-ink); text-decoration: none; }
+.kz-menu .kz-btn small { font-size: 0.8rem; color: var(--kz-ink2); margin-left: 0.6em; letter-spacing: 0; }
+.kz-dash { position: absolute; left: 4px; top: 0; width: 20px; height: 3px; margin-top: -1.5px; border-radius: 1px 50% 40% 1px / 1px 70% 60% 1px; background: var(--kz-ink); opacity: 0; pointer-events: none;
+  box-shadow: 1px 0 0 -0.5px rgba(42, 38, 34, 0.5); transition: transform 0.32s cubic-bezier(0.3, 0.7, 0.2, 1), opacity 0.3s ease; }
+.kz-menu .kz-btn:focus-visible { outline: 0; }
+.kz-menu:focus-within .kz-dash { background: var(--kz-ink); }
+/* title: the scene stays, faded under a paper wash */
+.kz-title { max-width: none; padding: 9vh 7vw; gap: 26px; justify-content: flex-start;
+  background: radial-gradient(90% 120% at 0% 30%, rgba(var(--kz-wash), 0.78) 0%, rgba(var(--kz-wash), 0.5) 45%, rgba(var(--kz-wash), 0.28) 100%); }
+.kz-title__brand { display: block; }
+.kz-title__name { position: relative; display: inline-block; margin: 0; font: italic 400 clamp(3rem, 11vh, 5.4rem) / 1 var(--kz-it); letter-spacing: 0.04em; margin-right: 0; color: rgba(42, 38, 34, 0.86); }
+.kz-seal { position: absolute; right: -1.15em; top: 0.12em; width: 1.05rem; height: 1.05rem; display: grid; place-items: center; font: 700 0.72rem / 1 var(--kz-jp); font-style: normal; color: #efe4cc; background: var(--kz-red); opacity: 0.86; transform: rotate(-3deg); border-radius: 1px 2px 1px 3px; letter-spacing: 0; }
+.kz-title__tag { margin: 12px 0 0 0.2em; font: italic 0.98rem / 1.4 var(--kz-it); color: var(--kz-ink2); max-width: none; }
+.kz-rings { position: absolute; pointer-events: none; overflow: visible; }
+.kz-rings ellipse { fill: none; stroke: #2a2622; vector-effect: non-scaling-stroke; transform-origin: center; animation: kz-ring 6s ease-in-out infinite; }
+.kz-rings ellipse:nth-child(2) { animation-delay: -2s; } .kz-rings ellipse:nth-child(3) { animation-delay: -4s; }
+@keyframes kz-ring { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.04); } }
+/* panels: no sheet edges at all, the whole veil is a paper wash that is densest where the words sit */
+.kz-veil { background: radial-gradient(ellipse at 50% 50%, rgba(var(--kz-wash), 0.95) 0%, rgba(var(--kz-wash), 0.9) 38%, rgba(var(--kz-wash), 0.7) 70%, rgba(var(--kz-wash), 0.55) 100%); }
+.kz-panel { gap: 14px; }
+.kz-h { font-family: var(--kz-it); font-size: 1.4rem; color: rgba(42, 38, 34, 0.88); }
+.kz-h span { font-size: 1.1rem; font-style: normal; color: #efe4cc; background: var(--kz-red); opacity: 0.86; padding: 3px 3px 2px; border-radius: 1px 2px 1px 3px; transform: rotate(-3deg); align-self: center; line-height: 1; }
+.kz-muted { font-family: var(--kz-it); }
+.kz-chapters span { font-size: 0.95rem; color: var(--kz-ink2); margin-right: 10px; }
+.kz-row { font-family: var(--kz-it); font-style: italic; }
+.kz-row input[type=range] { -webkit-appearance: none; appearance: none; height: 18px; background: transparent; }
+.kz-row input[type=range]::-webkit-slider-runnable-track { height: 1px; background: rgba(42, 38, 34, 0.45); }
+.kz-row input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 12px; height: 12px; margin-top: -5.5px; border-radius: 50%; background: var(--kz-ink); border: 0; }
+.kz-row input[type=range]::-moz-range-track { height: 1px; background: rgba(42, 38, 34, 0.45); }
+.kz-row input[type=range]::-moz-range-thumb { width: 12px; height: 12px; border-radius: 50%; background: var(--kz-ink); border: 0; }
+.kz-row input[type=checkbox] { -webkit-appearance: none; appearance: none; width: 16px; height: 16px; border-radius: 50%; border: 1px solid rgba(42, 38, 34, 0.6); margin: 0; display: grid; place-items: center; cursor: pointer; }
+.kz-row input[type=checkbox]::after { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--kz-ink); transform: scale(0); transition: transform 0.15s ease; }
+.kz-row input[type=checkbox]:checked::after { transform: scale(1); }
+.kz-row input:focus-visible { outline: 2px solid var(--kz-red); outline-offset: 3px; }
+/* controls: a calm two-column list, words left, the key in small italic right, no rules or boxes */
+.kz-ctl { gap: 2px 44px; }
+.kz-ctl__r { border-bottom: 0; padding: 4px 0; font-family: var(--kz-it); font-style: italic; color: rgba(42, 38, 34, 0.85); }
+.kz-key { border: 0; min-width: 0; padding: 2px 4px; font-style: normal; font-size: 0.85rem; letter-spacing: 0.08em; color: var(--kz-ink2) !important; text-transform: uppercase; }
+.kz-key:hover { color: var(--kz-ink) !important; text-decoration: underline; text-underline-offset: 4px; }
+.kz-key.is-wait { text-transform: none; font-style: italic; letter-spacing: 0; }
+/* haiku: a sheet of paper with soft, blurred edges, never a card */
+.kz-haiku { isolation: isolate; padding: 24px 28px; }
+.kz-haiku::before { content: ""; position: absolute; inset: -6px -10px; z-index: -1; background: rgba(var(--kz-wash), 0.95); border-radius: 46% 54% 50% 48% / 18% 22% 20% 24%; filter: blur(14px); }
+.kz-haiku__poem { font-family: var(--kz-it); }
+.kz-opt { font-family: var(--kz-it); padding: 6px 4px; }
+.kz-narr, .kz-credits { background: radial-gradient(ellipse at 50% 50%, rgba(var(--kz-wash), 0.95) 0%, rgba(var(--kz-wash), 0.86) 60%, rgba(var(--kz-wash), 0.72) 100%); }
+.kz-narr p, .kz-credits p { font-family: var(--kz-it); color: rgba(42, 38, 34, 0.9); }
+.kz-narr small { font-family: var(--kz-it); font-style: italic; }
+.kz-narr--end { background: radial-gradient(ellipse 80% 50% at 50% 30%, rgba(var(--kz-wash), 0.7) 0%, rgba(var(--kz-wash), 0) 100%); }
+.kz-credits h2 { font-family: var(--kz-it); font-style: italic; letter-spacing: 0.06em; }
+.kz-credits h3 { font-family: var(--kz-it); font-style: italic; text-transform: none; letter-spacing: 0.02em; font-size: 1.05rem; }
+.kz-pausebtn { width: 44px; height: 44px; top: 6px; right: 6px; font: italic 400 0.95rem / 1 var(--kz-it); color: rgba(42, 38, 34, 0.6); }
+.kz--play .kz-pausebtn { text-shadow: 0 0 6px rgba(var(--kz-wash), 0.9); }
+/* touch: quiet ink circles, faint until pressed */
+.kz-stick { background: none; box-shadow: inset 0 0 0 1px rgba(42, 38, 34, 0.3); opacity: 0.6; }
+.kz-stick__knob { width: 40px; height: 40px; margin: -20px 0 0 -20px; background: rgba(42, 38, 34, 0.28); }
+.kz-stick:active { opacity: 0.95; }
+.kz-tb, .kz-heal { border: 1px solid rgba(42, 38, 34, 0.42); background: rgba(var(--kz-wash), 0.14); color: rgba(42, 38, 34, 0.9); font: italic 400 0.78rem / 1 var(--kz-it); opacity: 0.6; border-radius: 50%; transition: opacity 0.15s ease, background 0.15s ease; text-shadow: 0 0 4px rgba(var(--kz-wash), 0.9); }
+.kz-tb:active, .kz-heal:active { opacity: 1; background: rgba(42, 38, 34, 0.72); color: #efe4cc; text-shadow: none; }
+.kz-tb--ctx { border-color: rgba(184, 50, 30, 0.55); }
+.kz-heal { left: auto; top: auto; right: calc(max(16px, 3vw) + 150px); bottom: calc(max(14px, 3vh) + 150px); width: 46px; height: 46px; padding: 0; }
+@media (max-width: 720px), (max-height: 480px) {
+  .kz-title { padding: 22px 22px; gap: 12px; background: linear-gradient(180deg, rgba(var(--kz-wash), 0.8) 0%, rgba(var(--kz-wash), 0.45) 40%, rgba(var(--kz-wash), 0.5) 70%, rgba(var(--kz-wash), 0.82) 100%); }
+  .kz-title__name { font-size: 3.2rem; }
+  .kz-menu .kz-btn { padding: 7px 12px 7px 32px; font-size: 1.04rem; }
+}
+/* phone portrait: the title at the top, the menu low where a thumb reaches */
+@media (orientation: portrait) and (max-width: 600px) {
+  .kz-title { justify-content: space-between; padding: 7vh 22px max(22px, 5vh); }
+  .kz-title .kz-menu { margin-top: auto; }
+  .kz-rotate { font: italic 0.8rem var(--kz-it); color: var(--kz-ink2); margin: 0 0 0 34px; }
+  .kz-heal { right: auto; left: max(16px, 3vw); bottom: calc(max(16px, 4vh) + 136px); }
+}
+@media (max-height: 480px) {
+  .kz-title { flex-direction: column; flex-wrap: nowrap; justify-content: center; padding: 14px 28px; gap: 6px; background: radial-gradient(80% 140% at 0% 50%, rgba(var(--kz-wash), 0.82) 0%, rgba(var(--kz-wash), 0.5) 55%, rgba(var(--kz-wash), 0.28) 100%); }
+  .kz-title__name { font-size: 2.6rem; } .kz-title__tag { display: block; font-size: 0.85rem; margin-top: 4px; }
+  .kz-menu .kz-btn { padding: 4px 10px 4px 30px; font-size: 0.98rem; }
+}
+@media (max-height: 480px) and (orientation: landscape) {
+  .kz-tb { font-size: 0.72rem; }
+  .kz-heal { right: calc(max(10px, 2vw) + 108px); bottom: 116px; width: 40px; height: 40px; font-size: 0.72rem; }
+}
+@media (prefers-reduced-motion: reduce) { .kz-dash { transition: none; } .kz-rings ellipse { animation: none; } }
+.kz-chj { font: 500 0.92rem / 1 var(--kz-jp); font-style: normal; color: var(--kz-ink2); margin-right: 14px; display: inline-block; min-width: 4.2em; }
+.kz-panel .kz-menu { margin-left: -12px; }
+@media (max-height: 480px) and (orientation: landscape) { .kz-ctl { grid-template-columns: 1fr 1fr; gap: 0 36px; } .kz-ctl__r { padding: 1px 0; } .kz-panel--wide { width: min(720px, 100%); } }
+/* keyboard focus stays visible even when the pointer has moved the dash elsewhere: a thin red underline */
+.kz-menu .kz-btn:focus-visible { outline: 0; text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 5px; text-decoration-color: rgba(184, 50, 30, 0.75); }
+/* `.kz button { font: inherit }` outranks single-class rules, so the italic serif is restated at button specificity */
+.kz button.kz-btn, .kz button.kz-opt, .kz .kz-seg button { font-family: var(--kz-it); font-style: italic; }
+.kz button.kz-opt { font-size: 1.04rem; }
+.kz button.kz-tb, .kz button.kz-heal { font: italic 400 0.8rem / 1 var(--kz-it); }
+.kz button.kz-tb--ctx { font-size: 0.74rem; }
+@media (max-height: 480px) and (orientation: landscape) { .kz button.kz-tb, .kz button.kz-heal { font-size: 0.72rem; } }
+.kz button.kz-pausebtn { font: italic 400 0.95rem / 1 var(--kz-it); }
+.kz-tb, .kz-heal { opacity: 0.72; color: var(--kz-ink); text-shadow: 0 0 3px rgba(var(--kz-wash), 1), 0 0 8px rgba(var(--kz-wash), 0.8); }
+/* haiku choices: the same ink-dash cursor as the menus, no box */
+.kz-opt { position: relative; padding-left: 34px; }
+.kz-opt::before { content: ""; position: absolute; left: 6px; top: 50%; width: 0; height: 3px; margin-top: -1.5px; border-radius: 1px 50% 40% 1px / 1px 70% 60% 1px; background: var(--kz-ink); opacity: 0.85; transition: width 0.2s ease; }
+.kz-opt:hover::before, .kz-opt:focus-visible::before { width: 20px; }
+.kz-opt:focus-visible { outline: 0; text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 5px; text-decoration-color: rgba(184, 50, 30, 0.75); }
+.kz-haiku .kz-h span { font-size: 0.95rem; }
+@media (hover: none) { .kz-menu .kz-btn:focus-visible, .kz-opt:focus-visible { text-decoration: none; } }
 
 /* NEON KUMITE (組手) · versus fighter. Canvas play field + DOM menus on top. */
 .nk { position: absolute; inset: 0; overflow: hidden; background: #07050c; color: var(--ink); font-family: var(--f-body); touch-action: none; user-select: none; -webkit-user-select: none; -webkit-tap-highlight-color: transparent; }
@@ -2492,5 +2599,5 @@ html.is-gaming, html.is-gaming body { overflow: hidden; overscroll-behavior: non
 </style>
 </head><body><div id="root"></div>
 <noscript><p style="padding:2rem;font-family:monospace;color:#f5f2ea;background:#0d0d0d">This page needs JavaScript. Contact: anur.dash@gmail.com</p></noscript>
-<script type="module" src="./assets/app-QGFZ5OP3.js"></script>
+<script type="module" src="./assets/app-UIDIOXUO.js"></script>
 </body></html>
