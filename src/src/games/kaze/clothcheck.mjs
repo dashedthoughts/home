@@ -1,14 +1,19 @@
 // Cloth checker (node): steps every ronin animation and every robed foe and boss animation frame by frame through
 // the real pose code and the real figure drawing (on a recording no-op canvas), and asserts the garment rules on
 // every frame. Usage: node clothcheck.mjs   (also run from test.mjs)
-import { poseFor, drawFigure, newFig, walkLegs, POSE, lerpPose } from './figures.js';
+import { poseFor, drawFigure, newFig, walkLegs, POSE, lerpPose, STAND_H, LOOKS } from './figures.js';
 import { checkGarment } from './cloth.js';
 import { P as PT } from './sim.js';
 import { ATK, BOSSES, FOES } from './data.js';
 
 const noop = () => {};
 const grad = { addColorStop: noop };
-export const mockCtx = new Proxy({}, { get: (t, k) => (k in t ? t[k] : k.startsWith('create') ? () => grad : noop), set: (t, k, v) => { t[k] = v; return true; } });
+export const SCALES = { n: 0 }; export const MEAS = [];
+export const mockCtx = new Proxy({}, { get: (t, k) => (k in t ? t[k] : k === 'scale' ? () => { SCALES.n++; } : k.startsWith('create') ? () => grad : noop), set: (t, k, v) => { t[k] = v; return true; } });
+// standing, walking, running and guard animations: these keep the body's full height
+const TALL = /^(idle|idle-drawn|walk|run|run-start|run-stop|turn|guard|parry|sheathe|reduced-run|gust)$|^(?!archer).*:(approach|ready)$/;
+// poses that are meant to be low or wide: crouches, rolls, kneels, falls
+const LOW = /dead|death|knockdown|stagger|heal|kneel|sit|dodge|bow|focus|draw|stun|opened|jump/;
 
 const DT = 1 / 60;
 function run(name, look, isPlayer, frames, fails, counts) {
@@ -21,8 +26,21 @@ function run(name, look, isPlayer, frames, fails, counts) {
     if (fr.speed) { walk += fr.speed * DT; walkLegs(pose, walk, fr.speed, fr.e.st, fr.gait || look); }
     if (fr.mod) fr.mod(pose);
     fig.t = (fig.t || 0) + DT;
-    drawFigure(mockCtx, fr.x, fr.y, look, pose, fig, { face: fr.face ?? 1, dt: DT, vx: fr.vx || 0, wind: fr.wind || 0, groundY: fr.groundY ?? fr.y, boilN: 0, reduced: !!fr.reduced });
+    SCALES.n = 0; const geo = drawFigure(mockCtx, fr.x, fr.y, look, pose, fig, { face: fr.face ?? 1, dt: DT, vx: fr.vx || 0, wind: fr.wind || 0, groundY: fr.groundY ?? fr.y, boilN: 0, reduced: !!fr.reduced, running: (fr.speed || 0) > 200, walkPh: fr.speed ? (walk / 132) * 6.283 : null });
     const b = checkGarment(fig.garment, { rest: fr.rest });
+    // never squashed: no scale transform, and the figure keeps its height and a sensible width
+    if (SCALES.n) b.push('figure drawn with a scale transform');
+    { const G = fig.garment; let x0 = 1e9, x1 = -1e9, y1 = -1e9; for (const P of [G.gusset, ...G.legs.map((l) => l.poly)]) for (const q of P) { x0 = Math.min(x0, q[0]); x1 = Math.max(x1, q[0]); y1 = Math.max(y1, q[1]); }
+      for (const f2 of G.feet) y1 = Math.max(y1, f2.bot);
+      const h = y1 - geo.headTop, w = x1 - x0, H0 = 100 * G.sc;
+      if (process.env.CC_DEBUG && n === 1) console.log(name, (h / H0).toFixed(2), (w / h).toFixed(2)); if (!LOW.test(name)) { if (h < 0.72 * H0) b.push(`figure squashed: height ${h.toFixed(0)} < 0.72 of ${H0.toFixed(0)}`); if (w < 0.25 * h) b.push(`figure too thin: width ${w.toFixed(0)} < 0.25 x height ${h.toFixed(0)}`); }
+      if (h > 1.4 * H0) b.push(`figure stretched: height ${h.toFixed(0)}`);
+      // the body's measures: a visible neck always; a head about a seventh of the standing height; tall stances
+      const Hs = STAND_H * G.sc, neck = Math.hypot(geo.Hd[0] - geo.N[0], geo.Hd[1] - geo.N[1]) - (geo.chin - geo.Hd[1]), hh = (geo.chin - geo.headTop) / Hs;
+      if (neck < 2 * G.sc) b.push(`neck hidden: ${neck.toFixed(1)}`);
+      if (hh < 0.12 || hh > 0.22) b.push(`head ${hh.toFixed(3)} of standing height`);
+      if (TALL.test(name)) { const hip = (G.groundY - geo.H[1]) / Hs, tot = (G.groundY - geo.headTop) / Hs; if (hip < 0.46) b.push(`hips pressed down: ${hip.toFixed(3)}`); if (tot < 0.93) b.push(`figure pressed down: ${tot.toFixed(3)} of standing height`); }
+      MEAS.push([name, neck / G.sc, hh, (G.groundY - geo.H[1]) / Hs, (G.groundY - geo.headTop) / Hs]); }
     n++; if (b.length) fails.push(`${name} f${n}: ${b[0]}${b.length > 1 ? ` (+${b.length - 1})` : ''}`);
   }
   counts.push([name, n]);
@@ -81,6 +99,8 @@ export function runClothCheck(log = console.log) {
   }
   const total = counts.reduce((a, c) => a + c[1], 0);
   log(`cloth: ${counts.length} animations, ${total} frames checked, ${fails.length} failing frames`);
+  { const mn = (i) => Math.min(...MEAS.map((m) => m[i])), mx = (i) => Math.max(...MEAS.map((m) => m[i])), T2 = MEAS.filter((m) => TALL.test(m[0]));
+    log(`body: neck ${mn(1).toFixed(1)}..${mx(1).toFixed(1)} units, head ${mn(2).toFixed(3)}..${mx(2).toFixed(3)} of standing height; tall stances hips >= ${Math.min(...T2.map((m) => m[3])).toFixed(3)}, height >= ${Math.min(...T2.map((m) => m[4])).toFixed(3)}`); }
   if (fails.length) { const by = new Map(); for (const f of fails) { const k = f.split(' f')[0]; by.set(k, (by.get(k) || 0) + 1); } log('  failing: ' + [...by].map(([k, v]) => `${k}×${v}`).join(', ')); for (const f of fails.slice(0, 25)) log('  ' + f); }
   return { fails, total, anims: counts.length };
 }

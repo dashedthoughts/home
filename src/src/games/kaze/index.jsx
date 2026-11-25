@@ -7,6 +7,7 @@ import { checkGarment } from './cloth.js';
 import { Input, keyName, ACTIONS } from './input.js';
 import { makeStore, DEFAULT_KEYS } from './save.js';
 import { Audio } from './audio.js';
+import { groundH } from './data.js';
 import { CHAPTERS, NARRATION, ENDING, HAIKU, DIFF, CHARMS, PROLOGUE, OPENINGS } from './data.js';
 
 const ACTION_LABEL = { left: 'Move left', right: 'Move right', up: 'Jump', down: 'Crouch', run: 'Run', dodge: 'Dodge roll', slash: 'Quick cut', heavy: 'Heavy cut', parry: 'Parry / guard', focus: 'Focus (standoff)', interact: 'Bow, sit, take', wind: 'Call the wind', heal: 'Heal (uses resolve)' };
@@ -88,7 +89,7 @@ class Engine {
   }
   draw(dt, mode) {
     const s = this.s; this.audio.extGust = this.r.gustLevel || 0; this.audio.update(s, dt, this.screen);
-    this.r.frame(s, this.manual ? 1 : Math.min(1, this.acc / DT), dt, { mode, reduced: this.reduced(), labels: this.input.labels() });
+    this.r.frame(s, this.manual ? 1 : Math.min(1, this.acc / DT), dt, { mode, reduced: this.reduced(), labels: this.input.labels(), touch: this.input.mode === 'touch' });
     this.emit();
   }
   emit(force) {
@@ -153,45 +154,59 @@ export default function Game({ onExit }) {
 function Btn({ children, onClick, primary, autoFocus, ...rest }) { return <button type="button" className={`kz-btn${primary ? ' kz-btn--p' : ''}`} onClick={onClick} autoFocus={autoFocus} {...rest}>{children}</button>; }
 function Panel({ children, wide, title, jp }) { return <div className={`kz-panel${wide ? ' kz-panel--wide' : ''}`} role="dialog" aria-label={title}>{(title || jp) && <h2 className="kz-h"><span lang="ja">{jp}</span>{title}</h2>}{children}</div>; }
 
+// A menu is a column of italic words; one short ink dash slides to the word under the pointer or the focus.
+function Menu({ children, label, className = '' }) {
+  const ref = useRef(null), dash = useRef(null);
+  const place = (el) => { const r = ref.current, d = dash.current; if (!r || !d || !el || !el.closest) return; const b = el.closest('button'); if (!b || b.disabled || !r.contains(b)) return; d.style.transform = `translateY(${b.offsetTop + b.offsetHeight / 2}px)`; d.style.opacity = '0.88'; };
+  useEffect(() => { const r = ref.current; if (!r) return; const a = document.activeElement; place(a && r.contains(a) ? a : r.querySelector('button:not([disabled])')); });
+  const key = (e) => { if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return; const bs = [...ref.current.querySelectorAll('button:not([disabled])')]; if (!bs.length) return; const i = bs.indexOf(document.activeElement); const n = bs[(i + (e.key === 'ArrowDown' ? 1 : bs.length - 1) + (i < 0 ? 1 : 0)) % bs.length]; e.preventDefault(); n.focus(); };
+  const back = () => { const r = ref.current, a = document.activeElement; if (r && a && r.contains(a)) place(a); };
+  return <nav ref={ref} className={`kz-menu ${className}`} aria-label={label} onFocus={(e) => place(e.target)} onMouseOver={(e) => place(e.target)} onMouseLeave={back} onKeyDown={key}><span className="kz-dash" ref={dash} aria-hidden="true" />{children}</nav>;
+}
+// ink rings drawn around the ronin's feet on the title, placed from the renderer's camera
+function Rings({ E }) {
+  const ref = useRef(null);
+  useEffect(() => { let raf = 0; const tick = () => { raf = requestAnimationFrame(tick); const el = ref.current, r = E.r, s = E.titleSim; if (!el || !r || !r.v || !s) return; const d = r.dpr || 1, x = r.worldToScreenX(s.p.x) / d, y = r.worldToScreenY(-groundH(s.ch, s.p.x)) / d, k = (r.v.k || 1) * (r.v.zoom || 1) / d;
+    el.style.left = `${x - 90 * k}px`; el.style.top = `${y - 18 * k}px`; el.style.width = `${180 * k}px`; el.style.height = `${36 * k}px`; }; tick(); return () => cancelAnimationFrame(raf); }, [E]);
+  return <svg className="kz-rings" ref={ref} viewBox="0 0 180 36" preserveAspectRatio="none" aria-hidden="true"><ellipse cx="90" cy="18" rx="42" ry="7" strokeWidth="2" opacity="0.62" strokeDasharray="70 9 30 6 120 14" /><ellipse cx="90" cy="18" rx="64" ry="11" strokeWidth="1.4" opacity="0.42" strokeDasharray="110 16 60 10 140 20" /><ellipse cx="90" cy="18" rx="86" ry="16" strokeWidth="1" opacity="0.26" strokeDasharray="90 30 150 24 80 40" /></svg>;
+}
 function Title({ E, act, onExit }) {
-  const P = E.progress, cont = P.chapter > 0 || P.checkpoint > 0, d = E.settings.difficulty;
-  const diffs = ['story', 'blade'].concat(P.lethal ? ['lethal'] : []);
-  return (
+  const P = E.progress, cont = P.chapter > 0 || P.checkpoint > 0;
+  return (<>
+    <Rings E={E} />
     <div className="kz-title">
-      <div className="kz-title__brand"><span className="kz-title__kanji" lang="ja">風</span><h1 className="kz-title__name">KAZE</h1><p className="kz-title__tag">A ronin, the wind, and five duels on the road north.</p></div>
-      <nav className="kz-menu" aria-label="KAZE menu">
-        {cont ? <Btn primary autoFocus onClick={act((e) => e.newRun({ chapter: P.chapter, checkpoint: P.checkpoint }))}>Continue · {CHAPTERS[P.chapter].en}</Btn> : null}
-        <Btn primary={!cont} autoFocus={!cont} onClick={act((e) => e.newRun({ chapter: 0, checkpoint: 0, fresh: !P.finished && !cont ? true : false }))}>{cont ? 'Begin again' : 'Begin the journey'}</Btn>
+      <div className="kz-title__brand"><h1 className="kz-title__name" aria-label="Kaze">KAZE<span className="kz-seal" lang="ja" aria-hidden="true">風</span></h1><p className="kz-title__tag">A ronin, the wind, and five duels on the road north.</p></div>
+      <Menu label="KAZE menu">
+        {cont ? <Btn primary autoFocus onClick={act((e) => e.newRun({ chapter: P.chapter, checkpoint: P.checkpoint }))} aria-label={`Continue: ${CHAPTERS[P.chapter].en}`}>Continue<small>{CHAPTERS[P.chapter].en}</small></Btn> : null}
+        <Btn primary={!cont} autoFocus={!cont} onClick={act((e) => e.newRun({ chapter: 0, checkpoint: 0, fresh: !P.finished && !cont ? true : false }))}>{cont ? 'Begin again' : 'Begin'}</Btn>
         {(P.maxChapter > 0 || P.finished) && <Btn onClick={act((e) => e.go('chapters'))}>Chapters</Btn>}
-        <Btn onClick={act((e) => { const i = diffs.indexOf(d); e.setSettings({ difficulty: diffs[(i + 1) % diffs.length] }); })} aria-label={`Difficulty: ${DIFF[d].name}`}>Difficulty · {DIFF[d].name}{P.lethal ? '' : ''}</Btn>
-        <Btn onClick={act((e) => e.go('scroll'))}>Scroll of haiku{E.haiku.length ? ` · ${E.haiku.length}` : ''}</Btn>
+        <Btn onClick={act((e) => e.go('scroll'))} aria-label={`Scroll of haiku${E.haiku.length ? `, ${E.haiku.length} kept` : ''}`}>Haiku{E.haiku.length ? <small>{E.haiku.length}</small> : null}</Btn>
+        <Btn onClick={act((e) => e.go('settings'))} aria-label={`Settings, difficulty ${DIFF[E.settings.difficulty].name}`}>Settings</Btn>
         <Btn onClick={act((e) => e.go('controls'))}>Controls</Btn>
-        <Btn onClick={act((e) => e.go('settings'))}>Settings</Btn>
-        <Btn onClick={() => onExit && onExit()}>Return to the city</Btn>
-      </nav>
-      <p className="kz-title__note">{DIFF[d].id === 'story' ? 'Story: wide timing, more health.' : DIFF[d].id === 'lethal' ? 'Lethal: two cuts and you fall. Tight timing.' : 'Blade: the intended duel.'}{!P.lethal ? ' Finish once to unlock Lethal.' : ''}</p>
+        <Btn onClick={() => onExit && onExit()} aria-label="Return to the city">Leave</Btn>
+      </Menu>
       <p className="kz-rotate">Best played in landscape.</p>
     </div>
-  );
+  </>);
 }
 function Chapters({ E, act }) {
   const max = E.progress.finished ? 4 : E.progress.maxChapter;
-  return (<div className="kz-veil"><Panel title="Chapters" jp="章"><ol className="kz-chapters">{CHAPTERS.map((c, i) => <li key={c.key}><Btn disabled={i > max} onClick={act((e) => e.newRun({ chapter: i, checkpoint: 0, noPrologue: i > 0 }))}><span lang="ja">{c.jp}</span> {i + 1}. {c.en}</Btn></li>)}</ol><Btn autoFocus onClick={act((e) => e.go('title'))}>Back</Btn></Panel></div>);
+  return (<div className="kz-veil"><Panel title="Chapters" jp="章"><Menu label="Chapters">{CHAPTERS.map((c, i) => <Btn key={c.key} autoFocus={i === 0} disabled={i > max} onClick={act((e) => e.newRun({ chapter: i, checkpoint: 0, noPrologue: i > 0 }))}><span className="kz-chj" lang="ja">{c.jp}</span>{c.en}</Btn>)}<Btn onClick={act((e) => e.go('title'))}>Back</Btn></Menu></Panel></div>);
 }
 function ScrollView({ E, act }) {
   const list = E.haiku.slice().reverse();
   return (<div className="kz-veil"><Panel wide title="Scroll of haiku" jp="句">
     {list.length ? <div className="kz-scroll">{list.map((h, i) => <figure key={i} className="kz-poem"><figcaption lang="ja">{h.jp}</figcaption>{h.lines.map((l, j) => <p key={j}>{l}</p>)}<small>{CHAPTERS[h.ch].en}</small></figure>)}</div> : <p className="kz-muted">Empty for now. There is one place to sit in every chapter; the wind knows where.</p>}
     {E.progress.charms.length > 0 && <p className="kz-muted">Charms: {E.progress.charms.map((c) => CHARMS[c].name).join(', ')}.</p>}
-    <Btn autoFocus onClick={act((e) => e.go('title'))}>Back</Btn></Panel></div>);
+    <Menu label="Scroll"><Btn autoFocus onClick={act((e) => e.go('title'))}>Back</Btn></Menu></Panel></div>);
 }
 function Pause({ E, act, onExit }) {
   return (<div className="kz-veil"><Panel title="Paused" jp="休">
-    <div className="kz-stack"><Btn primary autoFocus onClick={act((e) => e.togglePause())}>Resume</Btn>
+    <Menu label="Paused"><Btn primary autoFocus onClick={act((e) => e.togglePause())}>Resume</Btn>
       <Btn onClick={act((e) => e.go('controls'))}>Controls</Btn><Btn onClick={act((e) => e.go('settings'))}>Settings</Btn>
       <Btn onClick={act((e) => { const s = e.s; e.newRun({ chapter: s.ch, checkpoint: s.cp, noPrologue: true, difficulty: s.diff }); })}>Return to the last shrine</Btn>
       <Btn onClick={act((e) => { e.screen = 'title'; e.titleSim = createSim({ seed: 7, chapter: e.s.ch }); e.r.cam.init = false; e.emit(true); })}>Title screen</Btn>
-      <Btn onClick={() => onExit && onExit()}>Exit to the arcade</Btn></div></Panel></div>);
+      <Btn onClick={() => onExit && onExit()}>Exit to the arcade</Btn></Menu></Panel></div>);
 }
 function Settings({ E, act }) {
   const st = E.settings, P = E.progress; const diffs = ['story', 'blade'].concat(P.lethal ? ['lethal'] : []);
@@ -202,7 +217,7 @@ function Settings({ E, act }) {
     {slider('volume', 'Volume')}{slider('music', 'Music')}{slider('sfx', 'Effects')}
     <label className="kz-row"><span>Sound</span><input type="checkbox" checked={!st.muted} onChange={(e) => E.setSettings({ muted: !e.target.checked })} /></label>
     <label className="kz-row"><span>Reduced effects</span><input type="checkbox" checked={E.reduced()} onChange={(e) => E.setSettings({ reduced: e.target.checked })} /></label>
-    <Btn autoFocus onClick={act((e) => e.go(e.prevScreen || 'title'))}>Back</Btn></Panel></div>);
+    <Menu label="Settings"><Btn autoFocus onClick={act((e) => e.go(e.prevScreen || 'title'))}>Back</Btn></Menu></Panel></div>);
 }
 function Controls({ E, act }) {
   const [wait, setWait] = useState(null);
@@ -213,7 +228,7 @@ function Controls({ E, act }) {
   return (<div className="kz-veil"><Panel wide title="Controls" jp="操作">
     <div className="kz-ctl">{rows.map((a) => <div className="kz-ctl__r" key={a}><span>{ACTION_LABEL[a]}</span><button type="button" className={`kz-key${wait === a ? ' is-wait' : ''}`} onClick={() => remap(a)} aria-label={`Change key for ${ACTION_LABEL[a]}`}>{wait === a ? 'Press a key' : keyName(map[a][0])}</button></div>)}</div>
     <p className="kz-muted">Parry also on right mouse. Heavy while guarding spends one resolve for a counter that cannot fail. Pad: X cut, Y heavy, RB parry, B dodge, A jump and interact, LT focus, LB wind, Down heal. Touch: stick on the left, four buttons on the right, ◎ for the context action.</p>
-    <div className="kz-stack kz-stack--row"><Btn onClick={act((e) => e.setSettings({ keys: null }))}>Reset keys</Btn><Btn autoFocus onClick={act((e) => e.go(e.prevScreen || 'title'))}>Back</Btn></div></Panel></div>);
+    <Menu label="Controls" className="kz-menu--row"><Btn autoFocus onClick={act((e) => e.go(e.prevScreen || 'title'))}>Back</Btn><Btn onClick={act((e) => e.setSettings({ keys: null }))}>Reset keys</Btn></Menu></Panel></div>);
 }
 
 function PlayLayer({ E, ui, act, onExit }) {
@@ -236,7 +251,7 @@ function HaikuPanel({ E, hk, act }) {
     <h2 className="kz-h"><span lang="ja">{H.jp}</span>{H.en}</h2>
     <div className="kz-haiku__poem">{hk.picks.map((k, i) => <p key={i}>{H.lines[i][k]}</p>)}{!hk.done && <p className="kz-haiku__blank">…</p>}</div>
     {!hk.done ? <div className="kz-haiku__opts">{H.lines[hk.step].map((l, i) => <button type="button" key={i} className="kz-opt" onClick={choose(i)} autoFocus={i === 0}><b>{i + 1}</b>{l}</button>)}</div>
-      : <div className="kz-stack kz-stack--row"><p className="kz-muted">Kept in your scroll.</p><Btn primary autoFocus onClick={act((e) => { e.input.script.confirm = true; setTimeout(() => { e.input.script.confirm = false; }, 120); })}>Rise</Btn></div>}
+      : <div className="kz-stack"><p className="kz-muted">Kept in your scroll.</p><Menu label="Rise"><Btn primary autoFocus onClick={act((e) => { e.input.script.confirm = true; setTimeout(() => { e.input.script.confirm = false; }, 120); })}>Rise</Btn></Menu></div>}
     {!hk.done && <p className="kz-muted">Choose with 1, 2, 3. Dodge to stand up.</p>}
   </div>);
 }
@@ -252,9 +267,9 @@ function Credits({ E }) {
 function Fin({ E, act, onExit }) {
   return (<div className="kz-veil"><Panel title="The road ends here" jp="終">
     <p className="kz-muted">Lethal is now open: tighter windows, two cuts and you fall.</p>
-    <div className="kz-stack"><Btn primary autoFocus onClick={() => onExit && onExit()}>Return to the city</Btn>
+    <Menu label="The road ends"><Btn primary autoFocus onClick={() => onExit && onExit()}>Return to the city</Btn>
       <Btn onClick={act((e) => { e.setSettings({ difficulty: 'lethal' }); e.newRun({ chapter: 0, checkpoint: 0, difficulty: 'lethal', fresh: true }); })}>Walk it again on Lethal</Btn>
-      <Btn onClick={act((e) => { e.screen = 'title'; e.titleSim = createSim({ seed: 7, chapter: 4 }); e.r.cam.init = false; e.emit(true); })}>Title screen</Btn></div></Panel></div>);
+      <Btn onClick={act((e) => { e.screen = 'title'; e.titleSim = createSim({ seed: 7, chapter: 4 }); e.r.cam.init = false; e.emit(true); })}>Title screen</Btn></Menu></Panel></div>);
 }
 
 // Touch: a stick on the left, four buttons on the right, a context button above them.

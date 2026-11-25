@@ -306,6 +306,25 @@ function lanternPost(g, R, x, base, h, o = {}) {
 }
 
 // ---------- skies (screen space) ----------
+function sunBloom(g, R, x, y, r, col, a) {
+  // wet core: soft, with a faint pooled ring where the pigment gathered as it dried
+  let rg = g.createRadialGradient(x, y, 0, x, y, r * 1.25); rg.addColorStop(0, rgba(col, a * 0.82)); rg.addColorStop(0.62, rgba(col, a * 0.72)); rg.addColorStop(0.8, rgba(col, a * 0.5)); rg.addColorStop(1, rgba(col, 0));
+  g.fillStyle = rg; g.fillRect(x - r * 1.3, y - r * 1.3, r * 2.6, r * 2.6);
+  // bleed: lobes that crept outward through the wet paper, more on the lower side (the sheet was tilted)
+  for (let i = 0; i < 16; i++) {
+    const an = R() * 6.2832, d = r * (0.7 + R() * 0.5), lx = x + Math.cos(an) * d, ly = y + Math.sin(an) * d * (Math.sin(an) > 0 ? 1.15 : 0.9), lr = r * (0.25 + R() * 0.35);
+    rg = g.createRadialGradient(lx, ly, 0, lx, ly, lr); rg.addColorStop(0, rgba(col, a * 0.2)); rg.addColorStop(1, rgba(col, 0)); g.fillStyle = rg; g.fillRect(lx - lr, ly - lr, lr * 2, lr * 2);
+  }
+  // a wide faint halo of pigment carried by the water
+  rg = g.createRadialGradient(x, y, r, x, y, r * 3); rg.addColorStop(0, rgba(col, a * 0.12)); rg.addColorStop(1, rgba(col, 0)); g.fillStyle = rg; g.fillRect(x - r * 3, y - r * 3, r * 6, r * 6);
+  g.save(); g.globalAlpha = a * 0.22; g.strokeStyle = mix(col, INK, 0.3); g.lineWidth = Math.max(1, r * 0.035); g.beginPath(); g.arc(x, y, r * 1.02, 0.4, 2.6); g.stroke(); g.restore();
+}
+function fibres(g, R, W, H, k) {
+  g.save(); g.lineCap = 'round'; g.strokeStyle = '#6b5638'; g.lineWidth = Math.max(0.5, 0.45 * k);
+  const n = Math.round(W * H / 2600);
+  for (let i = 0; i < n; i++) { const x = R() * W, y = R() * H, a = R() * 6.2832, L = (4 + R() * 12) * k, c = (R() - 0.5) * 6 * k; g.globalAlpha = 0.035 + R() * 0.05; g.beginPath(); g.moveTo(x, y); g.quadraticCurveTo(x + Math.cos(a) * L * 0.5 - Math.sin(a) * c, y + Math.sin(a) * L * 0.5 + Math.cos(a) * c, x + Math.cos(a) * L, y + Math.sin(a) * L); g.stroke(); }
+  g.restore();
+}
 export function paintSky(g, W, H, k, ch, paper) {
   const C = CHAPTERS[ch], acc = C.accent, R = rng(ch * 97 + 5);
   const S = (v) => v * k;
@@ -329,8 +348,10 @@ export function paintSky(g, W, H, k, ch, paper) {
   // the sun: a wet disc with a darker pooled rim, partly veiled by a cloud stroke
   const sun = { bamboo: [0.22, 0.24, 26, 0.18], terraces: [0.7, 0.46, 46, 0.78], torii: [0.7, 0.13, 30, 0.85], castle: [0.3, 0.5, 40, 0.6] }[C.key];
   const sx = W * sun[0], sy = H * sun[1], sr = S(sun[2]);
-  g.save(); g.globalAlpha = sun[3]; g.fillStyle = acc; g.shadowColor = acc; g.shadowBlur = S(6); g.beginPath(); g.arc(sx, sy, sr, 0, 6.3); g.fill(); g.restore();
-  g.save(); g.globalAlpha = sun[3] * 0.45; g.strokeStyle = mix(acc, INK, 0.25); g.lineWidth = S(1.6); g.beginPath(); g.arc(sx, sy, sr * 0.98, 0, 6.3); g.stroke(); g.restore();
+  // [inkfx grade] the sun is a vermilion-family ink bloom bleeding into wet paper, not a hard disc
+  sunBloom(g, R, sx, sy, sr, acc, sun[3]);
+  // [inkfx grade] visible paper fibre in the sky: short, faint, warm hairs laid in the sheet
+  fibres(g, R, W, H * 0.75, k);
   // long cloud strokes: thin dry ink above, paper veils across the sun
   // a couple of very faint dry streaks high up: wind written in the sky
   for (let i = 0; i < 2; i++) { const y = H * (0.08 + R() * 0.18), x = R() * W * 0.6, L = W * (0.25 + R() * 0.3); stroke(g, [[x, y, 0.2], [x + L * 0.5, y - S(4), 1], [x + L, y - S(1), 0.1]], { w: S(5), alpha: 0.07, dry: 0.92, seed: Math.floor(R() * 1e6), color: INK, taper: [0.3, 0.5], bristles: 14 }); }
