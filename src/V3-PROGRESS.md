@@ -58,3 +58,7 @@ claude/vibrant-curie-0x7eb2 @ 1ad129b (main was published from it). Tag pushes a
 ## 02:30 UTC — planned pause (owner: stop at ~75% of the usage window, keep 25% for him)
 - Stopped KAZE, KUMITE and ITO builders mid-round; all suites pass and the site builds with their WIP; committed `c4970eb`.
 - Everything needed to resume is in `src/RESUME-NOTES.md`. Next reset is about 06:40 UTC; check-in 7 fires at 06:45.
+
+## 06:42 UTC — owner gave a 3-minute burst, then pause again
+- ITO round 2 DEPLOYED (built in scratchpad/rel: eec8162 + ito and media from c4970eb): course-facing start, ring pull, persona checks green, dispatcher lines. Run-start and mid-run frames checked on desktop and phone.
+- Still saved, not live: KAZE figures r2 + boss backdrop (half), KUMITE fighters r3 + art fixes (half). Resume per RESUME-NOTES.md when the owner says go.

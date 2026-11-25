@@ -3,7 +3,7 @@
 // paper grain (multiply), letterbox, calligraphy cards, HUD.
 import { INK, rng, clamp, lerp, makeCanvas, rgba, mix, makePaper, makeGrain, ribbon, leaf, drop, stroke } from './brush.js';
 import { buildScene, paintSky, bamboo, torii, pine, rock, TW, REDP, paintRedSky } from './scenery.js';
-import { CHAPTERS, groundH, ATK, BOSSES, HAIKU } from './data.js';
+import { CHAPTERS, groundH, ATK, BOSSES, HAIKU, BOSS_LINES } from './data.js';
 import { poseFor, drawFigure, newFig, stepScarf, LOOKS, POSE, lerpPose, BOSSLOOK, drawFoxFig, walkLegs, brushLine } from './figures.js';
 import { P as PT, standoffPose } from './sim.js';
 
@@ -30,7 +30,7 @@ export class Renderer {
     if (W === this.v.W && H === this.v.H) return;
     this.cv.width = W; this.cv.height = H; this.v.W = W; this.v.H = H; this.dpr = dpr;
     const portrait = W / H < 1.2;
-    this.v.k = portrait ? W / 470 : Math.min(H / 480, W / 600);
+    this.v.k = portrait ? W / 540 : Math.min(H / 580, W / 700); // walking: the ronin about a quarter of the height; fights push in
     this.v.gy = portrait ? H * 0.6 : H * 0.8; this.v.cy = this.v.gy - 100 * this.v.k;
     this.portrait = portrait;
     if (this.ch >= 0) this.rebuild();
@@ -51,13 +51,13 @@ export class Renderer {
     const v = this.v, c = this.cam, p = s.p, px = lerp(p.ox, p.x, this.alpha);
     let tx = px + p.face * 90 + clamp(p.vx, -260, 260) * 0.3, zoom = 1;
     if (mode === 'title') { this.titleDrift += dt; tx = px - (this.portrait ? 0 : 150) + Math.sin(this.titleDrift * 0.08) * 40; zoom = 1; }
-    else if (s.phase === 'standoff' && s.so) { const so = s.so; tx = (px + lerp(so.oppOX, so.oppX, this.alpha)) / 2; zoom = so.st === 'hold' || so.st === 'strike' ? 1.3 + Math.min(0.08, so.t * 0.01) : so.st === 'ready' ? 1.22 : 1.1; }
+    else if (s.phase === 'standoff' && s.so) { const so = s.so; tx = (px + lerp(so.oppOX, so.oppX, this.alpha)) / 2; zoom = so.st === 'hold' || so.st === 'strike' ? 1.36 + Math.min(0.08, so.t * 0.01) : so.st === 'ready' ? 1.26 : 1.12; }
     else if (s.phase === 'haiku') { tx = px + 210; zoom = 0.84; }
     else if (s.arena) {
       // frame the fight: centre on the duellists and ease in until they stand about a third of the screen tall
       let lo = px, hi = px; for (const f of s.foes) if (f.st !== 'dead' && (f.st !== 'enter' || Math.abs(f.x - px) < 500)) { lo = Math.min(lo, f.x); hi = Math.max(hi, f.x); }
       tx = (lo + hi) / 2 * 0.8 + px * 0.2; const need = hi - lo + 300, fit = v.W / (v.k * need);
-      zoom = clamp(fit, 1, s.arena.boss ? 1.28 : 1.24) + (s.arena.boss ? this.red2 * 0.06 : 0);
+      zoom = clamp(fit, 1, s.arena.boss ? 1.32 : 1.28) + (s.arena.boss ? this.red2 * 0.06 : 0);
     }
     else if (s.phase === 'ending') { tx = px + 60; zoom = 0.92; }
     if (this.reduced && zoom > 1) zoom = 1 + (zoom - 1) * 0.5;
@@ -183,7 +183,7 @@ export class Renderer {
         case 'cut': { const fg = this.figs.get(c.id); if (fg) fg.sqv = 5; }
           this.splash(c.x, gy(c.x) - 60, c.dmg > 1 ? 26 : 14, acc, s.p.face); this.shake = Math.max(this.shake, c.dmg > 1 ? 0.6 : 0.3); break;
         case 'riposte': if (s.arena && s.arena.boss && !this.reduced) this.inkFrame = 2; this.splash(c.x, gy(c.x) - 62, 34, acc, s.p.face); this.shake = 0.8; this.flash = 0.6; break;
-        case 'kill': { if (c.boss && !this.reduced) this.inkFrame = 3; const fig = this.figs.get(c.id); if (fig) fig.dieT = this.time; this.dissolveAt(c.x, gy(c.x), acc, c.boss ? 70 : 34); if (c.boss) { this.flash = 1; this.shake = 1; } break; }
+        case 'kill': { if (c.boss) this.fallLine = { t0: this.time, boss: c.boss }; if (c.boss && !this.reduced) this.inkFrame = 3; const fig = this.figs.get(c.id); if (fig) fig.dieT = this.time; this.dissolveAt(c.x, gy(c.x), acc, c.boss ? 70 : 34); if (c.boss) { this.flash = 1; this.shake = 1; } break; }
         case 'parry': case 'reflect': this.expr = { k: 'wide', t: 0.7 }; if (this.red > 0.5 && !this.reduced) this.inkFrame = 1; this.sparks(c.x, gy(c.x) - 66, 14); this.ring(c.x, gy(c.x) - 66); this.flash = Math.max(this.flash, 0.5); break;
         case 'deflect': case 'clash': this.sparks(c.x, gy(c.x) - 62, 7); this.shake = Math.max(this.shake, 0.25); break;
         case 'guardbreak': this.sparks(c.x, gy(c.x) - 60, 16); this.splash(c.x, gy(c.x) - 50, 10, INK, s.p.face); this.shake = 0.7; break;
@@ -300,6 +300,7 @@ export class Renderer {
       if (f.st === 'enter' && Math.abs(f.vx) > 1) fig.walk = (fig.walk || 0) + Math.abs(f.vx) * dt;
       else if (Math.abs(f.vx) > 1) fig.walk = (fig.walk || 0) + Math.abs(f.vx) * dt;
       const look = f.boss ? BOSSLOOK[f.boss] : f.type; const pose = poseFor(fig, f, look, t, false, { dt });
+      if (look === 'archer' && Math.abs(f.vx) > 5 && pose.kneel) { pose.kneel = 0; pose.hy = -49; pose.ff = [12, 0]; pose.fb = [-14, 0]; } // he stands to move
       walkLegs(pose, fig.walk || 0, Math.abs(f.vx), f.st);
       shadow(fx, 20 * (LOOKS[look] ? LOOKS[look].sc : 1));
       const o = { face: f.face, alpha: al, wind, vx: f.vx, dt, boilN: this.boilN, reduced: this.reduced, sash: f.boss ? acc : null, shield: !!f.shield, draw: look === 'archer' && f.st === 'wind' ? clamp(f.stt / f.windT, 0, 1) : 0, shieldOut: f.st === 'act' && f.atk === 'bash', walkPh: (fig.walk || 0) / 19, still: look === 'master' };
@@ -533,6 +534,7 @@ export class Renderer {
       const B = BOSSES[boss.boss], bw = Math.min(W * 0.5, 460 * d), bx = (W - bw) / 2, by = top + 30 * d;
       const intro = this.bossCard ? this.time - this.bossCard.t0 : 9;
       if (intro < 3.6) { const a = clamp(intro / 0.6, 0, 1) * clamp((3.6 - intro) / 0.6, 0, 1); g.save(); g.globalAlpha = a; g.textAlign = 'center'; g.fillStyle = INK; g.font = `700 ${Math.round(H * 0.07)}px ${JP}`; g.shadowColor = rgba(C.paper, 0.9); g.shadowBlur = 12 * d; g.fillText(B.jp, W / 2, H * 0.36); g.font = `italic ${Math.round(Math.max(13 * d, H * 0.026))}px ${SERIF}`; g.fillText(B.name, W / 2, H * 0.36 + H * 0.06); g.restore(); }
+      if (intro > 1.2 && intro < 5.2) { const a = clamp((intro - 1.2) / 0.5, 0, 1) * clamp((5.2 - intro) / 0.6, 0, 1); g.globalAlpha = a; this.plate(g, W / 2, H - H * 0.1 * this.lb - 40 * d, B.jp.slice(-2), BOSS_LINES[boss.boss][0]); g.globalAlpha = 1; }
       g.save(); g.globalAlpha = 0.25; ribbon(g, [bx, by, bx + bw / 2, by - 1 * d, bx + bw, by], () => 5 * d, INK, 0.25, 0);
       const fr = clamp(boss.hp / boss.hpMax, 0, 1); g.globalAlpha = 1;
       if (fr > 0) ribbon(g, [bx, by, bx + bw * fr * 0.5, by - 1 * d, bx + bw * fr, by + 0.5 * d], (q) => (6 - q * 1.5) * d, INK, 0.88, 0.3);
@@ -550,6 +552,7 @@ export class Renderer {
     if (s.hint && s.phase !== 'dead') {
       const H2 = HINT[s.hint.id]; if (H2) { const a = clamp(s.hint.t / 0.3, 0, 1) * clamp((4.5 - s.hint.t) / 0.6, 0, 1); g.globalAlpha = a; this.plate(g, W / 2, (this.lb > 0.1 ? H * 0.1 * this.lb : 0) + H * 0.2, H2.keys.map((k) => lab[k] || k).join(' / '), H2.text); g.globalAlpha = 1; }
     }
+    if (this.fallLine && s.phase === 'play') { const age = this.time - this.fallLine.t0; if (age < 3.4) { const a = clamp((age - 0.5) / 0.4, 0, 1) * clamp((3.4 - age) / 0.5, 0, 1); g.globalAlpha = a; this.plate(g, W / 2, H - H * 0.1 * this.lb - 40 * d, BOSSES[this.fallLine.boss].jp.slice(-2), BOSS_LINES[this.fallLine.boss][1]); g.globalAlpha = 1; } }
     if (s.phase === 'standoff' && s.so) {
       const so = s.so; let txt = null;
       if (so.st === 'ready') txt = ['focus', 'Hold to face him'];

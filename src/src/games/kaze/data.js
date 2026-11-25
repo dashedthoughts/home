@@ -2,7 +2,7 @@
 export const DIFF = {
   // react: the minimum telegraph (seconds from glint to the hit frame) any attack may have on this difficulty.
   story: { id: 'story', name: 'Story', hp: 6, parry: 0.26, react: 0.55, wind: 1.3, standoff: 0.62, feint: 0.6, aggr: 0.7, dmg: 1 },
-  blade: { id: 'blade', name: 'Blade', hp: 4, parry: 0.17, react: 0.4, wind: 1, standoff: 0.42, feint: 1, aggr: 1, dmg: 1 },
+  blade: { id: 'blade', name: 'Blade', hp: 5, parry: 0.17, react: 0.4, wind: 1, standoff: 0.42, feint: 1, aggr: 1, dmg: 1 },
   lethal: { id: 'lethal', name: 'Lethal', hp: 3, parry: 0.13, react: 0.3, wind: 0.82, standoff: 0.3, feint: 1.4, aggr: 1.3, dmg: 2 },
 };
 
@@ -35,8 +35,8 @@ export const FOES = {
 };
 
 export const BOSSES = {
-  gonroku: { jp: '竹割りの権六', name: 'Gonroku the Bamboo-Splitter', look: 'bandit', hp: 10, w: 32, speed: 120, range: 92, block: 0.28,
-    p1: [['cut', 3], ['combo', 3], ['overhead', 1]], p2: [['combo', 2], ['flurry', 2], ['lunge', 2]], feint: [0, 0.12] },
+  gonroku: { jp: '竹割りの権六', name: 'Gonroku the Bamboo-Splitter', look: 'bandit', hp: 12, w: 32, speed: 120, range: 92, block: 0.28,
+    p1: [['cut', 5], ['combo', 1]], p2: [['combo', 2], ['flurry', 2], ['lunge', 2]], feint: [0, 0.12] },
   ono: { jp: '案山子の大野', name: 'Ōno the Scarecrow', look: 'spear', hp: 10, w: 32, speed: 95, range: 150, block: 0.15,
     p1: [['thrust', 3], ['sweep', 2]], p2: [['dthrust', 2], ['lunge', 2], ['sweep', 2], ['thrust', 1]], feint: [0.08, 0.2] },
   shizu: { jp: '門番の静', name: 'Shizu the Gatekeeper', look: 'duelist', hp: 11, w: 30, speed: 140, range: 92, block: 0.4,
@@ -110,18 +110,29 @@ export function groundH(ch, x) {
   return P[P.length - 1][1];
 }
 
+// The through-line: a ronin who left his teacher's school with the teacher's sword walks north to return it. Every
+// duelist on the road was once of that school and has been sent to stop him. At the castle the teacher does not want
+// the sword back: he wants to see whether his student can put it down.
 export const NARRATION = [
-  'The lights of the city are behind you. Ahead, only wind.',
-  'Bamboo bends, and stands again. So do you.',
-  'The fields are gold for one hour. Then they are only fields.',
-  'A thousand gates. None of them closed behind you.',
-  'Snow forgives every footprint by morning. Your teacher waits at the castle.',
+  'You left your teacher\'s school with his sword, and the city swallowed you. Now the wind turns north. Take it home.',
+  'Gonroku cut the practice bamboo in the old yard. Your teacher sent him to stop you.',
+  'Ōno kept the fields the school was built on. He kept your name, too.',
+  'Shizu kept the gate you ran through once. She will not hold it open again.',
+  'Hyōe lit the lanterns the night you left. Beyond the pass, the castle. Your teacher waits.',
 ];
 export const ENDING = [
-  'He taught you the sword.',
-  'He never taught you to put it down.',
+  'He did not take the sword back.',
+  'He only wanted to see you set it down.',
   'The wind goes on ahead. This time, you let it.',
 ];
+// What each boss says as the duel begins, and as they fall.
+export const BOSS_LINES = {
+  gonroku: ['The old man says you stole from him.', 'Then carry it back yourself.'],
+  ono: ['Scarecrows keep birds off what is not theirs.', 'Cross, then. The field is quiet.'],
+  shizu: ['I opened this gate for you once.', 'Go on. It is open.'],
+  hyoe: ['I lit your way out. I will not light your way back.', 'Take the light. It was going out anyway.'],
+  sotetsu: ['You took my sword to become someone. Show me who.', 'Keep it. You never needed it.'],
+};
 
 // Haiku spots: three lines, three choices each (5, 7, 5 syllables). Title in Japanese.
 export const HAIKU = [

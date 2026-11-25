@@ -188,5 +188,20 @@ console.log('[5] CPU difficulty vs masher, spam and a competent player (rounds w
   ok(pro >= 55, `a competent player (blocks, punishes) can beat RIVAL (${pro.toFixed(0)}%)`);
 }
 
+// ---------------------------------------------------------------- 6) arcade story: every matchup has its lines, every fighter an intro, a rival beat and an ending
+console.log('[6] arcade story script');
+{
+  const { STORY } = await import('./story.js'); const { BASE } = await import('./anim.js');
+  for (const a of ROSTER) {
+    ok(STORY.intro[a] && STORY.intro[a].length === 2 && STORY.intro[a].every((l) => l.length > 8), `${a} has a two-line intro card`);
+    ok(STORY.rival[a] && STORY.rival[a].length > 20, `${a} has a rival beat`);
+    ok(STORY.ending[a] && STORY.ending[a].length >= 2 && STORY.ending[a].length <= 3, `${a} has a two- or three-line ending`);
+    ok(BASE[a].ending, `${a} has an ending illustration pose`);
+    for (const b of ROSTER) { const l = STORY.banter[a + '>' + b]; ok(l && l.length === 2 && l[0] && l[1], `banter for ${a} vs ${b}`); }
+  }
+  const all = JSON.stringify(STORY); ok(!/\u2014|—/.test(all), 'no em-dashes in the story copy');
+  console.log(`    ${Object.keys(STORY.banter).length} banter exchanges, ${Object.keys(STORY.ending).length} endings`);
+}
+
 console.log(`\n${fails ? fails + ' CHECKS FAILED' : 'ALL KUMITE CHECKS PASSED'} (${((Date.now() - t0) / 1000).toFixed(1)} s)`);
 process.exit(fails ? 1 : 0);

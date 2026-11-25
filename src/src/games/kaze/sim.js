@@ -14,7 +14,7 @@ export const P = {
   walk: 150, run: 255, guardWalk: 45, jumpV: 430, grav: 1500, dodgeV: 520, dodgeT: 0.42, dodgeIfr: 0.3,
   slash: [{ wind: 0.07, act: 0.08, rec: 0.24, reach: 104 }, { wind: 0.07, act: 0.08, rec: 0.26, reach: 104 }, { wind: 0.12, act: 0.1, rec: 0.42, reach: 112 }],
   heavy: { wind: 0.36, act: 0.1, rec: 0.46, reach: 122 }, counter: { wind: 0.08, act: 0.12, rec: 0.34, reach: 150 },
-  hitT: 0.36, ifrHit: 0.7, healT: 0.75, bowT: 1.25, buffer: 0.18,
+  hitT: 0.36, ifrHit: 1.0, healT: 0.75, bowT: 1.25, buffer: 0.18,
 };
 
 export function createSim(o = {}) {
@@ -69,7 +69,7 @@ export function step(s, I) {
     case 'play': stepPlay(s, I); break;
     case 'standoff': stepStandoff(s, I); break;
     case 'haiku': stepHaiku(s, I); break;
-    case 'dead': if (s.pt > 1.7 || (s.pt > 0.7 && (pressed(s, I, 'confirm') || pressed(s, I, 'slash')))) respawn(s); break;
+    case 'dead': if (s.pt > 1.3 || (s.pt > 0.4 && (pressed(s, I, 'confirm') || pressed(s, I, 'slash')))) respawn(s); break; // cheap death: back at the shrine in under 2 s
     case 'narr': if (s.pt > 5.5 || (s.pt > 1.2 && (pressed(s, I, 'confirm') || pressed(s, I, 'slash') || pressed(s, I, 'interact')))) { if (s.prologue) { s.prologue = false; s.phase = 'play'; s.pt = 0; s.card = { ch: s.ch, t: 0 }; } else nextChapter(s); } break;
     case 'ending': stepEnding(s); if (s.pt > 13 || (s.pt > 3 && pressed(s, I, 'confirm'))) { s.phase = 'credits'; s.pt = 0; } break;
     case 'credits': if (s.pt > 26 || (s.pt > 1.5 && pressed(s, I, 'confirm'))) { s.phase = 'fin'; s.pt = 0; s.done = true; s.lethalUnlocked = true; } break;
@@ -302,16 +302,20 @@ function hurtFoe(s, f, kind) {
   if (f.shield && facing && (kind === 'slash')) { cue(s, 'clash', { x: (f.x + p.x) / 2, shield: 1 }); setP(p, 'hit'); p.stt = P.hitT * 0.55; p.vx = -p.face * 150; hint(s, 'heavy'); f.readyT = Math.min(f.readyT, 0.25); return; }
   if (f.shield && facing && (kind === 'heavy' || kind === 'counter')) { f.shield = 0; cue(s, 'guardbreak', { x: f.x }); setF(s, f, 'stagger'); f.stunT = 1.4; return; }
   const F = f.boss ? BOSSES[f.boss] : FOES[f.type];
-  if (kind === 'slash' && facing && f.blockCD <= 0 && (f.st === 'ready' || f.st === 'approach' || f.st === 'rec' && f.stt > 0.25) && rnd(s) < (F.block || 0) * (f.phase === 2 ? 1.3 : 1)) {
-    setF(s, f, 'block'); f.blockCD = 1.1; cue(s, 'clash', { x: (f.x + p.x) / 2 }); p.vx = -p.face * 110; return;
+  // a boss cut again and again raises its guard: mashing quick cuts gets blocked and countered
+  if (kind === 'slash' && facing && f.blockCD <= 0 && (f.st === 'ready' || f.st === 'approach' || f.st === 'rec' && f.stt > 0.25 || f.boss && f.st === 'stun') && rnd(s) < (F.block || 0) * (f.phase === 2 ? 1.3 : 1) + (f.boss ? 0.22 * (f.streak || 0) : 0)) {
+    setF(s, f, 'block'); f.blockCD = f.boss ? 0.5 : 1.1; f.streak = 0; cue(s, 'clash', { x: (f.x + p.x) / 2 }); p.vx = -p.face * 110; return;
   }
-  const dmg = kind === 'slash' ? 1 : kind === 'arrow' ? 2 : kind === 'heavy' ? 2 : 3;
+  // against a boss a quick cut only grazes: the duel is won with parries, ripostes and heavy cuts
+  const dmg = (kind === 'slash' ? 1 : kind === 'arrow' ? 2 : kind === 'heavy' ? 2 : 3) * (f.boss && kind === 'slash' ? 0.5 : 1);
   f.hp -= dmg; s.stats.hits++; cue(s, 'cut', { x: f.x, id: f.id, kind, dmg });
   if (f.hp <= 0) return killFoe(s, f, kind);
   if (f.boss && f.phase === 1 && f.hp <= f.hpMax / 2) { setF(s, f, 'shift'); f.phase = 2; cue(s, 'phase2', { x: f.x, boss: f.boss }); if (BOSSES[f.boss].shieldP2) f.shield = 1; return; }
   // bosses shrug off quick cuts and answer them; heavier blows still stagger
-  if (f.boss && kind === 'slash') { if (f.st === 'ready' || f.st === 'approach') f.readyT = Math.min(f.readyT, 0.12); f.poise = (f.poise || 0) + 1; if (f.poise >= 3) { f.poise = 0; setF(s, f, 'stun'); f.stunT = 0.4; } return; }
-  const armored = (F.armor || f.boss) && (f.st === 'wind' || f.st === 'act');
+  // bosses shrug off quick cuts and answer them; a heavy cut or a riposte is how you make them stagger
+  if (f.boss && kind === 'slash') { f.streak = (f.streak || 0) + 1; if (f.phase === 2 && (f.st === 'ready' || f.st === 'approach')) f.readyT = Math.min(f.readyT, 0.35); return; }
+  // a foe already committed to its attack trades through a quick cut; only heavier blows break a windup
+  const armored = (F.armor || f.boss || kind === 'slash') && (f.st === 'wind' && f.stt > 0.12 || f.st === 'act');
   if (!armored && f.st !== 'act') { setF(s, f, kind === 'slash' ? 'stun' : 'stagger'); f.stunT = kind === 'slash' ? 0.32 : 0.9; }
 }
 function killFoe(s, f, how) {
@@ -337,7 +341,7 @@ function updateFoe(s, f) {
   switch (f.st) {
     case 'enter': {
       const to = f.tx - f.x; mv = Math.sign(to) * Math.min(Math.abs(to) / DT, F.speed * 1.3); f.face = Math.sign(to) || f.face;
-      if (Math.abs(to) < 4 || f.stt > 4) { setF(s, f, 'ready'); f.readyT = 0.5 + rnd(s) * 0.5; }
+      if (Math.abs(to) < 4 || f.stt > 4) { setF(s, f, 'ready'); f.readyT = f.boss ? 1.6 + rnd(s) * 0.4 : 0.5 + rnd(s) * 0.5; } // a boss holds his stance before the first cut
       break;
     }
     case 'ready': case 'approach': {
@@ -388,13 +392,13 @@ function updateFoe(s, f) {
     case 'rec': {
       if (f.stt >= A.rec * (f.phase === 2 ? 0.85 : 1)) {
         if (A.next) { f.atk = A.next; s.token = f.id; setF(s, f, 'wind'); f.windT = windupOf(s, f.atk); cue(s, 'tell', { x: f.x, id: f.id, red: !!ATK[f.atk].red }); }
-        else { if (s.token === f.id) s.token = 0; setF(s, f, 'ready'); f.readyT = (0.4 + rnd(s) * 0.9) * (f.boss && f.phase === 2 ? 0.7 : 1); f.atk = null; }
+        else { if (s.token === f.id) s.token = 0; setF(s, f, 'ready'); f.readyT = (0.4 + rnd(s) * 0.9) * (f.boss ? (f.phase === 2 ? 0.8 : 2.0) : 1); f.atk = null; }
       }
       break;
     }
     case 'stun': case 'stagger': case 'block': {
       if (f.st !== 'block') mv = -f.face * 40 * (1 - f.stt * 2);
-      if (f.stt >= (f.st === 'block' ? 0.34 : f.stunT)) { const wasBlock = f.st === 'block'; setF(s, f, 'ready'); f.readyT = wasBlock ? (f.boss ? 0 : 0.15) : 0.3 + rnd(s) * 0.4; }
+      if (f.stt >= (f.st === 'block' ? 0.34 : f.stunT)) { const wasBlock = f.st === 'block'; setF(s, f, 'ready'); f.readyT = wasBlock ? (f.boss ? (f.phase === 2 ? 0.15 : 0.6) : 0.15) : 0.3 + rnd(s) * 0.4; }
       break;
     }
     case 'opened': if (f.stt >= (f.boss ? 0.95 : 1.25)) { setF(s, f, 'ready'); f.readyT = 0.4; } break;

@@ -52,6 +52,11 @@ for (const id in BASE) {
   b.tech = P([-12, y, -14, -10, 50, y + 50, 34, y + 40, s.fn[0], 0, s.ff[0] - 12, 0, 0, 0, 0, 0]);
   b.lose = P([0, y - 10, 38, 38, 22, y, 6, y - 2, s.fn[0] - 8, 0, s.ff[0] + 6, 0, 0, 0, 0, 0]);
 }
+// ending illustrations for the arcade story cards
+BASE.rin.ending = P([0, 84, -10, -16, 18, 158, -14, 100, 10, 0, -18, 0, 1, 0, 0, 20]); // leaning back, skewer to her mouth, other hand on the hip
+BASE.ganji.ending = P([0, 70, 18, 10, 20, 118, 32, 112, 34, 0, -30, 0, 1, 1, 0, 0]); // arms folded, settled, head down, done for the night
+BASE.suzu.ending = P([0, 92, -8, -10, 40, 176, -12, 98, 6, 0, -18, 0, 0, 0, 0, 24]); // arm up, launching the drone
+BASE.sayo.ending = P([0, 50, 26, -6, 44, 74, 10, 110, 36, 0, -30, 0, 0, 2, 0, 30]); // crouched on the roof edge, chin on the back of her hand
 // win poses: each one a still you could put on a poster
 BASE.rin.win = P([0, 82, -8, -14, 22, 200, -10, 98, 12, 0, -20, 0, 1, 0, 0, 24]); // fist to the sky, other hand on the hip, weight on one leg
 BASE.ganji.win = P([0, 76, -8, -12, 16, 128, 36, 126, 34, 0, -34, 0, 1, 1, 0, 0]); // arms folded over the chest, chin up, planted

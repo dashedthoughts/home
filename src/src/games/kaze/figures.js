@@ -31,7 +31,13 @@ export const POSE = {
   heal: mk({ grip: [10, -40], sw: 0.9, sheath: 1, lean: 0.25, hy: -30, head: 0.35, kneel: 1, ff: [-10, 0], fb: [-14, 0] }),
   dead: mk({ grip: [10, -8], sw: 0.1, lean: -1.45, head: -0.3, hy: -12, ff: [24, 0], fb: [18, 0] }),
   // bow (archer)
-  bowg: mk({ grip: [22, -64], sw: -1.57 }), boww: mk({ grip: [26, -66], sw: -1.57, lean: -0.08, ff: [16, 0], fb: [-16, 0] }),
+  // guard stances as shape language: each cast member holds the sword its own way
+  hasso: mk({ grip: [6, -84], sw: -1.95, lean: 0.12, ff: [22, 0], fb: [-26, 0], hy: -42 }),
+  waki: mk({ grip: [-8, -42], sw: 2.75, lean: 0.24, head: 0.15, ff: [22, 0], fb: [-24, 0], hy: -43 }),
+  jodan: mk({ grip: [8, -104], sw: -1.35, lean: -0.05, ff: [11, 0], fb: [-13, 0], hy: -50 }),
+  iaigoshi: mk({ grip: [8, -48], sw: 0.95, sheath: 1, lean: 0.06, ff: [9, 0], fb: [-11, 0], hy: -50 }),
+  bowg: mk({ grip: [24, -44], sw: -1.57, kneel: 1, hy: -27, lean: 0.05, ff: [-14, 0], fb: [-14, 0] }), boww: mk({ grip: [28, -48], sw: -1.57, kneel: 1, hy: -28, lean: -0.1, ff: [-14, 0], fb: [-14, 0] }),
+  gedan: mk({ grip: [28, -38], sw: 0.45, lean: 0.22, head: 0.15, ff: [28, 0], fb: [-32, 0], hy: -39 }),
   // shield brute
   bashw: mk({ grip: [-8, -64], sw: -2.35, lean: 0.06, ff: [16, 0], fb: [-18, 0], hy: -47 }), basha: mk({ grip: [8, -56], sw: -1.0, lean: 0.4, ff: [30, 0], fb: [-24, 0], hy: -42 }),
 };
@@ -55,7 +61,8 @@ const ATKPOSE = {
   thrust: ['thw', 'tha'], dthrust: ['thw', 'tha'], lunge: ['thw', 'tha'], rthrust: ['thw', 'tha'], sweep: ['swpw', 'swpa'], overhead: ['hw', 'ha'],
   shoot: ['boww', 'boww'], bash: ['bashw', 'basha'],
 };
-const GUARD = { ronin: 'guard', bandit: 'guard', duelist: 'guard', master: 'guard', spear: 'thw', archer: 'bowg', brute: 'bashw', gonroku: 'guard', shizu: 'guard', ono: 'thw', hyoe: 'bashw' };
+const GUARD = { ronin: 'guard', bandit: 'hasso', duelist: 'waki', master: 'iaigoshi', spear: 'thw', archer: 'bowg', brute: 'bashw', gonroku: 'gedan', shizu: 'jodan', ono: 'thw', hyoe: 'bashw' };
+export const guardPose = (look) => POSE[GUARD[look] || 'guard'];
 
 // Pose for a sim entity. fig is the persistent render-side record (keeps the previous pose for blending).
 export function poseFor(fig, e, kind, t, isPlayer, extra) {
@@ -270,7 +277,7 @@ export function drawFigure(g, x, y, look, pose, fig, o) {
   if (L.lantern) {
     const base = [N[0] - f * 10 * sc, N[1] + 6 * sc], top = [N[0] - f * 22 * sc, N[1] - 46 * sc], lx = top[0] + f * 14 * sc + cloth * 0.8, ly = top[1] + 16 * sc;
     sweep(g, [base, [lerp(base[0], top[0], 0.5) - f * 2 * sc, lerp(base[1], top[1], 0.5)], top, [top[0] + f * 14 * sc, top[1] + 2 * sc]], 2.6 * sc, ink, A, seed + 3);
-    g.globalAlpha = A * 0.5; const gl = g.createRadialGradient(lx, ly, 2, lx, ly, 46 * sc); gl.addColorStop(0, 'rgba(247,238,214,0.8)'); gl.addColorStop(1, 'rgba(247,238,214,0)'); g.fillStyle = cc(gl); g.fillRect(lx - 46 * sc, ly - 46 * sc, 92 * sc, 92 * sc); g.globalAlpha = 1;
+    if (!FLATC) { g.globalAlpha = A * 0.5; const gl = g.createRadialGradient(lx, ly, 2, lx, ly, 46 * sc); gl.addColorStop(0, 'rgba(247,238,214,0.8)'); gl.addColorStop(1, 'rgba(247,238,214,0)'); g.fillStyle = cc(gl); g.fillRect(lx - 46 * sc, ly - 46 * sc, 92 * sc, 92 * sc); g.globalAlpha = 1; }
     mo([[lx, ly - 9 * sc], [lx + 6 * sc, ly - 5 * sc], [lx + 6.5 * sc, ly + 5 * sc], [lx, ly + 9 * sc], [lx - 6.5 * sc, ly + 5 * sc], [lx - 6 * sc, ly - 5 * sc]], '#f3ead4', { k: 35, tex: 0.2, lw: 1.4 * sc });
   }
   // ---- back arm (sleeve mass) ----
@@ -279,7 +286,7 @@ export function drawFigure(g, x, y, look, pose, fig, o) {
     const ex = T4b[0], ey = T4b[1], wx = T4b[2], wy = T4b[3];
     const ux = ex - S[0], uy = ey - S[1], ul = Math.hypot(ux, uy) || 1, px = -uy / ul, py = ux / ul; // perpendicular of upper arm
     const vx2 = wx - ex, vy2 = wy - ey, vl = Math.hypot(vx2, vy2) || 1, qx = -vy2 / vl, qy = vx2 / vl;
-    const drop = [cloth * 1.2 * (back ? 1 : 0.8) - f * (back ? 2 : 0), (15 + Math.abs(cloth) * 0.2) * sc];
+    const tied = !pose.sheath && L === LOOKS.ronin, drop = [cloth * 1.2 * (back ? 1 : 0.8) - f * (back ? 2 : 0), ((tied ? 6 : 15) + Math.abs(cloth) * 0.2) * sc];
     const w = 7 * sc * Math.sqrt(bulk), cuff = [lerp(ex, wx, 0.45), lerp(ey, wy, 0.45)];
     const P = [[S[0] + px * w, S[1] + py * w], [ex + px * w * 0.9, ey + py * w * 0.9], [cuff[0] + qx * w * 0.75, cuff[1] + qy * w * 0.75], [cuff[0] - qx * w * 0.75, cuff[1] - qy * w * 0.75],
       [lerp(ex, cuff[0], 0.4) + drop[0], lerp(ey, cuff[1], 0.4) + drop[1]], [ex + drop[0] * 0.7 - px * w * 0.3, ey + drop[1] * 0.75], [S[0] - px * w, S[1] - py * w]];
@@ -298,6 +305,11 @@ export function drawFigure(g, x, y, look, pose, fig, o) {
     const sa = 0.5 + cloth * 0.01, s0 = [H[0] + f * 6 * sc, H[1] - 6 * sc], s1 = [s0[0] - f * Math.cos(sa) * 44 * sc, s0[1] + Math.sin(sa) * 44 * sc];
     rib(g, [s0[0], s0[1], lerp(s0[0], s1[0], 0.5), lerp(s0[1], s1[1], 0.5) + 1 * sc, s1[0], s1[1]], (u) => (3.8 - u * 1.4) * sc, '#15120f', A, 0.6);
   }
+  if ((L.weapon === 'katana' || L.weapon === 'odachi') && !o.noWeapon && (L === LOOKS.ronin || L.kind === 'duelist' || L.kind === 'master')) {
+    const s0 = [H[0] + f * 3 * sc, H[1] - 9 * sc], s1 = [s0[0] - f * 26 * sc, s0[1] + 13 * sc];
+    rib(g, [s0[0], s0[1], s1[0], s1[1]], (u) => (3.2 - u * 1) * sc, '#1c1714', A, 0.6);
+    sweep(g, [s0, [s0[0] + f * 9 * sc, s0[1] - 5 * sc]], 3 * sc, INK, A, seed + 152, 2);
+  }
   if (hand2) arm(Sb, hand2[0], hand2[1], 1, 1);
   // ---- feet (pale, in sandals), then the hakama over them ----
   for (const l of legs) {
@@ -305,6 +317,7 @@ export function drawFigure(g, x, y, look, pose, fig, o) {
     if (L.shins) mo([[l.hemx - 3 * sc, l.hemy - 2 * sc], [l.hemx + 3 * sc, l.hemy - 2 * sc], [F[0] + 2.5 * sc, F[1] - 4 * sc], [F[0] - 2.5 * sc, F[1] - 4 * sc]], L.skin, { k: 60 + l.back, tex: 0.1, lw: 1.3 * sc, strokes: 2 });
     mo([[F[0] - f * 3.5 * sc, F[1] - 0.5 * sc], [F[0] - f * 2 * sc, F[1] - 5 * sc], [F[0] + f * 3 * sc * toe, F[1] - 4.5 * sc], [F[0] + f * 8.5 * sc * toe, F[1] - 0.5 * sc]], L.skin, { k: 62 + l.back, tex: 0.1, lw: 1.3 * sc, strokes: 2 });
     sweep(g, [[F[0] - f * 4 * sc, F[1]], [F[0] + f * 9 * sc * toe, F[1] + 0.3 * sc]], 1.8 * sc, ink, A, seed + 64);
+    sweep(g, [[F[0] - f * 1.5 * sc, F[1] - 4.5 * sc], [F[0] + f * 4 * sc * toe, F[1] - 1 * sc]], 0.9 * sc, ink, A, seed + 65);
   }
   // hakama: ONE shape for both legs, split only as far as the legs part
   {
@@ -345,7 +358,7 @@ export function drawFigure(g, x, y, look, pose, fig, o) {
   // ---- neck, head, hair, face ----
   const neckA = [N[0] + nfx * 1 * sc, N[1] + 2 * sc];
   mo([[neckA[0] - 3 * sc, neckA[1]], [neckA[0] + 3.4 * sc, neckA[1]], [Hd[0] + 3 * sc * f, Hd[1] + 4 * sc], [Hd[0] - 3 * sc * f, Hd[1] + 3 * sc]], L.skin, { k: 100, tex: 0.1, lw: 1.3 * sc, strokes: 2 });
-  const hc = Math.cos(ha), hs = Math.sin(ha) * f, hk = 0.88 * sc, HP = (u, v) => [Hd[0] + (u * hc - v * hs) * hk * f, Hd[1] + (u * hs * f + v * hc) * hk];
+  const hc = Math.cos(ha), hs = Math.sin(ha) * f, hk = 0.94 * sc, HP = (u, v) => [Hd[0] + (u * hc - v * hs) * hk * f, Hd[1] + (u * hs * f + v * hc) * hk];
   // head: skull, jaw toward the front; face is a pale mass
   const headP = [HP(-6.5, -2), HP(-4, -8), HP(2, -8.4), HP(6.2, -4), HP(6.8, 1.5), HP(5.2, 5.5), HP(1.5, 7.8), HP(-3.5, 6.5), HP(-6.5, 3)];
   mo(headP, L.skin, { k: 102, tex: 0.12, lw: 1.6 * sc, strokes: 2 });
@@ -362,6 +375,7 @@ export function drawFigure(g, x, y, look, pose, fig, o) {
     if (L.hat === 'band') { const b0 = HP(-6.8, -3), b1 = HP(6.4, -3.6); rib(g, [b0[0], b0[1], b1[0], b1[1]], () => 3.2 * sc, L.acc, A, 0); sweep(g, [b0, [b0[0] - f * 8 * sc + cloth * 1.2, b0[1] + 2 * sc], [b0[0] - f * 15 * sc + cloth * 2, b0[1] + 5 * sc]], 2.2 * sc, L.acc, A, seed + 109); }
   }
   if (L.beard) { const c0 = HP(5, 4), c1 = HP(1, 8.5); sweep(g, [c0, c1, [c1[0] - f * 2 * sc + cloth * 0.5, c1[1] + (L.beard === 'white' ? 9 : 4) * sc]], (L.beard === 'white' ? 2.6 : 3.4) * sc, L.beard === 'white' ? '#e9e2d3' : '#151311', A, seed + 110); }
+  if (L.hat === 'kasa') { const n0 = HP(-6.5, -1), n1 = HP(-8.5, 6), n2 = [HP(-5, 9)[0] + cloth * 0.5, HP(-5, 9)[1]]; mo([n0, HP(-2, -2), HP(-3.2, 4), n2, n1], '#141210', { k: 109, tex: 0.3, lw: 1.3 * sc, strokes: 2 }); sweep(g, [HP(-7.5, 4), [HP(-10, 10)[0] + cloth * 0.8, HP(-10, 10)[1]]], 1.6 * sc, '#141210', A, seed + 119); }
   // face: in shadow under a hat; one decisive line for the eye
   const shaded = L.hat === 'kasa' || L.hat === 'jingasa' || L.hat === 'hood';
   if (shaded) { g.save(); g.beginPath(); const S = closedCurve(headP, 2); S.forEach((q, i) => (i ? g.lineTo(q[0], q[1]) : g.moveTo(q[0], q[1]))); g.closePath(); g.clip(); g.globalAlpha = A * 0.62; g.fillStyle = cc('#2a2420'); const sh = HP(0, -1.2); g.fillRect(Hd[0] - 12 * sc, Hd[1] - 14 * sc, 24 * sc, (sh[1] - (Hd[1] - 14 * sc))); g.restore(); }

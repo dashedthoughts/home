@@ -4,6 +4,7 @@ import { B } from './sim.js';
 import { FIGHTERS, ROSTER, MOVE_ORDER, INPUT_OF, advantage } from './data.js';
 import { LEVELS } from './ai.js';
 import { STAGES, STAGE_IDS, createStage, drawBack, drawFloor } from './stages.js';
+import { STORY, bant } from './story.js';
 import { createAudio } from './audio.js';
 import { createInput, DEFAULT_KEYS, ACTIONS, ACTION_LABEL, keyName } from './input.js';
 import { drawFighter, sideColor, solve, LOOKS, stillChains } from './rig.js';
@@ -186,6 +187,8 @@ function resultLine(r, screen) {
   return { title: `P${r.winner + 1} WINS`, sub: `${FIGHTERS[id].name} wins`, color: col };
 }
 
+const lostOnePlayer = (r) => r && r.cpu && !r.cpu[0] && r.cpu[1] && r.winner === 1;
+
 // ---------------------------------------------------------------- the game
 export default function NeonKumite({ onExit }) {
   const rootRef = useRef(null), canvasRef = useRef(null);
@@ -206,6 +209,8 @@ export default function NeonKumite({ onExit }) {
   const [hintGone, setHintGone] = useState(false);
   const [trainOpt, setTrainOpt] = useState({ dummy: 'stand', refill: true, meter: true, boxes: false });
   const [vs, setVs] = useState(null);
+  const [card, setCard] = useState(null); // arcade story card
+  const [tip, setTip] = useState(false); // one-time first-fight prompt
   useEffect(() => { if (screen !== 'fight' || hintGone) return undefined; const t = setTimeout(() => setHintGone(true), 4500); return () => clearTimeout(t); }, [screen, hintGone]);
   const ui = useRef({}); ui.current = { ...ui.current, screen, overlay, paused, mode, pick, arcade, settings, progress };
 
@@ -324,16 +329,23 @@ export default function NeonKumite({ onExit }) {
   }
   function startFight(cfg) {
     const E = eng.current;
-    setVs({ p1: cfg.p1, p2: cfg.p2, rival: cfg.rival, stage: cfg.stage, round: cfg.round });
+    setVs({ p1: cfg.p1, p2: cfg.p2, rival: cfg.rival, stage: cfg.stage, round: cfg.round, banter: cfg.banter, rivalLine: cfg.rivalLine });
     setScreen('vs'); E.manual = false;
     if (audio.current) audio.current.ui('ok');
     clearTimeout(ui.current.vsT);
-    const go = () => { setScreen('fight'); setPaused(false); E.start(cfg); };
-    ui.current.vsT = setTimeout(go, cfg.mode === 'training' ? 10 : 1700);
+    const go = () => {
+      clearTimeout(ui.current.vsT); ui.current.vsGo = null;
+      setScreen('fight'); setPaused(false); E.start(cfg);
+      // first fight ever with a human on P1: one short prompt that teaches block and one special
+      let seen = true; try { seen = localStorage.getItem(LS + 'tutorial') === '1'; } catch (e) { /* storage blocked */ }
+      if (!seen && cfg.mode !== 'training' && !cfg.cpu[0]) { E.paused = true; setTip(cfg.p1); }
+    };
+    ui.current.vsGo = go;
+    ui.current.vsT = setTimeout(go, cfg.mode === 'training' ? 10 : cfg.banter ? 3800 : 1700);
   }
   function arcadeFight(a) {
     const opp = a.ladder[a.idx]; const rival = a.idx === a.ladder.length - 1;
-    startFight({ p1: a.p1, p2: opp, cpu: [false, true], level: rival ? Math.min(4, a.level + 1) : a.level, stage: rival ? 'roof' : STAGE_IDS[a.idx % 3], mode: 'arcade', rival, round: `STAGE ${a.idx + 1} / ${a.ladder.length}` });
+    startFight({ p1: a.p1, p2: opp, cpu: [false, true], level: rival ? Math.min(4, a.level + 1) : a.level, stage: rival ? 'roof' : STAGE_IDS[a.idx % 3], mode: 'arcade', rival, round: `STAGE ${a.idx + 1} / ${a.ladder.length}`, banter: bant(a.p1, opp), rivalLine: rival ? STORY.rival[a.p1] : null });
   }
   function choose(id) {
     const p = ui.current.pick; const m = ui.current.mode;
@@ -341,7 +353,7 @@ export default function NeonKumite({ onExit }) {
     if (m === 'arcade') {
       const others = ROSTER.filter((r) => r !== id); for (let i = others.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [others[i], others[j]] = [others[j], others[i]]; }
       const a = { p1: id, ladder: [...others, id], idx: 0, level: p.level };
-      setArcade(a); arcadeFight(a); return;
+      setArcade(a); setCard({ kind: 'intro', id }); setScreen('story'); return;
     }
     if (p.step === 0) { setPick({ ...p, p1: id, step: 1 }); return; }
     setPick({ ...p, p2: id, step: 2 }); setScreen('stage');
@@ -459,27 +471,52 @@ export default function NeonKumite({ onExit }) {
       )}
 
       {screen === 'vs' && vs && (
-        <div className="nk-vs" aria-live="polite">
+        <div className={'nk-vs' + (vs.banter ? ' has-talk' : '')} aria-live="polite" onClick={() => ui.current.vsGo && ui.current.vsGo()}>
+          {vs.rivalLine && <p className="nk-vs__rival">{vs.rivalLine}</p>}
+          {vs.banter && <p className="nk-vs__say nk-vs__say--l" style={{ '--c': FIGHTERS[vs.p1].color }}>{vs.banter[0]}</p>}
+          {vs.banter && <p className="nk-vs__say nk-vs__say--r" style={{ '--c': FIGHTERS[vs.p2].color }}>{vs.banter[1]}</p>}
           <div className="nk-vs__side nk-vs__l" style={{ '--c': FIGHTERS[vs.p1].color }}><Portrait id={vs.p1} size={portrait ? 120 : 210} /><b>{FIGHTERS[vs.p1].name}</b><span className="nk-jp">{FIGHTERS[vs.p1].jp}</span></div>
           <div className="nk-vs__mid"><span>VS</span>{vs.round && <small>{vs.round}</small>}{vs.rival && <em>RIVAL</em>}<small>{STAGES[vs.stage] ? STAGES[vs.stage].jp : ''}</small></div>
           <div className="nk-vs__side nk-vs__r" style={{ '--c': FIGHTERS[vs.p2].color }}><Portrait id={vs.p2} size={portrait ? 120 : 210} flip alt={vs.p1 === vs.p2} /><b>{FIGHTERS[vs.p2].name}</b><span className="nk-jp">{FIGHTERS[vs.p2].jp}</span></div>
         </div>
       )}
 
+      {screen === 'story' && card && !overlay && (
+        <div className="nk-result nk-story is-top" data-menu>
+          <div className="nk-result__card" style={{ '--c': FIGHTERS[card.id].color }}>
+            <Portrait id={card.id} pose="stance" size={portrait ? 130 : 190} />
+            <div>
+              <h2>{FIGHTERS[card.id].name}</h2>
+              <p className="nk-result__sub">{FIGHTERS[card.id].jp} · tonight, under the tracks</p>
+              {STORY.intro[card.id].map((l, k) => <p className="nk-story__line" key={k}>{l}</p>)}
+            </div>
+          </div>
+          <nav className="nk-menu nk-menu--row"><button type="button" className="nk-btn nk-btn--big" autoFocus onClick={() => { setCard(null); arcadeFight(arcade); }}>Fight</button><button type="button" className="nk-btn nk-btn--ghost" data-back onClick={backToTitle}>Main menu</button></nav>
+        </div>
+      )}
+      {screen === 'fight' && tip && (
+        <div className="nk-tip is-top" data-menu role="dialog" aria-label="How to fight">
+          <b>FIRST FIGHT</b>
+          <p><strong>Block:</strong> {coarse ? 'hold the pad away from your opponent.' : 'hold away from your opponent (A or D).'} Hold down and away for low attacks, stand for jump-ins.</p>
+          <p><strong>Special:</strong> {coarse ? 'tap SPECIAL' : 'press L'} for {FIGHTERS[tip].moves.S.name}. {coarse ? 'Push the pad toward them and tap SPECIAL' : 'Hold toward them and press L'} for {FIGHTERS[tip].moves.fS ? FIGHTERS[tip].moves.fS.name : FIGHTERS[tip].moves.S.name}.</p>
+          <button type="button" className="nk-btn nk-btn--big" autoFocus onClick={() => { try { localStorage.setItem(LS + 'tutorial', '1'); } catch (e) { /* storage blocked */ } setTip(false); if (eng.current) eng.current.paused = false; }}>Got it</button>
+        </div>
+      )}
       {(screen === 'result' || screen === 'ending') && result && !overlay && (
         <div className="nk-result is-top" data-menu>
           <div className={'nk-result__card' + (resultLine(result, screen).lose ? ' is-lose' : '')} style={{ '--c': resultLine(result, screen).color }}>
-            {result.winner >= 0 && <Portrait id={result.ids[result.winner]} size={portrait ? 130 : 180} alt={result.mirror && result.winner === 1} />}
+            {result.winner >= 0 && <Portrait id={result.ids[result.winner]} pose={screen === 'ending' ? 'ending' : 'win'} size={portrait ? 130 : 180} alt={result.mirror && result.winner === 1} />}
             <div>
               <h2>{resultLine(result, screen).title}</h2>
               <p className="nk-result__sub">{resultLine(result, screen).sub}</p>
-              <p className="nk-quote">“{result.quote}”</p>
+              {screen === 'ending' ? STORY.ending[result.ids[0]].map((l, k) => <p className="nk-story__line" key={k}>{l}</p>) : <p className="nk-quote">“{result.quote}”</p>}
               <p className="nk-score"><b>{result.wins[0]}</b><span> : </span><b>{result.wins[1]}</b><small>{result.cpu && result.cpu[0] ? ' CPU · CPU' : result.cpu && result.cpu[1] ? ' YOU · CPU' : ' P1 · P2'}</small>{result.mode === 'arcade' && arcade ? ` · stage ${Math.min(arcade.idx + (result.next ? 0 : 1), ladder.length)} of ${ladder.length}` : ''}</p>
             </div>
           </div>
           <nav className="nk-menu nk-menu--row">
             {result.next && <button type="button" className="nk-btn nk-btn--big" autoFocus onClick={() => arcadeFight(arcade)}>Next fight</button>}
             {result.lost && <button type="button" className="nk-btn nk-btn--big" autoFocus onClick={() => arcadeFight(arcade)}>Continue</button>}
+            {lostOnePlayer(result) && (eng.current && eng.current.cfg && eng.current.cfg.level > 1) && <button type="button" className="nk-btn" onClick={() => { if (result.mode === 'arcade' && arcade) { const a = { ...arcade, level: 1 }; setArcade(a); arcadeFight(a); } else startFight({ ...eng.current.cfg, level: 1 }); }}>Try on EASY</button>}
             {!result.next && !result.lost && screen !== 'ending' && <button type="button" className="nk-btn nk-btn--big" autoFocus onClick={rematch}>Rematch</button>}
             {screen === 'ending' && <button type="button" className="nk-btn nk-btn--big" autoFocus onClick={() => openMode('arcade')}>Play again</button>}
             <button type="button" className="nk-btn" onClick={() => openMode(mode)}>Character select</button>

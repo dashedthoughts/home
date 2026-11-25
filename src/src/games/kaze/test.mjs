@@ -5,7 +5,7 @@
 // 4 no softlocks: watchdogs over 20 seeds with a capable bot and a random "monkey";
 // 5 save/load round-trips (and survives broken storage); 6 determinism.
 import { createSim, step, DT, blankInput, standoffPose, digest } from './sim.js';
-import { makeBot, botInput } from './bot.js';
+import { makeBot, botInput, makePersona, personaInput } from './bot.js';
 import { DIFF, ATK, CHAPTERS, HAIKU } from './data.js';
 import { makeStore, DEFAULT_PROGRESS } from './save.js';
 
@@ -154,6 +154,37 @@ console.log('6. determinism');
 {
   const run = () => { const s = createSim({ seed: 5, difficulty: 'blade', chapter: 1 }); const m = makeBot(); for (let i = 0; i < 60 * 90; i++) { step(s, botInput(s, m)); s.cues.length = 0; } return digest(s); };
   const a = run(), b = run(); ok(a === b, `same seed, same inputs, same state (${a} vs ${b})`);
+}
+
+// ---- 7. personas: human-like players on the default difficulty (Blade), 8 seeds each ----
+console.log('7. personas (Blade, 8 seeds)');
+function persona(kind, seed, maxCh) {
+  const s = createSim({ seed, difficulty: 'blade' }); const m = makePersona(kind, seed);
+  const r = { chDone: 0, deaths: 0, firstFight: false, boss1: false, bossDeathT: [], fin: false, deadMax: 0 }; let bossT = null, deadT = 0;
+  for (let i = 0; i < 60 * 60 * 12 * maxCh && !s.done; i++) {
+    const ch = s.ch; step(s, personaInput(s, m));
+    for (const c of s.cues) { if (c.k === 'death') { r.deaths++; if (s.ch === 0 && bossT != null) r.bossDeathT.push(s.t - bossT); } if (c.k === 'clear' && s.ch === 0 && !c.boss) r.firstFight = true; }
+    s.cues.length = 0;
+    if (s.arena && s.arena.boss) { if (r._a !== s.arena) { r._a = s.arena; bossT = s.t; if (s.ch === 0) r.boss1 = true; } }
+    if (s.phase === 'dead') { deadT += DT; r.deadMax = Math.max(r.deadMax, deadT); } else deadT = 0;
+    if (s.phase === 'narr' && !r['n' + ch]) { r['n' + ch] = 1; r.chDone = ch + 1; if (r.chDone >= maxCh) break; }
+  }
+  r.fin = s.done || s.phase === 'ending' || s.phase === 'credits' || s.phase === 'fin';
+  return r;
+}
+{
+  const M = [], L = [], C = []; for (let seed = 1; seed <= 8; seed++) { M.push(persona('masher', seed, 1)); L.push(persona('learner', seed, 2)); C.push(persona('competent', seed, 5)); }
+  const firstFight = M.filter((r) => r.firstFight).length, toBoss = M.filter((r) => r.boss1).length;
+  const bt = M.flatMap((r) => r.bossDeathT).sort((a, b) => a - b), med = bt.length ? bt[bt.length >> 1] : 99;
+  ok(firstFight >= 6 && toBoss >= 6, `masher clears the first fight (${firstFight}/8) and reaches the first boss (${toBoss}/8)`);
+  ok(!bt.length || (med >= 10 && bt[0] >= 8), `masher loses to the first boss only after a real fight (median ${med.toFixed(1)}s, shortest ${bt.length ? bt[0].toFixed(1) : '-'}s)`);
+  const l1 = L.filter((r) => r.chDone >= 1).length, l2 = L.filter((r) => r.chDone >= 2).length;
+  ok(l1 >= 6, `learner finishes chapter 1 on ${l1}/8 (need 6)`); ok(l2 >= 6, `learner gets through chapter 2 on ${l2}/8`);
+  const cf = C.filter((r) => r.fin).length; ok(cf >= 7, `competent finishes the game on ${cf}/8`);
+  const deadMax = Math.max(...[...M, ...L, ...C].map((r) => r.deadMax)); ok(deadMax < 2, `death is cheap: back at the shrine after ${deadMax.toFixed(2)}s at most`);
+  console.log(`  masher: first fight ${firstFight}/8, reached boss ${toBoss}/8, boss deaths ${bt.length} (median ${med.toFixed(1)}s), beat boss ${M.filter((r) => r.chDone >= 1).length}/8`);
+  console.log(`  learner: ch1 ${l1}/8, ch2 ${l2}/8, deaths ${L.map((r) => r.deaths).join(',')}`);
+  console.log(`  competent: finished ${cf}/8, deaths ${C.map((r) => r.deaths).join(',')}; respawn after death <= ${deadMax.toFixed(2)}s`);
 }
 
 console.log(`\n${checks - fails}/${checks} checks passed in ${((Date.now() - t0) / 1000).toFixed(1)}s`);

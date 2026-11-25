@@ -44,7 +44,7 @@ Routes: `#/` home · `#/p/<slug>` case study · `#/arcade` the arcade · `#/arca
 | **REDLINE** `#/play` | the night race (below) |
 | **ITO 糸** `#/arcade/ito` | 3D swing traversal in a comic-book city: three timed delivery runs with a dispatcher, medals and a ghost, plus free roam |
 | **NEON KUMITE 組手** `#/arcade/kumite` | a versus fighter: four fighters, three stages, an arcade story for each fighter (one night, one sealed box), 1P vs CPU or 2P on one keyboard, training and move list |
-| **KAZE 風** `#/arcade/kaze` | ink-wash duels: five chapters, standoffs, parries, five bosses |
+| **KAZE 風** `#/arcade/kaze` | ink-wash duels: a ronin carries his teacher's sword north through five chapters; standoffs, parries, five bosses under a red sky |
 | **MACHI 街** `#/arcade/machi` | a voxel block of Tokyo to rebuild: eight tools, walk mode, photo mode, three save slots |
 
 To take a game off the floor, set `hidden: true` on its entry in `src/src/games/registry.js` and rebuild. The cabinet pictures are `media/arcade/<game>.jpg`.

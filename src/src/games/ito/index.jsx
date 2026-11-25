@@ -295,9 +295,9 @@ function Hud({ register, mode, touch, total }) {
           // screen position in px; off-screen targets ride the edge of a safe box that keeps clear of the HUD panels,
           // the hint bar and (on touch) the stick and buttons, with the label always inside the screen
           const host = m.parentElement, W = host.clientWidth, H = host.clientHeight;
-          const L = 46, R = W - 46, T = 128, B = H - (touch ? 250 : 64);
+          const L = 46, R = W - 46, T = touch && W < 560 ? 162 : 128, B = H - (touch ? 250 : 64);
           let X = (d.sx * 0.5 + 0.5) * W, Y = (-d.sy * 0.5 + 0.5) * H;
-          if (d.on) Y += Math.min(0.3 * H, (d.rr || 0) * 0.5 * H) + 22; // the distance tag sits just under a visible ring
+          if (d.on) Y -= Math.min(0.3 * H, (d.rr || 0) * 0.5 * H) + 22; // the distance tag sits just above a visible ring (the courier is usually below it)
           if (!d.on || X < L || X > R || Y < T || Y > B) {
             const cx = W / 2, cy = (T + B) / 2;
             let ux = X - cx, uy = Y - cy;
