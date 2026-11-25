@@ -62,3 +62,9 @@ claude/vibrant-curie-0x7eb2 @ 1ad129b (main was published from it). Tag pushes a
 ## 06:42 UTC — owner gave a 3-minute burst, then pause again
 - ITO round 2 DEPLOYED (built in scratchpad/rel: eec8162 + ito and media from c4970eb): course-facing start, ring pull, persona checks green, dispatcher lines. Run-start and mid-run frames checked on desktop and phone.
 - Still saved, not live: KAZE figures r2 + boss backdrop (half), KUMITE fighters r3 + art fixes (half). Resume per RESUME-NOTES.md when the owner says go.
+
+## 07:02 UTC — resumed after the reset (owner's rule: resume at reset, pause at ~75%)
+- DEPLOYED 06:55: KUMITE round 3 (redrawn fighters, arcade story, first-fight prompt). DEPLOYED 07:01: KAZE round 3 (solid ink figures with two swords, red boss backdrop + ink kill frame, persona-tuned difficulty, story through-line) and ITO round 2 complete (full delivery story, camera, marker, street). All suites green; integrator looked at model sheets and in-game frames for each before shipping. New cabinet captures for all five games.
+- Running: ronin reference research (a98e99e568783cc3f) -> forward its correction list to the KAZE builder (a96e8e6fec773fc6e); REDLINE v3 playtest critic (playability on the real loop, story, look in motion).
+- Budget this window so far: about 45 agent-minutes of ~120. Pause check fires 07:25.
+- Open: KUMITE idle stances still low in the knees, rim light reads as piping; KAZE ronin still in hakama (kinagashi + haori not done), needs a human play; MACHI desktop polish + music toggle; REDLINE fixes from its critic; final report.
