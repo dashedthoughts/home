@@ -21,7 +21,7 @@ export const TOOLS = ['place', 'remove', 'paint', 'pick', 'box', 'line', 'select
 export const DEFAULT_HOTBAR = ['plaster', 'tile', 'wood', 'rooftile', 'glass', 'lantern', 'neonpink', 'neoncyan', 'sakura'].map((k) => ID[k]);
 const DH = 18.6; // default: blue hour, drifting to night
 const PRESETS = {
-  opening: { target: [42, 6, 50], yaw: -1.72, pitch: 0.62, dist: 64 }, // from the west: shrine, torii, sakura, canal and bridge leading into the neon
+  opening: { target: [40, 6, 54], yaw: -1.42, pitch: 0.8, dist: 118 }, // from the west: shrine, torii, sakura, canal and bridge leading into the neon
   south: { target: [48, 12, 48], yaw: 0, pitch: 0.42, dist: 100 },
   north: { target: [48, 12, 48], yaw: Math.PI, pitch: 0.42, dist: 100 },
   east: { target: [48, 12, 48], yaw: Math.PI / 2, pitch: 0.42, dist: 100 },

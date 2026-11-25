@@ -42,15 +42,15 @@ for (const k of ['neonpink', 'neoncyan', 'neonred', 'neonamber', 'neongreen', 'n
 ok(A.meta.wires.length >= 20, `power lines and lantern wires (${A.meta.wires.length})`);
 // signs: the glyph voxels must be exactly the authored glyphs
 const checkGlyph = (ch, at, neon) => { const g = GLYPHS[ch]; for (let r = 0; r < g.length; r++) for (let c = 0; c < g[0].length; c++) { const [x, y, z] = at(c, r); const on = A.get(x, y, z) === ID[neon]; if (on !== (g[r][c] === '#')) return false; } return true; };
-// ラーメン: plate top-left x=34, y=45, z=40, one-voxel frame; glyphs 7 wide stacked with 1 gap
-const ramenTop = A.meta.landmarks.ramen[4] - 3; // plate top is roof-2, glyphs start one below
-ok(checkGlyph('ラ', (c, r) => [35 + c, ramenTop - r, 40], 'neonred'), 'ラ on the ramen sign is legible voxel for voxel');
-ok(checkGlyph('｜', (c, r) => [35 + c, ramenTop - 8 - r, 40], 'neonred'), 'vertical long-vowel mark (tategaki)');
-ok(checkGlyph('メ', (c, r) => [35 + c, ramenTop - 16 - r, 40], 'neonred'), 'メ');
-ok(checkGlyph('ン', (c, r) => [35 + c, ramenTop - 24 - r, 40], 'neonred'), 'ン');
-// 湯 on the sento: south row lot faces -z, so columns run toward -x
-const sentoTop = GY + 19;
-ok(checkGlyph('湯', (c, r) => [17 - 3 - c, sentoTop - 2 - r, 51], 'neoncyan'), '湯 on the public bath');
+// generated signs: narrow plates (neon frame, dark board) whose text the renderer draws in Noto Sans JP
+for (const t of ['ラーメン', 'カラオケ', '湯', '本', '酒', 'ホテル', 'BAR']) {
+  const sg = A.meta.signs.find((q) => q.t === t);
+  if (!sg) { ok(false, `sign ${t} recorded`); continue; }
+  const [x0, y0, z0, x1, y1, z1] = sg.box; let inner = 0, frame = 0, total = 0;
+  for (let y = y0; y <= y1; y++) for (let z = z0; z <= z1; z++) for (let x = x0; x <= x1; x++) { const k = BLOCKS[A.get(x, y, z)].key; total++; if (k === 'signboard' || k === 'darkwood') inner++; if (k.startsWith('neon')) frame++; }
+  ok(Math.max(x1 - x0, z1 - z0) + 1 <= 7 && inner >= sg.iw * sg.ih && (frame > 0 || t === '本'), `sign ${t}: plate ${Math.max(x1 - x0, z1 - z0) + 1} wide, board ${inner}, neon frame ${frame}`);
+}
+ok(A.meta.signs.every((q) => q.iw <= 5), 'sign plates are at most 7 voxels (3.5 m) wide');
 for (const [n, f] of [['park', flatPark], ['district', () => randomDistrict(5)], ['empty', emptyLot]]) { const w = f(); let s = 0; for (const b of w.blocks) if (b) s++; ok(s > 96 * 96 * 4, `template ${n} builds (${s} voxels)`); }
 
 {
@@ -158,7 +158,7 @@ const palette = ['stone', 'air', 'air', 'neonpink', 'neoncyan', 'lantern', 'glas
   ok(bad === 0, `200 random edits in the Tokyo corner, compared every 20: ${bad} mismatches`);
   // removing a neon sign voxel darkens; putting it back restores exactly
   const w2 = A.clone(); const before = w2.light.slice();
-  const ramenX = 35, ramenY = ramenTop, ramenZ = 40;
+  const sr = A.meta.signs.find((q) => q.t === 'ラーメン'); const ramenX = sr.box[0], ramenY = sr.box[1], ramenZ = sr.box[2];
   const id0 = w2.get(ramenX, ramenY, ramenZ);
   w2.set(ramenX, ramenY, ramenZ, 0); w2.set(ramenX, ramenY, ramenZ, id0);
   ok(eqArr(before, w2.light), 'remove and re-add a neon voxel restores the light exactly');

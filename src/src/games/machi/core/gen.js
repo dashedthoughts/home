@@ -13,7 +13,7 @@ export function rng(seed) {
 const id = (b) => (typeof b === 'string' ? ID[b] : b);
 
 class Gen {
-  constructor(w, seed) { this.w = w; this.r = rng(seed); this.meta = { wires: [], props: [], train: null, cat: null, petals: [], landmarks: {}, spawn: null }; }
+  constructor(w, seed) { this.w = w; this.r = rng(seed); this.meta = { wires: [], props: [], train: null, cat: null, petals: [], landmarks: {}, spawn: null, signs: [], lamps: [] }; }
   rand(a, b) { return a + Math.floor(this.r() * (b - a + 1)); }
   chance(p) { return this.r() < p; }
   pick(a) { return a[Math.floor(this.r() * a.length)]; }
@@ -68,6 +68,38 @@ function facadeSign(L, str, u0, yTop, neon, { back = 'signboard', border = null,
   }
   paintText(L.g, str, (c, r) => L.world(u0 + pad + c, yTop - pad - r, d), neon, { vertical, colW: tw });
   return [pw, ph];
+}
+// A generated shop sign: a narrow plate (signboard inside a neon frame that lights the street) whose text is
+// drawn by the renderer as a glowing canvas texture in Noto Sans JP. 3x3 voxels per character, 5x5 for a lone kanji.
+const NEON_HEX = { neonpink: '#ff3fb4', neoncyan: '#3ff2ff', neonred: '#ff4a3a', neonamber: '#ffc23a', neongreen: '#9dff4a', neonblue: '#9a8bff' };
+function textSign(L, str, u0, yTop, neon, { back = 'signboard', border = null, d = -1 } = {}) {
+  const chars = [...str];
+  const cell = chars.length === 1 ? 5 : 3;
+  const iw = cell, ih = cell * chars.length;
+  const pw = iw + 2, ph = ih + 2;
+  for (let r = 0; r < ph; r++) for (let c = 0; c < pw; c++) {
+    const edge = r === 0 || c === 0 || r === ph - 1 || c === pw - 1;
+    L.set(u0 + c, yTop - r, d, edge ? (border || neon) : back);
+  }
+  const [x, y, z] = L.world(u0 + 1, yTop - 1, d);
+  const [xa, , za] = L.world(u0, yTop, d), [xb, , zb] = L.world(u0 + pw - 1, yTop, d);
+  L.g.meta.signs.push({ t: str, col: NEON_HEX[neon] || '#ffffff', x, y, z, iw, ih, n: [0, L.face], r: [L.face, 0], box: [Math.min(xa, xb), yTop - ph + 1, Math.min(za, zb), Math.max(xa, xb), yTop, Math.max(za, zb)] });
+  return [pw, ph];
+}
+// two-sided text sign sticking out over the street, readable from both ends of the shotengai
+function bladeTextSign(L, str, us, yTop, neon, { back = 'signboard', border = null } = {}) {
+  const chars = [...str], iw = 3, ih = 3 * chars.length, pw = iw + 2, ph = ih + 2;
+  for (const layer of [0, 1]) for (let r = 0; r < ph; r++) for (let c = 0; c < pw; c++) {
+    const edge = r === 0 || c === 0 || r === ph - 1 || c === pw - 1;
+    L.set(us + layer, yTop - r, -1 - c, edge ? (border || neon) : back);
+  }
+  const col = NEON_HEX[neon] || '#ffffff', F = L.face;
+  const [xa, , za] = L.world(us, yTop, -1), [xb, , zb] = L.world(us + 1, yTop, -pw);
+  const box = [Math.min(xa, xb), yTop - ph + 1, Math.min(za, zb), Math.max(xa, xb), yTop, Math.max(za, zb)];
+  const [x1, y1, z1] = L.world(us + 1, yTop - 1, -iw - 1);
+  L.g.meta.signs.push({ t: str, col, x: x1, y: y1, z: z1, iw, ih, n: [F, 0], r: [0, -F], box });
+  const [x0, y0, z0] = L.world(us, yTop - 1, -2);
+  L.g.meta.signs.push({ t: str, col, x: x0, y: y0, z: z0, iw, ih, n: [-F, 0], r: [0, F], box });
 }
 // two-sided sign sticking out from the facade (perpendicular); readable from both directions along the street
 function bladeSign(L, str, us, yTop, neon, { back = 'signboard', border = null, vertical = true } = {}) {
@@ -356,7 +388,7 @@ function ramenBuilding(g) {
   for (let u = 2; u <= 9; u++) L.set(u, GY + 4, 0, 'norenblue');
   L.set(0, GY + 4, -1, 'lantern'); L.set(11, GY + 4, -1, 'lantern');
   // the tall sign: ラーメン in red neon with an amber frame
-  facadeSign(L, 'ラ｜メン', 0, top - 1, 'neonred', { border: 'neonamber' });
+  textSign(L, 'ラーメン', 1, top - 3, 'neonred', { border: 'neonamber' });
   g.mark('ramen', 34, GY, 8, 45, top + 1, 40);
 }
 function konbiniBuilding(g) {
@@ -408,7 +440,7 @@ function karaokeBuilding(g) {
   L.box(1, GY, 0, 8, GY + 4, 0, 'glass'); L.box(4, GY, 0, 5, GY + 3, 0, 'air');
   L.box(0, GY + 5, -1, 9, GY + 6, -1, 'signboard');
   for (let u = 0; u <= 9; u++) L.set(u, GY + 6, -1, u % 2 ? 'neonpink' : 'neoncyan');
-  facadeSign(L, 'カラオケ', 1, top - 1, 'neoncyan', { border: 'neonpink' });
+  textSign(L, 'カラオケ', 2, top - 3, 'neoncyan', { border: 'neonpink' });
   g.mark('karaoke', 68, GY, 8, 77, top + 1, 40);
 }
 
@@ -427,7 +459,7 @@ function sento(g) {
   L.set(6, GY + 4, 2, 'shoplight'); L.set(11, GY + 4, 2, 'shoplight');
   L.box(5, GY, 3, 12, GY + 3, 3, 'shoji');
   // big sign over the doors
-  facadeSign(L, '湯', 2, top - 1, 'neoncyan', { border: 'neonblue', d: -1 });
+  textSign(L, '湯', 5, top - 3, 'neoncyan', { border: 'neonblue', d: -1 });
   // tiled gable roof, gable end to the street, with a small cusped porch roof over the doors
   gable(g, -1 + 0, 18, 51, 64, top + 1, 'rooftile', 'slabroof', 'z', 'darkwood');
   g.box(4, GY + 5, 50, 13, GY + 5, 51, 'slabroof'); g.box(6, GY + 6, 50, 11, GY + 6, 51, 'rooftile'); g.box(7, GY + 7, 50, 10, GY + 7, 50, 'slabroof');
@@ -451,7 +483,7 @@ function bookshop(g) {
   // upstairs: shoji windows and a sign
   L.box(0, GY + 6, 0, 9, top, 0, 'darkwood');
   for (let u = 1; u <= 8; u++) for (let y = GY + 8; y <= GY + 10; y++) L.set(u, y, 0, 'shoji');
-  facadeSign(L, '本', 1, top + 0, 'neonamber', { border: null, d: -1, back: 'darkwood' });
+  textSign(L, '本', 1, top - 1, 'neonamber', { border: 'darkwood', d: -1, back: 'darkwood' });
   gable(g, 17, 28, 51, 64, top + 1, 'rooftile', 'slabroof', 'x', 'darkwood');
   backSide(L, GY, top, 6, 0.5);
   L.set(0, GY + 4, -1, 'paperlamp');
@@ -467,7 +499,7 @@ function izakaya(g) {
   for (let u = 4; u <= 6; u++) L.set(u, GY + 3, 0, 'norenred');
   // red lanterns (akachochin) either side of the door
   L.set(2, GY + 3, -1, 'lantern'); L.set(8, GY + 3, -1, 'lantern'); L.set(2, GY + 2, -1, 'lantern'); L.set(8, GY + 2, -1, 'lantern');
-  facadeSign(L, '酒', 1, top - 1, 'neonred', { border: 'neonamber' });
+  textSign(L, '酒', 2, top - 3, 'neonred', { border: 'neonamber' });
   g.mark('izakaya', 28, GY, 52, 39, top + 1, 63);
 }
 function southAlley(g) {
@@ -491,7 +523,7 @@ function kissa(g) {
   L.box(0, GY + 5, -1, 13, GY + 5, -1, 'leaves');
   for (const u of [0, 13]) { L.set(u, GY, -1, 'wood'); L.set(u, GY + 1, -1, g.chance(0.5) ? 'flowers' : 'fern'); }
   // blade sign for the bar upstairs
-  bladeSign(L, 'BAR', 11, top - 2, 'neonamber', { border: 'neonpink' });
+  bladeTextSign(L, 'BAR', 11, top - 2, 'neonamber', { border: 'neonpink' });
   g.mark('kissa', 48, GY, 52, 61, top + 1, 63);
 }
 function oldHouse(g) {
@@ -515,7 +547,13 @@ function southBank(g) {
   g.box(0, 3, 80, W - 1, 3, 84, 'paving');
   g.box(0, 3, 85, W - 1, 3, D - 1, 'grass');
   // lamps along the promenade
-  for (let x = 6; x < 78; x += 12) { if (x >= 38 && x <= 49) continue; for (let y = GY; y <= GY + 5; y++) g.set(x, y, 80, 'pole'); g.set(x, GY + 6, 80, 'paperlamp'); }
+  for (let x = 6; x < 78; x += 12) {
+    if (x >= 38 && x <= 49) continue;
+    // pole, an arm reaching over the path, a slim shade and the lamp hanging under it
+    for (let y = GY; y <= GY + 6; y++) g.set(x, y, 80, 'pole');
+    g.set(x, GY + 7, 80, 'slabconc'); g.set(x, GY + 7, 81, 'slabconc'); g.set(x, GY + 6, 81, 'paperlamp');
+    g.meta.lamps.push([x + 0.5, GY, 81.5, 4.5]);
+  }
   // a second sakura by the bridge and a few green trees
   sakuraTree(g, 54, 86, { r: 5, h: 7, seed: 23 });
   sakuraTree(g, 30, 87, { r: 4, h: 6, seed: 31, leaf: 'leaves' });
@@ -582,7 +620,7 @@ function eastStrip(g) {
   shell(L, { top, wall: 'concrete', band: 'tile', litP: 0.6, sideWin: [false, false] });
   shopCavity(L, 1, 6, 5, 5, 'paving', 'shoplight');
   L.box(1, GY, 0, 6, GY + 4, 0, 'glass'); L.box(3, GY, 0, 4, GY + 3, 0, 'air');
-  facadeSign(L, 'ホテル', 0, top - 2, 'neonpink', { border: 'neonblue' });
+  textSign(L, 'ホテル', 1, top - 3, 'neonpink', { border: 'neonblue' });
   const S = new Lot(g, 88, 95, 52, 63, -1);
   S.box(0, GY, 0, 7, GY + 9, 11, 'metal');
   S.box(1, GY, 0, 6, GY + 6, 0, 'air'); S.box(1, GY, 1, 6, GY + 6, 8, 'air');
@@ -604,7 +642,7 @@ function lanternStrings(g) {
 function powerLines(g) {
   // back lane poles with three sagging wires each
   const ps = [6, 22, 38, 55, 71];
-  for (const x of ps) { powerPole(g, x, 64); g.set(x, GY + 11, 65, 'konbini'); }
+  for (const x of ps) { powerPole(g, x, 64); g.set(x, GY + 11, 65, 'konbini'); g.meta.lamps.push([x + 0.5, GY, 66, 6]); }
   g.set(55, GY + 14, 65, 'metal'); g.set(55, GY + 14, 63, 'metal'); // transformer drums
   for (let i = 0; i + 1 < ps.length; i++) for (const dz of [-1, 0, 1]) g.wire([ps[i] + 0.5, GY + 16.6, 64.5 + dz], [ps[i + 1] + 0.5, GY + 16.6, 64.5 + dz], 1.6);
   // shrine alley poles
@@ -658,7 +696,7 @@ export function flatPark(seed = 2) {
 export function randomDistrict(seed = 3) {
   const w = new World(W, H, D); const g = new Gen(w, seed);
   ground(g, 'asphalt');
-  const words = ['ラ｜メン', 'カラオケ', 'スナック', 'ホテル', 'サウナ', 'シネマ', 'ネオン', 'マチ', 'BAR', 'ヤキトリ'];
+  const words = ['ラーメン', 'カラオケ', 'スナック', 'ホテル', 'サウナ', 'シネマ', 'ネオン', 'マチ', 'BAR', 'ヤキトリ'];
   const neons = ['neonpink', 'neoncyan', 'neonred', 'neonamber', 'neongreen', 'neonblue'];
   const walls = ['tile', 'tileblue', 'plaster', 'cream', 'concrete', 'brick', 'metal'];
   // streets every 32 along x and z, lots of 8..14 between
@@ -677,7 +715,7 @@ export function randomDistrict(seed = 3) {
         shopCavity(L, 1, wdt - 2, 5, 5, 'paving', g.chance(0.3) ? 'konbini' : 'shoplight');
         for (let u = 1; u <= wdt - 2; u++) for (let y = GY; y <= GY + 4; y++) if (g.chance(0.4) && y > GY) L.set(u, y, 0, 'glass');
         L.box(0, GY + 5, -1, wdt - 1, GY + 5, -1, g.pick(neons));
-        if (floors >= 4 && wdt >= 9) facadeSign(L, g.pick(words.slice(0, 7)), 0, top - 1, g.pick(neons), { border: g.pick(neons) });
+        if (floors >= 3 && wdt >= 6) textSign(L, g.pick(words.slice(0, 8)), 1, top - 2, g.pick(neons), { border: g.pick(neons) });
         else if (floors >= 2 && g.chance(0.5)) L.set(1, GY + 4, -1, g.chance(0.5) ? 'lantern' : 'paperlamp');
         x += wdt;
       }

@@ -6,7 +6,7 @@ import { createWorld } from './render/world.js';
 import { createPost } from './render/post.js';
 import { U } from './render/materials.js';
 import { createAudio } from './audio.js';
-import { DEFAULT_CONFIG, QUALITY, resolveQuality } from './config.js';
+import { DEFAULT_CONFIG, QUALITY, TIMES, resolveQuality } from './config.js';
 
 let audioSingleton = null;
 export const getAudio = () => (audioSingleton ||= createAudio());
@@ -231,12 +231,16 @@ export function createRedline(canvas, opts = {}) {
     gov: '#ffb35a', hills: '#b07aff', resid: '#ffc78a', tower: '#ff7a2a', bay: '#5ac8ff',
   };
   for (const k in HAZE_TINT) HAZE_TINT[k] = new THREE.Color(HAZE_TINT[k]);
-  const hazeNow = new THREE.Color(), hazeTarget = new THREE.Color();
+  const hazeNow = new THREE.Color(), hazeTarget = new THREE.Color(), HAZE_SODIUM = new THREE.Color('#d8a878');
   let hazeTun = 0, hazeInit = false;
   function updateHaze(dt) {
     const S = sim.S, D = S.district;
     const tint = (D && HAZE_TINT[D.style]) || HAZE_TINT.towers;
-    hazeTarget.copy(tint).multiplyScalar(0.03).add(U.uFogColor.value);
+    // the photographic TOKYO mood: mostly sodium-grey city glow with only a hint of the district's own colour
+    const real = !!(TIMES[cfg.time] || TIMES.tokyo).real;
+    hazeTarget.copy(tint);
+    if (real) hazeTarget.lerp(HAZE_SODIUM, 0.72);
+    hazeTarget.multiplyScalar(real ? 0.02 : 0.03).add(U.uFogColor.value);
     const k = hazeInit ? 1 - Math.exp(-Math.max(0, dt) / 0.7) : 1;
     hazeInit = true;
     hazeNow.lerp(hazeTarget, k);
@@ -247,7 +251,8 @@ export function createRedline(canvas, opts = {}) {
 
   function draw(dt) {
     const R = world.road;
-    if (R) post.road(R.wet, R.z, R.rough, R.fallback);
+    // a dry night keeps only a faint sheen (half the world's "damp" value); rain passes through untouched
+    if (R) post.road(cfg.weather === 'rain' ? R.wet : R.wet * 0.5, R.z, R.rough, R.fallback);
     updateHaze(dt);
     post.adapt(fx.view === 'showroom' ? 0.35 : 1, false);
     renderer.info.reset();

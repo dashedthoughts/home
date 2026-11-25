@@ -231,6 +231,8 @@ export function skyMaterial() {
       uCityGlow: { value: new THREE.Color() },
       uStars: { value: 0 },
       uCloud: { value: 0.7 },
+      uCloudLit: { value: 1 },   // how brightly the city lights the cloud bellies (1 = the stylised moods)
+      uGlowVar: { value: 0 },    // 0..1: the horizon glow varies with direction (brighter toward the dense districts)
       uTime: U.uTime,
     },
     vertexShader: /* glsl */ `
@@ -238,7 +240,7 @@ export function skyMaterial() {
       void main() { vDir = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
     fragmentShader: /* glsl */ `
       ${HASH_GLSL}
-      uniform vec3 uZenith, uHorizon, uGlow, uFogC, uCityGlow; uniform float uStars, uTime, uCloud;
+      uniform vec3 uZenith, uHorizon, uGlow, uFogC, uCityGlow; uniform float uStars, uTime, uCloud, uCloudLit, uGlowVar;
       varying vec3 vDir;
       float vn(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
         return mix(mix(h21(i), h21(i + vec2(1, 0)), f.x), mix(h21(i + vec2(0, 1)), h21(i + vec2(1, 1)), f.x), f.y); }
@@ -248,7 +250,10 @@ export function skyMaterial() {
         float y = d.y;
         // light-pollution dome
         vec3 col = mix(uHorizon, uZenith, pow(clamp(y, 0.0, 1.0), 0.42));
-        col += uGlow * (exp(-max(y, 0.0) * 14.0) * 0.5 + exp(-max(y, 0.0) * 4.0) * 0.1);
+        // light pollution is uneven: two broad lobes around the compass, so one side of the sky is dirtier than the other
+        float az = atan(d.z, d.x);
+        float dense = 1.0 + uGlowVar * (0.6 * sin(az * 2.0 + 0.7) + 0.4 * sin(az * 5.0 - 1.9));
+        col += uGlow * dense * (exp(-max(y, 0.0) * 14.0) * 0.5 + exp(-max(y, 0.0) * 4.0) * 0.1);
         // low cloud deck, lit from below: bright bellies near the horizon over the city, dark gaps between
         float cov = 0.0;
         if (y > 0.0 && uCloud > 0.0) {
@@ -257,7 +262,7 @@ export function skyMaterial() {
           float n = fbm(cp, oct);
           cov = smoothstep(0.4, 0.75, n) * smoothstep(0.0, 0.07, y) * uCloud;
           float under = exp(-y * 4.5);
-          vec3 cc = uCityGlow * (0.08 + 0.5 * under) * (0.55 + 0.9 * smoothstep(0.45, 0.85, n)) + uZenith * 0.5;
+          vec3 cc = uCityGlow * uCloudLit * dense * (0.08 + 0.5 * under) * (0.55 + 0.9 * smoothstep(0.45, 0.85, n)) + uZenith * 0.5;
           col = mix(col, cc, cov);
         }
         col = mix(col, uFogC, smoothstep(0.03, -0.02, y));       // below horizon → fog
@@ -274,6 +279,22 @@ export function skyMaterial() {
     depthWrite: false,
     fog: false,
   });
+}
+
+// One place that turns a mood (config.js TIMES entry) into sky uniforms. The stylised moods give only the classic fields;
+// the photographic TOKYO mood also sets clouds / cloudLit / glowVar.
+const _skyC = new THREE.Color();
+export function applySkyMood(u, T) {
+  u.uZenith.value.set(T.zenith);
+  u.uHorizon.value.set(T.horizon);
+  u.uGlow.value.set(T.glow);
+  u.uFogC.value.set(T.fog);
+  u.uStars.value = T.stars;
+  // clouds lit from below by the city: the mood's horizon glow warmed by its lamp colour
+  u.uCityGlow.value.set(T.glow).lerp(_skyC.set(T.windows[1]), 0.35);
+  u.uCloud.value = T.clouds != null ? T.clouds : 0.7;
+  u.uCloudLit.value = T.cloudLit != null ? T.cloudLit : 1;
+  u.uGlowVar.value = T.glowVar || 0;
 }
 
 // ---------- moon / sun ----------
@@ -350,9 +371,11 @@ export function underglowMaterial() {
       uniform vec3 uColor; uniform float uGain; varying vec2 vUv;
       void main() {
         vec2 p = (vUv - 0.5) * 2.0;
+        // a soft, dim spill of light on the asphalt (it used to tone-map into a flat cyan polygon): a gaussian that
+        // reaches zero well inside the quad, at roughly a fifth of the old energy
         float d = length(p * vec2(1.0, 0.62));
-        float a = pow(max(0.0, 1.0 - d), 1.6);
-        gl_FragColor = vec4(uColor * a * uGain, 1.0);
+        float a = exp(-d * d * 3.4) * smoothstep(1.0, 0.5, d);
+        gl_FragColor = vec4(uColor * a * uGain * 0.2, 1.0);
       }`,
     transparent: true,
     depthWrite: false,

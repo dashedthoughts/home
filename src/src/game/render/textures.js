@@ -9,63 +9,107 @@ const canvas = (w, h) => {
   return [c, c.getContext('2d')];
 };
 
-// Asphalt: 10.8 m wide × 24 m long tile. Edge lines + two dashed lane lines + grime + puddle mask (alpha → roughness).
+// Asphalt: 10.8 m wide × 24 m long tile (47 px/m across, 43 px/m along), mipmapped + anisotropic so paint never crawls.
+// What is drawn, as on the real Shuto deck: dark neutral asphalt with fine aggregate, darker polished tyre lanes and an
+// oil line between them, worn white edge lines and lane dashes, cat's-eye studs in the gaps, sealed cracks, one patch
+// repair, and a steel expansion joint across the deck once per tile (every 24 m; the real viaduct's are ~30 m apart).
+// The second texture carries surface state: G = roughness (dark blobs = hollows that fill with water in rain; the post
+// chain reads the same channel for puddles), B = micro-gloss (fine grain + polished tyre lanes) that breaks reflections up.
 export function roadTextures() {
-  const W = 512, H = 1024;
+  // 1024×2048 = ~1 cm per texel: the title bay puts the camera 1.3 m above this surface, and at half this size the
+  // paint wear read as blocky pixels. (4 MB + mips on the GPU; drawn once at load.)
+  const W = 1024, H = 2048, K = W / 512;
   const [c, g] = canvas(W, H);
   const r = mulberry(4);
-  g.fillStyle = '#17151d';
+  const lane = W / 3, pxm = H / 24;
+  g.fillStyle = '#1f1f21';
   g.fillRect(0, 0, W, H);
-  // aggregate speckle
-  for (let i = 0; i < 26000; i++) {
-    const v = 18 + r() * 26;
-    g.fillStyle = `rgb(${v},${v - 2},${v + 6})`;
-    g.fillRect(r() * W, r() * H, 1 + r() * 1.5, 1 + r() * 1.5);
+  // broad tonal drift: no two metres of asphalt are the same grey
+  for (let i = 0; i < 40; i++) {
+    const x = r() * W, y = r() * H, rad = (60 + r() * 160) * K, v = r() < 0.5 ? 0 : 255;
+    const grd = g.createRadialGradient(x, y, 0, x, y, rad);
+    grd.addColorStop(0, `rgba(${v},${v},${v},0.05)`); grd.addColorStop(1, `rgba(${v},${v},${v},0)`);
+    g.fillStyle = grd;
+    for (const dy of [0, H, -H]) { g.save(); g.translate(0, dy); g.fillRect(x - rad, y - rad, rad * 2, rad * 2); g.restore(); } // wraps in v: no seam
   }
-  // tyre tracks (darker, polished) in each lane
-  const lane = W / 3;
-  g.globalAlpha = 0.18;
-  g.fillStyle = '#05040a';
-  for (let l = 0; l < 3; l++) for (const o of [0.28, 0.72]) g.fillRect(l * lane + lane * o - 14, 0, 28, H);
-  g.globalAlpha = 1;
-  // edge lines
-  g.fillStyle = '#d9d6ce';
-  g.fillRect(10, 0, 9, H);
-  g.fillRect(W - 19, 0, 9, H);
-  // dashed lane lines: 6 m dash, 6 m gap (tile = 24 m → 2 dashes)
-  for (let l = 1; l < 3; l++) {
-    for (let k = 0; k < 2; k++) {
-      g.fillStyle = '#e8e2c8';
-      g.fillRect(l * lane - 4, k * (H / 2), 8, H / 4);
+  // fine aggregate, per texel: mostly dark grit, a few pale stones
+  { const im = g.getImageData(0, 0, W, H), d = im.data;
+    for (let k = 0; k < d.length; k += 4) {
+      const n = r(), v = n > 0.972 ? 78 + (n - 0.972) * 1900 : d[k] * (0.55 + n * 0.95);
+      d[k] = d[k + 1] = v; d[k + 2] = v + 1;
     }
-  }
-  // cracks / patches
-  g.strokeStyle = 'rgba(0,0,0,.35)';
-  for (let i = 0; i < 18; i++) {
-    g.lineWidth = 1 + r() * 1.5;
+    g.putImageData(im, 0, 0); }
+  // a patch repair: a slightly darker, smoother rectangle with a sealed edge
+  g.fillStyle = 'rgba(0,0,0,0.28)'; g.fillRect(lane * 1.12, H * 0.58, lane * 0.7, H * 0.16);
+  g.strokeStyle = 'rgba(0,0,0,0.55)'; g.lineWidth = 2 * K; g.strokeRect(lane * 1.12, H * 0.58, lane * 0.7, H * 0.16);
+  // tyre lanes (darker, polished) with soft edges, and the oil line down the middle of each lane
+  const band = (x, hw, a) => {
+    const grd = g.createLinearGradient(x - hw, 0, x + hw, 0);
+    grd.addColorStop(0, 'rgba(0,0,0,0)'); grd.addColorStop(0.5, `rgba(0,0,0,${a})`); grd.addColorStop(1, 'rgba(0,0,0,0)');
+    g.fillStyle = grd; g.fillRect(x - hw, 0, hw * 2, H);
+  };
+  for (let l = 0; l < 3; l++) { band(l * lane + lane * 0.27, 26 * K, 0.34); band(l * lane + lane * 0.73, 26 * K, 0.34); band(l * lane + lane * 0.5, 9 * K, 0.22); }
+  // sealed cracks (bitumen lines)
+  g.strokeStyle = 'rgba(0,0,0,.5)';
+  for (let i = 0; i < 9; i++) {
+    g.lineWidth = (1 + r() * 1.2) * K;
     g.beginPath();
-    let x = r() * W, y = r() * H;
+    let x = r() * W, y = r() * H * 0.8;
     g.moveTo(x, y);
-    for (let s = 0; s < 6; s++) { x += (r() - 0.5) * 40; y += r() * 30; g.lineTo(x, y); }
+    for (let k = 0; k < 6; k++) { x += (r() - 0.5) * 34 * K; y += r() * 30 * K; g.lineTo(x, y); }
     g.stroke();
   }
+  // paint: solid edge lines, 6 m dashes with 6 m gaps (two per tile). Worn: not pure white, thinned in soft scuffs
+  // along the direction of travel (low contrast, so it reads as wear and not as noise when the camera is close)
+  const paint = (x, y, w, h, wear) => {
+    g.fillStyle = '#c4c2bb'; g.fillRect(x, y, w, h);
+    for (let i = 0, n = (w * h * wear / (K * K)) | 0; i < n; i++) {
+      g.fillStyle = `rgba(30,30,31,${0.12 + r() * 0.3})`;
+      g.fillRect(x + r() * w, y + r() * h, (1 + r() * 2.2) * K, (2 + r() * 9) * K);
+    }
+  };
+  paint(10 * K, 0, 9 * K, H, 0.05);
+  paint(W - 19 * K, 0, 9 * K, H, 0.05);
+  for (let l = 1; l < 3; l++) for (let k = 0; k < 2; k++) paint(l * lane - 4 * K, k * (H / 2), 8 * K, H / 4, 0.09);
+  // cat's-eye studs: a dark housing with a pale reflector, in the middle of each gap and along both edge lines
+  const stud = (x, y, col) => { g.fillStyle = '#060607'; g.fillRect(x - 5 * K, y - 6 * K, 10 * K, 12 * K); g.fillStyle = col; g.fillRect(x - 3 * K, y - 3 * K, 6 * K, 5 * K); };
+  for (let k = 0; k < 2; k++) {
+    const y = k * (H / 2) + H * 0.375;
+    for (let l = 1; l < 3; l++) stud(l * lane, y, '#f3ead2');
+    stud(26 * K, y, '#ffc45a'); stud(W - 26 * K, y, '#ffc45a');
+  }
+  // expansion joint: a steel strip across the whole deck, a shadow line either side
+  { const y = Math.round(H * 0.93), h = Math.max(3, Math.round(0.09 * pxm));
+    g.fillStyle = 'rgba(0,0,0,0.6)'; g.fillRect(0, y - 2 * K, W, h + 4 * K);
+    g.fillStyle = '#34363a'; g.fillRect(0, y, W, h); }
   const map = new THREE.CanvasTexture(c);
   map.colorSpace = THREE.SRGBColorSpace;
 
-  // roughness: wet puddles (dark = glossy). Painted lines are rougher.
   const [rc, rg] = canvas(256, 512);
-  rg.fillStyle = '#9a9a9a';
+  // G: base roughness; B: micro-gloss
+  rg.fillStyle = 'rgb(0,154,150)';
   rg.fillRect(0, 0, 256, 512);
+  // polished tyre lanes are glossier (B up); they also hold a film of water in rain
+  for (let l = 0; l < 3; l++) for (const o of [0.27, 0.73]) {
+    const x = (l + o) * (256 / 3), grd = rg.createLinearGradient(x - 14, 0, x + 14, 0);
+    grd.addColorStop(0, 'rgba(0,150,255,0)'); grd.addColorStop(0.5, 'rgba(0,128,255,0.55)'); grd.addColorStop(1, 'rgba(0,150,255,0)');
+    rg.fillStyle = grd; rg.fillRect(x - 14, 0, 28, 512);
+  }
+  // hollows: dark in G = glossy
   for (let i = 0; i < 60; i++) {
     const x = r() * 256, y = r() * 512, rx = 10 + r() * 50, ry = 20 + r() * 90;
     const grd = rg.createRadialGradient(x, y, 0, x, y, Math.max(rx, ry));
-    grd.addColorStop(0, 'rgba(10,10,10,0.95)');
-    grd.addColorStop(1, 'rgba(10,10,10,0)');
+    grd.addColorStop(0, 'rgba(0,10,255,0.95)');
+    grd.addColorStop(1, 'rgba(0,10,255,0)');
     rg.fillStyle = grd;
     rg.beginPath();
     rg.ellipse(x, y, rx, ry, 0, 0, Math.PI * 2);
     rg.fill();
   }
+  // grain in B only (the asphalt's texture breaks a reflection into glints); G is left smooth so puddle edges stay clean
+  { const im = rg.getImageData(0, 0, 256, 512), d = im.data;
+    for (let k = 0; k < d.length; k += 4) d[k + 2] = Math.max(0, Math.min(255, d[k + 2] * (0.5 + r() * 0.62)));
+    rg.putImageData(im, 0, 0); }
   const rough = new THREE.CanvasTexture(rc);
   for (const t of [map, rough]) {
     t.wrapS = THREE.ClampToEdgeWrapping;

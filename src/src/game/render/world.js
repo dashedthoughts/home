@@ -1,6 +1,6 @@
 // The REDLINE world: everything you see except post-processing.
 import * as THREE from 'three';
-import { U, CITY, std, basic, glowMaterial, decalMaterial, skyMaterial, celestialMaterial, particleMaterial, underglowMaterial } from './materials.js';
+import { U, CITY, std, basic, glowMaterial, decalMaterial, skyMaterial, applySkyMood, celestialMaterial, particleMaterial, underglowMaterial } from './materials.js';
 import { roadTextures, kerbTexture, neonEnvironment } from './textures.js';
 import { buildPlayerCar, createTrafficKit } from './cars.js';
 import { TIMES, WEATHER, LIVERIES, GLOWS, SLOGANS, TOKYO_SIGNS } from '../config.js';
@@ -47,8 +47,8 @@ export function createWorld(renderer, initialCfg) {
   const bayTarget = new THREE.Object3D();
   const baySpot = (color, pos) => { const l = new THREE.SpotLight(color, 0, 0, 0.42, 0.85, 0); l.userData.off = new THREE.Vector3(...pos); l.target = bayTarget; return l; };
   const showKey = baySpot('#fff0e0', [-4, 7, -5]);
-  const showRim = baySpot('#7fe8ff', [4, 10, 7]);   // high: a low light mirrors off the glossy road straight into the lens
-  const showFill = baySpot('#ff8ad8', [6, 7, -3]);
+  const showRim = baySpot('#c4e2ff', [4, 10, 7]);  // [look] cool white (was cyan: it tinted the whole bay floor teal)   // high: a low light mirrors off the glossy road straight into the lens
+  const showFill = baySpot('#ffc2a4', [6, 7, -3]); // [look] warm, like a sodium lamp across the road (was pink)
   scene.add(showKey, showRim, showFill, bayTarget);
   let showMix = 0;
   const head = new THREE.SpotLight('#fff1dc', 140, 75, 0.42, 0.6, 1.4);
@@ -122,7 +122,7 @@ export function createWorld(renderer, initialCfg) {
   const poles = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.11, 0.16, 9, 10).translate(0, 4.5, 0), poleMat, lampN * 2);
   const arms = new THREE.InstancedMesh(new THREE.BoxGeometry(2.8, 0.14, 0.18), poleMat, lampN * 2);
   const heads = new THREE.InstancedMesh(new THREE.BoxGeometry(1.3, 0.12, 0.42), basic({ color: '#ffffff' }), lampN * 2);
-  const lampGlow = new THREE.InstancedMesh(new THREE.PlaneGeometry(1, 1), glowMaterial({ gain: 0.7 }), lampN * 2);
+  const lampGlow = new THREE.InstancedMesh(new THREE.PlaneGeometry(1, 1), glowMaterial({ gain: 0.5 }), lampN * 2);   // a tight halo round the luminaire, not a ball of fog
   const pools = new THREE.InstancedMesh(new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2), decalMaterial({ shape: 'pool', gain: 0.35 }), lampN * 2);
   const streaks = new THREE.InstancedMesh(new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2), decalMaterial({ shape: 'streak', gain: 0.9 }), lampN * 2);
   const lampColors = [new THREE.Color(), new THREE.Color()];
@@ -145,8 +145,8 @@ export function createWorld(renderer, initialCfg) {
         if (S && tokyo.tunnelAt(ls)) { for (const im of LAMP_IMS) im.setMatrixAt(i, LAMP_ZERO); i++; continue; }
         const col = lampCol.copy(lampColors[side < 0 ? 0 : 1]);
         if (S && lampKindAt(ls) === 'led') col.lerp(LED_WHITE, 0.75);
-        heads.setColorAt(i, lampHead.copy(col).multiplyScalar(4.5));
-        lampGlow.setMatrixAt(i, m.compose(p.set(px - side * 2.4, 8.75, z), q, s.set(5, 5, 5)));
+        heads.setColorAt(i, lampHead.copy(col).multiplyScalar(3.2));
+        lampGlow.setMatrixAt(i, m.compose(p.set(px - side * 2.4, 8.75, z), q, s.set(2.8, 2.8, 2.8)));
         lampGlow.setColorAt(i, col);
         pools.setMatrixAt(i, m.compose(p.set(px - side * 2.9, 0.02, z), q, s.set(9, 1, 11)));
         pools.setColorAt(i, col);
@@ -212,11 +212,12 @@ export function createWorld(renderer, initialCfg) {
 
   // ---------------------------------------------------------------- shards
   const SHARD_MAX = 72;
-  const shardMesh = new THREE.InstancedMesh(new THREE.OctahedronGeometry(0.5, 0), basic({ color: HDR('#b8ff2e', 3.2) }), SHARD_MAX);
+  const shardMesh = new THREE.InstancedMesh(new THREE.OctahedronGeometry(0.5, 0), basic({ color: HDR('#d6f8ff', 2.4) }), SHARD_MAX); // [look] a small crisp cyan-white marker (was a lime blob)
   const shardCore = new THREE.InstancedMesh(new THREE.OctahedronGeometry(0.62, 0), basic({ color: HDR('#ffffff', 0.4), wireframe: true }), SHARD_MAX);
-  const shardGlow = new THREE.InstancedMesh(new THREE.PlaneGeometry(1, 1), glowMaterial({ gain: 1.4 }), SHARD_MAX);
+  const shardGlow = new THREE.InstancedMesh(new THREE.PlaneGeometry(1, 1), glowMaterial({ gain: 0.5 }), SHARD_MAX);
   for (const m of [shardMesh, shardCore, shardGlow]) { m.frustumCulled = false; scene.add(m); }
-  for (let i = 0; i < SHARD_MAX; i++) shardGlow.setColorAt(i, new THREE.Color('#b8ff2e'));
+  shardCore.visible = false; // [look] the wireframe shell was one-pixel lines that shimmered in motion
+  for (let i = 0; i < SHARD_MAX; i++) shardGlow.setColorAt(i, new THREE.Color('#7fe6ff'));
 
   // ---------------------------------------------------------------- traffic
   const kit = createTrafficKit();
@@ -415,14 +416,7 @@ export function createWorld(renderer, initialCfg) {
     const Wt = WEATHER[cfg.weather] || WEATHER.clear;
     if (!prev._applied || prev.time !== cfg.time) {
       const sm = sky.material.uniforms;
-      sm.uZenith.value.set(T.zenith);
-      sm.uHorizon.value.set(T.horizon);
-      sm.uGlow.value.set(T.glow);
-      sm.uFogC.value.set(T.fog);
-      sm.uStars.value = T.stars;
-      // [lighting] clouds lit from below by the city: the time's horizon glow warmed by sodium light
-      sm.uCityGlow.value.set(T.glow).lerp(new THREE.Color(T.windows[1]), 0.35);
-      sm.uCloud.value = T.clouds != null ? T.clouds : 0.7;
+      applySkyMood(sm, T); // [look] mood → sky uniforms lives in materials.js (zenith, horizon, glow, clouds lit from below)
       scene.fog.color.set(T.fog);
       U.uFogColor.value.set(T.fog);
       hemi.color.set(T.hemi[0]);
@@ -446,7 +440,7 @@ export function createWorld(renderer, initialCfg) {
       // [lighting] reflection fallback: rays that leave the top of the screen see the sky above (zenith/horizon mix)
       roadState.fallback.set(T.horizon).lerp(new THREE.Color(T.zenith), 0.55).multiplyScalar(0.6);
       if (envRT) envRT.dispose();
-      envRT = neonEnvironment(renderer, { horizon: T.horizon, zenith: T.zenith, glow: T.glow, a: '#00f0ff', b: '#ff2bd6', c: T.windows[0] });
+      envRT = neonEnvironment(renderer, { horizon: T.horizon, zenith: T.zenith, glow: T.glow, a: T.envA || '#00f0ff', b: T.envB || '#ff2bd6', c: T.windows[0] }); // [look] TOKYO reflects lamp rows, not neon tubes
       scene.environment = envRT.texture;
     }
     U.uFogDensity.value = T.fogDensity * (Wt.rain ? 1.25 : 1);
@@ -469,7 +463,7 @@ export function createWorld(renderer, initialCfg) {
   const v3 = new THREE.Vector3();
   const look = new THREE.Vector3();
   const Q0 = new THREE.Quaternion(), qRot = new THREE.Quaternion(), eul = new THREE.Euler();
-  const SHARD_S = new THREE.Vector3(1, 1.25, 1), GLOW_S = new THREE.Vector3(4.2, 4.2, 4.2), sv = new THREE.Vector3(), lookT = new THREE.Vector3();
+  const SHARD_S = new THREE.Vector3(0.5, 1.15, 0.5), GLOW_S = new THREE.Vector3(1.9, 1.9, 1.9), sv = new THREE.Vector3(), lookT = new THREE.Vector3();
   let lastZ = 0;
   let blinkClock = 0;
 
@@ -869,7 +863,7 @@ export function createWorld(renderer, initialCfg) {
     }
     if (kind === 'slam') { emit(46, { x: x + Math.sign(x) * 0.9, y: 0.5, z: 0 }, { color: '#ffd27a', gain: 7, speed: 8, life: 0.55, size: 0.09, gravity: 13, vz: 9, vx: -Math.sign(x) * 3 }); return; }
     if (kind === 'bump') { emit(14, { x, y: 0.5, z: -2.4 }, { color: '#fff1b0', gain: 6, speed: 5, life: 0.3, size: 0.07, gravity: 9, vz: 3 }); return; }
-    if (kind === 'shard') emit(26, { x, y: 1.1, z: -0.5 }, { color: '#b8ff2e', gain: 5, speed: 7, life: 0.55, size: 0.12, vz: 8 });
+    if (kind === 'shard') emit(26, { x, y: 1.1, z: -0.5 }, { color: '#9fe8ff', gain: 3, speed: 7, life: 0.55, size: 0.12, vz: 8 });
     if (kind === 'ghost' || kind === 'nitro') emit(46, { x, y: 1.0, z: -1 }, { color: kind === 'ghost' ? '#5ff6ff' : '#ffb020', gain: 6, speed: 8, life: 0.6, size: 0.12, vz: 6 });
     if (kind === 'strike') emit(34, { x, y: 1.0, z: 0 }, { color: '#fff1b0', gain: 8, speed: 7, life: 0.4, size: 0.09, gravity: 8, vz: 3 });
     if (kind === 'hit') emit(60, { x, y: 0.6, z: -2 }, { color: '#ffd27a', gain: 7, speed: 9, life: 0.7, size: 0.1, gravity: 12, vz: 4 });

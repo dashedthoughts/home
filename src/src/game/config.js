@@ -35,14 +35,22 @@ export const GLOWS = [
 
 // Time of day sets the sky, fog, light and the colour of the city.
 export const TIMES = {
-  // the default world: a sleepless city at 2am. Fluorescent whites, sodium amber, red beacons, red haze on the horizon.
+  // The default look: the real Shuto at 3 a.m., as a night photograph would show it. A near-black blue-grey sky with a dirty
+  // sodium glow low on the horizon (light pollution), a few low clouds lit from below, almost no stars. Colour comes from
+  // the city, not the sky: cool-white LED and amber sodium lamps, lit windows, signs, brake lights.
+  // Extra knobs only this mood sets (all optional, read by render/materials.js applySkyMood and engine.js):
+  //   clouds 0..1 cloud cover · cloudLit how brightly the city lights the cloud bellies · glowVar how much the horizon glow
+  //   varies with direction (brighter toward dense districts) · envA/envB the two lamp rows in the reflection map ·
+  //   real: 1 = photographic grade (district haze tints pulled toward sodium grey)
   tokyo: {
-    name: 'MIDNIGHT TOKYO',
-    zenith: '#02040c', horizon: '#141c40', glow: '#ff3326', fog: '#0a0d1e',
-    body: { kind: 'moon', color: '#f4f1ff', size: 70, y: 280 },
-    hemi: ['#5a6cff', '#040509', 0.35], key: ['#c8d4ff', 0.25],
-    windows: ['#eef4ff', '#ffd39a', '#ff2a3a', '#8feaff'], stars: 0.06, fogDensity: 0.0032,
-    searchlights: true,
+    name: 'TOKYO',
+    zenith: '#05080d', horizon: '#131821', glow: '#70482a', fog: '#131210',
+    body: { kind: 'moon', color: '#e9e6dc', size: 44, y: 300 },
+    hemi: ['#8d95a6', '#17120c', 0.42], key: ['#b9c4dc', 0.2],
+    // lit windows and lamps: cool-white office LED, warm white, sodium amber, the blue of a TV
+    windows: ['#eef2f8', '#ffd6a6', '#ffb060', '#bcd8ff'], stars: 0.012, fogDensity: 0.003,
+    clouds: 0.5, cloudLit: 0.4, glowVar: 0.45, envA: '#ffb060', envB: '#dfe8ff', real: 1,
+    searchlights: false,
   },
   dusk: {
     name: 'DUSK',
@@ -109,7 +117,7 @@ export const DEFAULT_CONFIG = {
   rash: false,
   car: 'wedge',
   livery: 0,
-  glow: 0,
+  glow: 4, // underglow is OFF by default in the TOKYO look (still a garage option)
   time: 'tokyo',
   weather: 'clear',
   difficulty: 'street',

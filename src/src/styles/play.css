@@ -383,7 +383,7 @@
   .countdown__brief { top: 12%; font-size: .72rem; }
   /* music keeps playing; the video is not shown over the race */
   .radio { left: 12px !important; right: auto !important; top: 132px !important; bottom: auto !important; width: auto !important; }
-  .radio span { font-size: .52rem; opacity: .8; }
+  .radio span { display: none; } /* the place name owns this corner on a phone; the music keeps playing */
   .radio iframe { position: absolute; left: -9999px; width: 200px !important; height: 113px !important; }
   /* pad */
   .pad { padding: 10px; gap: 10px; }
@@ -415,6 +415,12 @@
 
 /* ================= the real road: minimap of the C1 loop, district, next JCT (bottom left; phones: one text stack) ================= */
 .hud2__route { display: flex; flex-direction: column-reverse; align-items: flex-start; gap: 6px; max-width: 280px; }
+/* desktop: map and place name sit side by side on the bottom edge, and the radio stacks above them instead of on top of them */
+@media (min-width: 761px) and (pointer: fine) {
+  .hud2__route { flex-direction: row; align-items: flex-end; max-width: 460px; }
+  .radio { bottom: calc(var(--sp-6) + 146px); }
+  .ghost-chip { top: 28%; }
+}
 .minimap { width: 132px; height: 132px; flex: none; padding: 6px; background: rgba(8,7,13,.62); clip-path: var(--shape-sm); overflow: visible; }
 .minimap .mm-road { fill: none; stroke: rgba(255,255,255,.34); stroke-width: 3; stroke-linejoin: round; }
 .minimap .mm-tunnel { fill: none; stroke: #08070d; stroke-width: 3; stroke-dasharray: 3 3; }

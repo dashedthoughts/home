@@ -38,3 +38,13 @@ claude/vibrant-curie-0x7eb2 @ 1ad129b (main was published from it). Tag pushes a
 - RULE from now on: at most 3 agents at once, one Chromium each, always closed.
 - Integrator looked at the city pass (`w-city/r9-sheet.png`): geography right, picture still arcade (giant red trail ribbons, magenta sky, flat box buildings, green pickup fog). Wrote `scratchpad/ART-DIRECTION-2.md`: a realistic default TOKYO look. Light agent resumed as LOOK engineer, City agent resumed on facades first (both via SendMessage, context intact: ids a6d9e860ad1086c51, aa59423e14b1e4e96).
 - KUMITE round-2 fixer resumed (ad57f81de1bb8825d). Queue: MACHI fixer (a6bc7d6e2636e629e, critic report scratchpad/crit-machi.txt), then critics for ITO and KAZE (prompt: scratchpad/critic-prompt.txt), then REDLINE review.
+
+## 22:12 UTC
+- KUMITE round 2 committed (`161e1dc`) and DEPLOYED (built in scratchpad/early: games from HEAD except machi at 67e4a21, REDLINE at checkpoint). Live verified by hash.
+- Running (3): LOOK (a6d9e860ad1086c51), CITY (aa59423e14b1e4e96), MACHI fixer (a6bc7d6e2636e629e). Queue: ITO critic, KAZE critic, REDLINE review, final integration + deploy of REDLINE v3, README, final report.
+
+## 01:45 UTC (25 Nov) — second usage limit, restart
+- Limit hit ~22:12, reset 01:40. Owner is back ("Go go go"). WIP committed (`462b17a`): sim tests pass, machi 103 checks pass, site builds.
+- Resumed via SendMessage: LOOK (a6d9e860ad1086c51), CITY (aa59423e14b1e4e96), MACHI fixer (a6bc7d6e2636e629e).
+- Live: arcade + four games (KUMITE at round 2, MACHI at round 1), REDLINE at the pre-v3 checkpoint.
+- Still queued: ITO and KAZE critics, REDLINE review, REDLINE v3 integration + deploy, README (REDLINE section, OSM credit), final report.

@@ -8,7 +8,8 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import * as C1 from '../track/c1.js';
-import { U, std, cityMaterial, blinkGlowMaterial, atlasMaterial, groundMaterial, structureMaterial, CITY, PROF } from './materials.js';
+import { U, std, blinkGlowMaterial, atlasMaterial, groundMaterial, structureMaterial, CITY, PROF } from './materials.js';
+import { facadeMaterial, FACADE } from './facade.js';
 import { createAtlas, JP, fitText, roundRect, routeShield, SHUTO_GREEN } from './textures.js';
 import { TOKYO_SIGNS, SLOGANS } from '../config.js';
 import { mulberry } from '../sim.js';
@@ -21,7 +22,7 @@ const BEHIND = 30;      // recycle a building once it is this far behind the car
 const AHEAD = 680;      // fill the street walls this far ahead
 
 // ---------------------------------------------------------------- district styles
-// Facade kinds (materials.js cityMaterial): 0 glass curtain wall · 1 punched office · 2 pencil building · 3 tiled mid-rise ·
+// Facade kinds (facade.js facadeMaterial): 0 glass curtain wall · 1 punched office · 2 pencil building · 3 tiled mid-rise ·
 // 4 government stone · 5 residential · 6 brick. rows: frontage (the street wall the viaduct threads through), second row,
 // skyline. R(x0 facade distance from the road centre, x jitter, depth, length along the road, gap, height, height power, kinds).
 // left/right: 'palace' = moat, stone wall and trees (no buildings at all); 'park' = trees in the two near rows.
@@ -347,6 +348,7 @@ export function createTokyo(scene, { seed = 2066 } = {}) {
   ground.renderOrder = -1;
   const structMat = structureMaterial();
   structMat.side = THREE.DoubleSide;
+  if (structMat.uniforms.uLed) structMat.uniforms.uLed.value.set('#000000');   // no LED line on the parapet: the real walls are bare concrete
   const structure = new THREE.Mesh(structureGeometry(), structMat);
   structure.frustumCulled = false;
   scene.add(ground, structure);
@@ -372,7 +374,7 @@ export function createTokyo(scene, { seed = 2066 } = {}) {
   bGeo.setAttribute('aSeed', new THREE.InstancedBufferAttribute(aSeed, 1));
   bGeo.setAttribute('aTier', new THREE.InstancedBufferAttribute(aTier, 4));
   bGeo.setAttribute('aKind', new THREE.InstancedBufferAttribute(aKind, 4));
-  const bMat = cityMaterial();
+  const bMat = facadeMaterial();
   const bMesh = new THREE.InstancedMesh(bGeo, bMat, NB);
   bMesh.frustumCulled = false;
   group.add(bMesh);
@@ -474,7 +476,8 @@ export function createTokyo(scene, { seed = 2066 } = {}) {
     else b.tier = [1, 1, 0, 0];
     const sn = Math.floor(b.seed * 997 + 0.5) / 997;
     b.helipad = b.h > 110 && (sn * 13.7) % 1 > 0.45 && b.kind < 2;
-    b.lit = Math.min(0.9, st.lit * (b.kind === 4 ? 1.2 : 1) * (0.7 + rnd() * 0.6));
+    // some blocks are all but dark, a few are working through the night
+    b.lit = Math.min(0.9, (st.lit + 0.06) * (b.kind === 4 ? 1.2 : 1) * (0.3 + 1.7 * rnd() * rnd()));
     b.warm = st.warm; b.shop = st.shop * (b.row === 0 ? 1 : 0.35);
     // signs, by district density
     const dens = st.signs;
@@ -540,16 +543,16 @@ export function createTokyo(scene, { seed = 2066 } = {}) {
     const hw = b.dep * (1 - cIns) / 2, hl = b.len * (1 - cIns) / 2;
     if (quality.extras && !b.helipad && b.h > 8) {
       const r1 = (b.seed * 31.7) % 1, r2 = (b.seed * 57.3) % 1;
-      plant.setMatrixAt(i * 3, M.compose(P.set(b.x + (r1 - 0.5) * hw, top, zc + (r2 - 0.5) * hl), Q0, Sc.set(Math.min(3, hw), 2.6, Math.min(3, hl))));
+      plant.setMatrixAt(i * 3, M.compose(P.set(b.x + (r1 - 0.5) * hw, top, zc + (r2 - 0.5) * hl), Q0, Sc.set(Math.min(6, hw * 1.1), 3.4, Math.min(5, hl * 0.7))));   // lift machine room / tank house
       plant.setMatrixAt(i * 3 + 1, M.compose(P.set(b.x - (r2 - 0.5) * hw, top, zc - (r1 - 0.5) * hl), Q0, Sc.set(hw * 0.7, 1.3, hl * 0.4)));
       if (b.h > 35) plant.setMatrixAt(i * 3 + 2, M.compose(P.set(b.x + hw * 0.6 * (r1 > 0.5 ? 1 : -1), top, zc + hl * 0.5), Q0, Sc.set(0.35, 7 + r2 * 8, 0.35)));
     }
-    // red aviation obstacle lights on anything tall, blinking in near-sync like the real ones
-    if (b.h > 45) {
+    // red aviation obstacle lights on anything over 60 m
+    if (b.h > 60) {
       for (let k = 0; k < 2; k++) {
         const sx = k ? 1 : -1;
         beacons.setMatrixAt(i * 2 + k, M.compose(P.set(b.x + sx * hw * 0.92, top + 0.6, zc + sx * hl * 0.92), Q0, Sc.set(2.2, 2.2, 2.2)));
-        const o = (i * 2 + k) * 4; aBlink[o] = 0.75; aBlink[o + 1] = b.seed * 0.08; aBlink[o + 2] = 0.4; aBlink[o + 3] = 0.06;
+        const o = (i * 2 + k) * 4; aBlink[o] = b.h > 110 ? 0.75 : 0; aBlink[o + 1] = b.seed * 0.08; aBlink[o + 2] = 0.4; aBlink[o + 3] = 0.3;   // steady red on mid-rises, flashing on the tall ones
       }
     }
   }
@@ -664,6 +667,12 @@ export function createTokyo(scene, { seed = 2066 } = {}) {
     CITY.uAmb.value.set(T.hemi[0]).multiplyScalar(0.05 + 0.08 * T.hemi[2]);
     CITY.uUp.value.set(T.windows[1]).lerp(tmpC.set('#ff9a50'), 0.5).multiplyScalar(0.42);
     CITY.uLampCol.value.set(T.windows[1]).lerp(tmpC.set('#ffffff'), 0.35);
+    // facades (facade.js): sky and city bounce on the walls, the street's sodium glow on the lower floors, the sky glow in the glass
+    FACADE.uFAmb.value.set(T.hemi[0]).multiplyScalar(0.05 + 0.12 * T.hemi[2]);
+    FACADE.uFStreet.value.set(T.windows[1]).lerp(tmpC.set('#ff9a50'), 0.5).multiplyScalar(0.4);
+    const sk = FACADE.uFSky.value.set(T.horizon).lerp(tmpC.set(T.glow), 0.35);
+    const lum = 0.2126 * sk.r + 0.7152 * sk.g + 0.0722 * sk.b;
+    sk.multiplyScalar(lum > 0.1 ? 0.1 / lum : 1);                               // stylised skies: the glass still stays darker than a lit room
   }
   function setLamp(col) { CITY.uLampCol.value.copy(col); }
   function applyQuality(q) {

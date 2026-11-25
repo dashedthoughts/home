@@ -221,6 +221,7 @@
   .m-kana { max-height: 84px; }
   .m-coach { bottom: 60px; }
   .m-palette { bottom: 58px; top: 50px; max-height: none; left: calc(50% + 46px); width: calc(100% - 108px); }
-  .m-req { left: auto; width: 280px; }
+  .m-req { left: auto; width: 250px; gap: 4px; padding: 8px 10px; }
+  .m-req p { display: none; }
 }
 @media (prefers-reduced-motion: reduce) { .m-coach { animation: none; } .m-tool__lbl { transition: none; } }

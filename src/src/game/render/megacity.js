@@ -1,13 +1,17 @@
 // Megacity layer: the 80s cel-anime city details. Light trails, searchlights, blade signs, the elevated expressway.
 // Everything is original geometry and generic signage words; no film assets, logos or places.
 import * as THREE from 'three';
-import { U, BEND_GLSL, std, basic, glowMaterial, latticeMaterial, buildingMaterial, blinkGlowMaterial } from './materials.js';
+import { U, BEND_GLSL, std, basic, glowMaterial, latticeMaterial, blinkGlowMaterial } from './materials.js';
+import { skylineMaterial } from './facade.js';
 import * as C1 from '../track/c1.js';
 
 const HDR = (c, k) => new THREE.Color(c).multiplyScalar(k);
 
 // ---------------------------------------------------------------- tail-light trails (player)
-// A ribbon per tail light, built from the car's recent lateral history, so every swerve is drawn in light.
+// [look] A long-exposure streak per tail light, as a camera would record it: nothing at cruising speed, a thin streak
+// behind each lamp from ~180 km/h, a longer one only while boosting. It is drawn from the car's recent lateral history
+// (a swerve bends it), is never taller than the lamp and fades to nothing. Length is capped at 1.3 m on purpose: the chase
+// camera sits only ~4 m behind the lamps, so anything longer runs off the bottom of the frame as a giant ribbon.
 export function createPlayerTrails(scene) {
   const N = 56;
   const ribbons = [-1, 1].map(() => {
@@ -23,7 +27,7 @@ export function createPlayerTrails(scene) {
     g.setAttribute('aFade', new THREE.BufferAttribute(fade, 1));
     g.setIndex(idx);
     const m = new THREE.Mesh(g, new THREE.ShaderMaterial({
-      uniforms: { uColor: { value: HDR('#ff1a2c', 5) } },
+      uniforms: { uColor: { value: HDR('#ff1a2c', 2.2) } },
       vertexShader: 'attribute float aFade; varying float vF; void main(){ vF = aFade; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
       fragmentShader: 'uniform vec3 uColor; varying float vF; void main(){ gl_FragColor = vec4(uColor * vF * vF, 1.0); }',
       transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide,
@@ -35,21 +39,35 @@ export function createPlayerTrails(scene) {
 
   // ring buffer of recent positions (no per-frame allocation)
   const hx = new Float32Array(N), hz = new Float64Array(N), ht = new Float64Array(N), hr = new Float32Array(N);
-  let head = 0, count = 0;
+  let head = 0, count = 0, boostK = 0;
   return {
     // roll: the vehicle's lean, so the trail leaves the tail light where it really is (bikes lean hard)
     update(S, rearZ, halfW, y, life = 0.38, roll = 0) {
+      // a restart or a jump along the road: forget the history (it used to draw stray ribbons across the frame)
+      if (count && (Math.abs(S.z - hz[head]) > 12 || S.time < ht[head])) count = 0;
+      const dtT = count ? Math.min(0.1, Math.max(0, S.time - ht[head])) : 0;
       head = (head + N - 1) % N;
       hx[head] = S.x; hz[head] = S.z; ht[head] = S.time; hr[head] = roll;
       count = Math.min(N, count + 1);
-      const w = 0.045, on = S.speed > 8 ? 1 : 0;
+      // 0 below ~175 km/h, full by ~205 km/h; boosting (overclock or slipstream) eases in over a quarter second
+      const fastT = Math.min(1, Math.max(0, (S.speed - 48.5) / 8.5)), fast = fastT * fastT * (3 - 2 * fastT);
+      boostK += ((S.overclock || S.slip > 0 ? 1 : 0) - boostK) * Math.min(1, dtT * 4);
+      const on = life > 0 ? Math.max(fast, boostK) : 0;
+      const len = 0.55 + 0.25 * fast + 0.5 * boostK; // metres: 0.55 to 1.3
+      const w = 0.022;
       for (let ri = 0; ri < 2; ri++) {
         const r = ribbons[ri], side = ri ? 1 : -1, pos = r.pos, fade = r.fade;
+        let px = 0, pr = 0, pd = 0, done = false, ex = 0, er = 0;
         for (let i = 0; i < N; i++) {
           const k = (head + Math.min(i, count - 1)) % N;
-          const f = Math.max(0, 1 - (S.time - ht[k]) / life) * on;
-          const r = hr[k], cr = Math.cos(r), sr = Math.sin(r);
-          const x = hx[k] + side * halfW * cr - y * sr, yy = y * cr + side * halfW * sr, z = rearZ + 0.12 + (S.z - hz[k]), o = i * 6;
+          let hxk = hx[k], rr = hr[k], dz = S.z - hz[k];
+          // cut the streak at exactly `len` (interpolating the last segment), whatever the frame rate; the rest collapses there
+          if (done) { hxk = ex; rr = er; dz = len; }
+          else if (dz >= len) { const t = i ? (len - pd) / Math.max(1e-4, dz - pd) : 0; hxk = i ? px + (hxk - px) * t : hxk; rr = i ? pr + (rr - pr) * t : rr; dz = len; done = true; ex = hxk; er = rr; }
+          px = hxk; pr = rr; pd = dz;
+          const f = Math.max(0, 1 - dz / len) * on;
+          const cr = Math.cos(rr), sr = Math.sin(rr);
+          const x = hxk + side * halfW * cr - y * sr, yy = y * cr + side * halfW * sr, z = rearZ + 0.12 + dz, o = i * 6;
           pos[o] = x; pos[o + 1] = yy + w; pos[o + 2] = z;
           pos[o + 3] = x; pos[o + 4] = yy - w; pos[o + 5] = z;
           fade[i * 2] = fade[i * 2 + 1] = f;
@@ -65,12 +83,13 @@ export function createPlayerTrails(scene) {
 // ---------------------------------------------------------------- trails for traffic (instanced, bent)
 export function createTrafficTrails(scene, max = 64) {
   const mat = new THREE.ShaderMaterial({
-    uniforms: { ...U, uColor: { value: HDR('#ff1a2c', 3.2) } },
+    uniforms: { ...U, uColor: { value: HDR('#ff1a2c', 1.5) } }, // [look] thin and dim: a streak, not a ribbon
     vertexShader: `${BEND_GLSL}
-      varying vec2 vUv;
-      void main(){ vUv = uv; vec4 wp = bendW(modelMatrix * instanceMatrix * vec4(position, 1.0)); gl_Position = projectionMatrix * viewMatrix * wp; }`,
-    fragmentShader: `uniform vec3 uColor; varying vec2 vUv;
-      void main(){ float x = (vUv.x - 0.5) * 2.0; float a = exp(-x * x * 5.0) * pow(vUv.y, 1.6); gl_FragColor = vec4(uColor * a, 1.0); }`,
+      varying vec2 vUv; varying float vD;
+      void main(){ vUv = uv; vec4 wp = bendW(modelMatrix * instanceMatrix * vec4(position, 1.0)); vec4 mv = viewMatrix * wp; vD = -mv.z; gl_Position = projectionMatrix * mv; }`,
+    // fades out with distance: far away the streak is thinner than a pixel and would only shimmer
+    fragmentShader: `uniform vec3 uColor; varying vec2 vUv; varying float vD;
+      void main(){ float x = (vUv.x - 0.5) * 2.0; float a = exp(-x * x * 5.0) * pow(vUv.y, 1.6) * (1.0 - smoothstep(45.0, 120.0, vD)); gl_FragColor = vec4(uColor * a, 1.0); }`,
     transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide,
   });
   // plane lying flat, uv.y = 1 at the lamp, 0 at the tail end
@@ -84,7 +103,7 @@ export function createTrafficTrails(scene, max = 64) {
     begin() { n = 0; },
     add(x, y, z, len) {
       if (n >= max) return;
-      mesh.setMatrixAt(n++, m.compose(p.set(x, y, z), q, s.set(0.16, 1, len)));
+      mesh.setMatrixAt(n++, m.compose(p.set(x, y, z), q, s.set(0.07, 1, len * 0.6)));
     },
     end() { mesh.count = n; mesh.instanceMatrix.needsUpdate = true; },
   };
@@ -409,7 +428,7 @@ const glowSprites = (n, gain = 2.4) => {
 function buildTokyoTower() {
   const g = new THREE.Group();
   const H = 333, half = (y) => y < 296 ? 2.4 + 41.6 * Math.pow(1 - y / 300, 2.25) : 1.2;
-  g.add(new THREE.Mesh(latticeEnvelope(half, 296, 60), latticeMaterial({ color: '#ff6a1a', color2: '#ffe2b8', gain: 2.6, rings: 9, panels: 3, bands: 0 })));
+  g.add(new THREE.Mesh(latticeEnvelope(half, 296, 60), latticeMaterial({ color: '#ff7a2a', color2: '#ffe2b8', gain: 2.1, rings: 9, panels: 3, bands: 0 })));
   const mast = new THREE.Mesh(latticeEnvelope(() => 1.1, 37, 6).translate(0, 296, 0), latticeMaterial({ color: '#ffd6a8', gain: 2.2, rings: 4, panels: 1 }));
   g.add(mast);
   const deckMat = new THREE.MeshBasicMaterial({ color: new THREE.Color('#ffe0b0').multiplyScalar(1.6), fog: false });
@@ -520,8 +539,7 @@ export function createTokyoFar(far, scene) {
   const ntGeo = new THREE.BoxGeometry(1, 1, 1).translate(0, 0.5, 0);
   const ntSeed = new Float32Array(NT.length).map((_, i) => (i * 0.137 + 0.21) % 1);
   ntGeo.setAttribute('aSeed', new THREE.InstancedBufferAttribute(ntSeed, 1));
-  const ntMat = buildingMaterial({ far: true });
-  ntMat.uniforms.uGain.value = 0.8;
+  const ntMat = skylineMaterial();
   const nt = new THREE.InstancedMesh(ntGeo, ntMat, NT.length);
   nt.frustumCulled = false;
   lmGroup.add(nt);
@@ -534,12 +552,12 @@ export function createTokyoFar(far, scene) {
   const farGeo = new THREE.BoxGeometry(1, 1, 1).translate(0, 0.5, 0);
   const farSeed = new Float32Array(SMAX);
   farGeo.setAttribute('aSeed', new THREE.InstancedBufferAttribute(farSeed, 1));
-  const farMat = buildingMaterial({ far: true });
+  const farMat = skylineMaterial();
   const sky = new THREE.InstancedMesh(farGeo, farMat, SMAX);
   sky.frustumCulled = false;
   far.add(sky);
   const skyB = glowSprites(90, 2.2);
-  for (let i = 0; i < 90; i++) skyB.add(0, 0, 0, 0, '#ff1a24', 0.75, (i % 7) * 0.006, 0.4, 0.05);
+  for (let i = 0; i < 90; i++) skyB.add(0, 0, 0, 0, '#ff1a24', i % 3 ? 0 : 0.75, (i % 7) * 0.006, 0.4, 0.3);
   far.add(skyB.m);
   const h2 = (i, j, k) => { let h = (i * 374761393 + j * 668265263 + k * 1442695041) | 0; h = (h ^ (h >>> 13)) * 1274126177 | 0; return ((h ^ (h >>> 16)) >>> 0) / 4294967296; };
   let lastX = 1e9, lastY = 1e9, baseY = -30;
@@ -553,7 +571,7 @@ export function createTokyoFar(far, scene) {
       const h = heightAt(wx, wy, h2(i, j, 3)), w = 34 + 50 * h2(i, j, 4), d = 30 + 46 * h2(i, j, 5);
       sky.setMatrixAt(n, _m.compose(_p.set(dx, baseY, -dy), _q.identity(), _s.set(w, h, d)));
       farSeed[n] = h2(i, j, 6);
-      if (h > 120 && nb < 90) skyB.m.setMatrixAt(nb++, _m.compose(_p.set(dx, baseY + h + 4, -dy), _q.identity(), _s.set(9, 9, 9)));
+      if (h > 100 && nb < 90) skyB.m.setMatrixAt(nb++, _m.compose(_p.set(dx, baseY + h + 4, -dy), _q.identity(), _s.set(9, 9, 9)));
       n++;
     }
     sky.count = n;

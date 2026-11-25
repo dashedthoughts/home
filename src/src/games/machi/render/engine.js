@@ -92,6 +92,8 @@ export class Renderer {
     this._buildSkirt();
     this._buildEntities();
     this.wiresVersion = -1;
+    this._buildSigns();
+    this._buildPools();
     // the reflection plane sits on the most common water surface
     const hist = new Map();
     for (let i = 0; i < world.N; i++) if (world.blocks[i] === ID.water) { const y = (i / world.WD) | 0; if (world.blocks[i + world.WD] !== ID.water) hist.set(y, (hist.get(y) || 0) + 1); }
@@ -172,6 +174,25 @@ export class Renderer {
           if (y > 4 && !w.get(x, y - 1, ze)) op.quad([[x, y, za], [x + 1, y, za], [x + 1, y, zb], [x, y, zb]], b, 3);
         }
       }
+    }
+    // low building silhouettes around the lot, leaving the streets, canal and viaduct corridors open
+    const sil = (x0, y0, z0, x1, y1, z1, id) => {
+      op.quad([[x0, y1, z0], [x0, y1, z1], [x1, y1, z1], [x1, y1, z0]], id, 2);
+      op.quad([[x0, y0, z1], [x1, y0, z1], [x1, y1, z1], [x0, y1, z1]], id, 4);
+      op.quad([[x0, y0, z0], [x0, y1, z0], [x1, y1, z0], [x1, y0, z0]], id, 5);
+      op.quad([[x1, y0, z0], [x1, y1, z0], [x1, y1, z1], [x1, y0, z1]], id, 0);
+      op.quad([[x0, y0, z0], [x0, y0, z1], [x0, y1, z1], [x0, y1, z0]], id, 1);
+    };
+    let seed = 7; const rnd = () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
+    const mats = [ID.steel, ID.concrete, ID.tileblue, ID.darkglass, ID.brick];
+    const open = (a, ranges) => ranges.some(([p, q]) => a + 1 > p && a < q);
+    const t2 = w.meta && w.meta.train;
+    const nsOpen = t2 ? [[t2.x - 7, t2.x + 7]] : [];
+    for (const side of [-1, 1]) {
+      // north / south rows
+      for (let x = -40; x < w.W + 40;) { const wd = 6 + Math.floor(rnd() * 8); if (!open(x, nsOpen) && !open(x + wd, nsOpen)) { const z0 = side < 0 ? -32 - Math.floor(rnd() * 10) - 12 : w.D + 32 + Math.floor(rnd() * 10); const h = 4 + 8 + Math.floor(rnd() * 26); sil(x, 4, z0, x + wd - 1, h, z0 + 12, mats[Math.floor(rnd() * mats.length)]); } x += wd + 1; }
+      // west / east rows, leaving the shotengai, lane and canal open
+      for (let z = -40; z < w.D + 40;) { const wd = 6 + Math.floor(rnd() * 8); if (!open(z, [[38, 54], [62, 86]]) && !open(z + wd, [[38, 54], [62, 86]])) { const x0 = side < 0 ? -32 - Math.floor(rnd() * 10) - 12 : w.W + 32 + Math.floor(rnd() * 10); const h = 4 + 8 + Math.floor(rnd() * 26); sil(x0, 4, z, x0 + 12, h, z + wd - 1, mats[Math.floor(rnd() * mats.length)]); } z += wd + 1; }
     }
     // far ground ring below everything (hidden by the skirts near the lot, pure haze beyond)
     const far = new VBuf(), F = 1800;
@@ -274,11 +295,82 @@ export class Renderer {
     C.mat.uniforms.uEntLit.value.set(...this.litAt(c.x, c.y + 0.5, c.z));
   }
 
+  // ---------------- warm light pools on the ground under street lamps (additive, night only) ----------------
+  _buildPools() {
+    if (this.pools) { this.scene.remove(this.pools); this.pools.geometry.dispose(); }
+    this.pools = null;
+    const L = (this.world.meta && this.world.meta.lamps) || []; if (!L.length) return;
+    const p = [], uv = [], idx = [];
+    L.forEach(([x, y, z, r], i) => { const yy = y + 0.03; p.push(x - r, yy, z - r, x - r, yy, z + r, x + r, yy, z + r, x + r, yy, z - r); uv.push(-1, -1, -1, 1, 1, 1, 1, -1); idx.push(i * 4, i * 4 + 1, i * 4 + 2, i * 4, i * 4 + 2, i * 4 + 3); });
+    const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(p, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); g.setIndex(idx);
+    this.pools = new THREE.Mesh(g, this.poolMat || (this.poolMat = new THREE.ShaderMaterial({
+      uniforms: { uNight: this.U.uNight },
+      vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+      fragmentShader: 'uniform float uNight; varying vec2 vUv; void main(){ float d = length(vUv); float k = pow(max(0.0, 1.0 - d), 2.2) * 0.42 * uNight; gl_FragColor = vec4(vec3(1.0, 0.72, 0.42) * k, 1.0); }',
+      transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1,
+    })));
+    this.pools.renderOrder = 2; this.scene.add(this.pools);
+  }
+
+  // ---------------- generated shop signs: glowing text drawn on canvas, laid on the voxel plates ----------------
+  _buildSigns() {
+    if (this.signs) for (const q of this.signs) { this.scene.remove(q.mesh); q.mesh.geometry.dispose(); q.mesh.material.map.dispose(); q.mesh.material.dispose(); }
+    this.signs = [];
+    const list = (this.world.meta && this.world.meta.signs) || [];
+    if (!list.length || typeof document === 'undefined') return;
+    const PX = 72;
+    for (const sg of list) {
+      const cv = document.createElement('canvas'); cv.width = sg.iw * PX; cv.height = sg.ih * PX;
+      const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.NoColorSpace; tex.anisotropy = 4;
+      const mat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
+      const mesh = new THREE.Mesh(new THREE.PlaneGeometry(sg.iw, sg.ih), mat);
+      const [nx, nz] = sg.n, [rx, rz] = sg.r, k = (sg.iw - 1) / 2;
+      mesh.position.set(sg.x + 0.5 + rx * k + nx * 0.515, sg.y + 1 - sg.ih / 2, sg.z + 0.5 + rz * k + nz * 0.515);
+      mesh.rotation.y = Math.atan2(nx, nz);
+      mesh.renderOrder = 3;
+      this.scene.add(mesh);
+      const q = { sg, mesh, cv, tex };
+      this.signs.push(q);
+      this._drawSign(q);
+    }
+    // redraw once the display font is ready (the page loads Noto Sans JP; fall back to any CJK font until then)
+    try {
+      const txt = list.map((q) => q.t).join('');
+      if (document.fonts && document.fonts.load) document.fonts.load(`900 64px "Noto Sans JP"`, txt).then(() => { if (this.signs) for (const q of this.signs) this._drawSign(q); }).catch(() => {});
+    } catch { /* fonts API missing */ }
+    this._signVis();
+  }
+  _drawSign(q) {
+    const { sg, cv, tex } = q, x = cv.getContext('2d'), PX = cv.width / sg.iw;
+    const chars = [...sg.t], cell = cv.height / chars.length, fs = Math.min(cv.width, cell) * 0.86;
+    x.clearRect(0, 0, cv.width, cv.height);
+    x.font = `900 ${fs}px "Noto Sans JP", "Hiragino Sans", "Yu Gothic", sans-serif`;
+    x.textAlign = 'center'; x.textBaseline = 'middle';
+    const hot = (h, k) => { const n = parseInt(h.slice(1), 16); const c = [(n >> 16) & 255, (n >> 8) & 255, n & 255].map((v) => Math.round(v + (255 - v) * k)); return `rgb(${c})`; };
+    chars.forEach((ch, i) => {
+      const cy = cell * (i + 0.5);
+      x.save(); x.translate(cv.width / 2, cy);
+      if (ch === 'ー' || ch === '｜') { x.rotate(Math.PI / 2); ch = 'ー'; } // long vowel mark runs vertically in tategaki
+      for (const [blur, col, a] of [[PX * 0.5, sg.col, 0.9], [PX * 0.18, sg.col, 1], [0, hot(sg.col, 0.55), 1]]) { x.shadowColor = sg.col; x.shadowBlur = blur; x.globalAlpha = a; x.fillStyle = col; x.fillText(ch, 0, fs * 0.04); }
+      x.restore();
+    });
+    tex.needsUpdate = true;
+  }
+  // hide a sign's text once most of its plate has been removed
+  _signVis() {
+    if (!this.signs) return;
+    for (const q of this.signs) {
+      const [x0, y0, z0, x1, y1, z1] = q.sg.box; let n = 0, t = 0;
+      for (let y = y0; y <= y1; y++) for (let z = z0; z <= z1; z++) for (let x = x0; x <= x1; x++) { t++; if (this.world.get(x, y, z)) n++; }
+      q.mesh.visible = n >= t * 0.75;
+    }
+  }
+
   // ---------------- wires ----------------
   _buildWires() {
     if (this.wires) { this.scene.remove(this.wires); this.wires.geometry.dispose(); }
     this.wires = null;
-    const meta = this.world.meta; if (!meta || !meta.wires || !meta.wires.length) return;
+    const meta = this.world.meta; if (!meta || !meta.wires || !meta.wires.length) { this._signVis(); return; }
     const att = (x, y, z) => { for (let dy = -1; dy <= 1; dy++) for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) if (this.world.get(Math.floor(x) + dx, Math.floor(y) + dy, Math.floor(z) + dz)) return true; return false; };
     const pts = [];
     for (const [ax, ay, az, bx, by, bz, sag] of meta.wires) {
@@ -290,6 +382,7 @@ export class Renderer {
     this.wires = new THREE.LineSegments(g, this.wireMat || (this.wireMat = new THREE.LineBasicMaterial({ color: 0x07070a, transparent: true, opacity: 0.9 })));
     this.scene.add(this.wires);
     this.wiresDirty = false;
+    this._signVis();
   }
 
   // ---------------- overlays ----------------
@@ -497,7 +590,7 @@ export class Renderer {
     // hide what should not reflect: water itself, overlays, rain
     const hidden = [];
     for (const c of this.chunks) if (c && c.tr && c.tr.visible) { c.tr.visible = false; hidden.push(c.tr); }
-    for (const o of [this.hover, this.face, this.ghostBox, this.ghostEdges, this.rain, this.ghostStamp, this.placeGhost, ...(this.skirt || []).filter((m) => m.material === this.matTrans)]) if (o && o.visible) { o.visible = false; hidden.push(o); }
+    for (const o of [this.hover, this.face, this.ghostBox, this.ghostEdges, this.rain, this.ghostStamp, this.placeGhost, this.pools, ...(this.skirt || []).filter((m) => m.material === this.matTrans)]) if (o && o.visible) { o.visible = false; hidden.push(o); }
     this.sky.position.copy(rc.position);
     this.gl.setRenderTarget(P.refl); this.gl.render(this.scene, rc);
     for (const o of hidden) o.visible = true;
@@ -547,6 +640,8 @@ export class Renderer {
     if (this.skirt) for (const m of this.skirt) m.geometry.dispose();
     if (this.ents) for (const o of this.ents) o.traverse((m) => { if (m.isMesh) { m.geometry.dispose(); m.material.dispose(); } });
     if (this.wires) this.wires.geometry.dispose();
+    if (this.pools) this.pools.geometry.dispose();
+    if (this.signs) for (const q of this.signs) { q.mesh.geometry.dispose(); q.mesh.material.map.dispose(); }
     if (this.ghostStamp) this.ghostStamp.geometry.dispose();
     if (this._bg) for (const g of this._bg.values()) if (g) g.dispose();
     if (this.placeGhost) this.placeGhost.geometry = new THREE.BufferGeometry();

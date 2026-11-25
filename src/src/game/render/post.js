@@ -141,7 +141,7 @@ class ReflectPass extends Pass {
         uProj: { value: camera.projectionMatrix }, uProjInv: { value: camera.projectionMatrixInverse },
         uView: { value: camera.matrixWorldInverse }, uViewInv: { value: camera.matrixWorld },
         uNF: { value: new THREE.Vector2(0.1, 3000) },
-        uCurve: U.uCurve, uHill: U.uHill, uRoadZ: { value: 0 }, uRipple: { value: 0.025 }, uClampL: { value: 3.5 },
+        uCurve: U.uCurve, uHill: U.uHill, uRoadZ: { value: 0 }, uRipple: { value: 0.04 }, uClampL: { value: 3.5 },
       },
       vertexShader: VERT,
       fragmentShader: /* glsl */ `
@@ -299,7 +299,7 @@ function finishShader({ reflect, streak, tonemap }) {
       tRough: { value: null }, tStreak: { value: null },
       uTime: { value: 0 }, uSpeed: { value: 0 }, uGlitch: { value: 0 }, uFlash: { value: 0 }, uBoost: { value: 0 },
       uGrain: { value: 0.012 }, uAspect: { value: 1.7 }, uLines: { value: 0 },
-      uExposure: { value: 0.88 }, uStreakGain: { value: 0.35 },
+      uExposure: { value: 0.88 }, uStreakGain: { value: 0.2 },
       uProjInv: { value: null }, uViewInv: { value: null }, uNF: { value: new THREE.Vector2(0.1, 3000) },
       uCurve: U.uCurve, uHill: U.uHill, uFogColor: U.uFogColor, uFogDensity: U.uFogDensity,
       uWet: { value: 0.5 }, uRoadZ: { value: 0 }, uReflGain: { value: 1 }, uFallback: { value: new THREE.Color('#10142a') },
@@ -371,21 +371,25 @@ function finishShader({ reflect, streak, tonemap }) {
               float onRoad = 1.0 - smoothstep(5.3, 5.6, abs(xr));
               // the road's own roughness texture (same tile, same scroll as the material): puddles mirror, paint does not
               float tv = (14.0 - wp.z + uRoadZ) / 24.0;
-              float rough = texture2D(tRough, vec2(clamp(xr / 10.8 + 0.5, 0.0, 1.0), tv)).g;
-              float puddle = 1.0 - smoothstep(0.12, 0.5, rough);
-              // wetness: rain soaks everything; a damp night leaves only the puddles; off the road it is matte
-              float wet = clamp(uWet * (0.55 + 0.45 * puddle) + puddle * 0.35 * min(uWet * 2.0, 1.0), 0.0, 1.0) * mix(0.2, 1.0, onRoad);
+              vec3 surf = texture2D(tRough, vec2(clamp(xr / 10.8 + 0.5, 0.0, 1.0), tv)).rgb;   // g roughness, b micro-gloss
+              // hollows hold water only when it rains: a dry night has no puddles, just a faint even sheen at grazing angles
+              float rainK = smoothstep(0.3, 0.7, uWet);
+              float puddle = (1.0 - smoothstep(0.12, 0.5, surf.g)) * rainK;
+              float wet = clamp(uWet * (0.55 + 0.45 * puddle) + puddle * 0.35, 0.0, 1.0) * mix(0.2, 1.0, onRoad);
+              // asphalt is not a mirror: its grain breaks a reflection into glints (calm only inside a puddle). The
+              // grain is a mipmapped texture, so it averages out with distance instead of shimmering.
+              float broken = mix(mix(0.3, 1.25, surf.b), 1.0, max(puddle, 0.3 * rainK));   // a soaked road is a calmer mirror
               float ndv = clamp(normalize(uViewInv[3].xyz - wp).y, 0.0, 1.0);
               float F = 0.02 + 0.98 * pow(1.0 - ndv, 5.0);            // Schlick, water F0
               vec4 sharp = texture2D(tRefl, vUv), soft = texture2D(tReflBlur, vUv);
               // standing water is a calmer mirror than soaked asphalt; rain (high uWet) roughens even the puddles
               float rsharp = puddle * (1.0 - 0.45 * uWet) * onRoad;   // off the asphalt: soft only (no half-res blocks)
-              vec4 rf = mix(soft, sharp, clamp(rsharp * 0.6, 0.0, 0.6));
+              vec4 rf = mix(soft, sharp, clamp(rsharp * 0.5, 0.0, 0.5));
               vec3 refl = rf.rgb + uFallback * (1.0 - clamp(rf.a, 0.0, 1.0));
               float fz = uFogDensity * -vp.z, fogT = 1.0 - exp(-fz * fz);   // the same exp² fog the materials use
-              col += refl * F * wet * ground * (1.0 - fogT) * uReflGain;
+              col += refl * F * wet * broken * ground * (1.0 - fogT) * uReflGain;
               // the blurred reflection also blooms a little: wet asphalt glows under neon
-              col += soft.rgb * F * wet * ground * (1.0 - fogT) * 0.25 * uReflGain;
+              col += soft.rgb * F * wet * broken * ground * (1.0 - fogT) * 0.25 * uReflGain;
             }
           }
         }
@@ -475,8 +479,8 @@ export function createPost(renderer, scene, camera, { samples = 0, bloom = 0.5, 
   composer.addPass(adapt);
   const refl = reflect ? new ReflectPass(camera) : null;
   if (refl) composer.addPass(refl);
-  // strength scales with the tier's bloom setting; radius is modest so glow hugs the emitter
-  const bloomPass = new UnrealBloomPass(new THREE.Vector2(size.x, size.y), 0.55 + bloom * 0.3, 0.32, 1.45);
+  // strength scales with the tier's bloom setting; the radius is small so glow hugs the emitter (a lens, not a fog filter)
+  const bloomPass = new UnrealBloomPass(new THREE.Vector2(size.x, size.y), 0.4 + bloom * 0.3, 0.22, 1.45);
   bloomPass.highPassUniforms.smoothWidth.value = 0.7;
   bloomPass.highPassUniforms.uTexel = { value: new THREE.Vector2(1 / Math.max(1, size.x * pr), 1 / Math.max(1, size.y * pr)) };
   bloomPass.materialHighPassFilter.dispose();
