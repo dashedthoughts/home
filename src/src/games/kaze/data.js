@@ -25,26 +25,48 @@ export const ATK = {
   rthrust: { wind: 0.65, act: 0.16, rec: 0.85, reach: 110, dash: 80, dmg: 1, red: 1 },
 };
 
-// Foe archetypes. moves: weighted picks. block: chance to guard a quick slash. shield: front guard only a heavy breaks.
+// Foe archetypes. moves: weighted picks. guard: how many blocked hits his guard takes before it breaks (0 = never guards;
+// a heavy cut counts twice). settle: seconds standing square to the ronin before the guard is up. shield: the guard is a
+// front shield (a heavy cut breaks it outright, quick cuts fill it). armor: trades through quick cuts while committed.
 export const FOES = {
-  bandit: { hp: 4, w: 30, speed: 105, range: 88, block: 0.22, moves: [['cut', 3], ['combo', 2]] },
-  spear: { hp: 4, w: 30, speed: 85, range: 150, block: 0.1, moves: [['thrust', 3], ['lunge', 1]] },
-  archer: { hp: 2, w: 28, speed: 95, range: 420, keep: [280, 470], block: 0, moves: [['shoot', 1]] },
-  brute: { hp: 5, w: 42, speed: 64, range: 96, block: 0, shield: 1, armor: 1, moves: [['overhead', 3], ['bash', 2]] },
-  duelist: { hp: 5, w: 30, speed: 125, range: 92, block: 0.4, feint: 0.3, moves: [['cut', 2], ['flurry', 2], ['rthrust', 1]] },
+  bandit: { hp: 3, w: 30, speed: 105, range: 88, guard: 3, settle: 0.32, moves: [['cut', 3], ['combo', 2]] },
+  spear: { hp: 3, w: 30, speed: 85, range: 150, guard: 3, settle: 0.4, moves: [['thrust', 3], ['lunge', 1]] },
+  archer: { hp: 2, w: 28, speed: 95, range: 420, keep: [280, 470], guard: 0, moves: [['shoot', 1]] },
+  brute: { hp: 4, w: 42, speed: 64, range: 96, guard: 3, settle: 0.45, shield: 1, armor: 1, moves: [['overhead', 3], ['bash', 2]] },
+  duelist: { hp: 3, w: 30, speed: 125, range: 92, guard: 4, settle: 0.2, feint: 0.3, moves: [['cut', 2], ['flurry', 2], ['rthrust', 1]] },
 };
 
 export const BOSSES = {
-  gonroku: { jp: '竹割りの権六', name: 'Gonroku the Bamboo-Splitter', look: 'bandit', hp: 9, boss2: 1.5, w: 32, speed: 120, range: 92, block: 0.28,
+  gonroku: { jp: '竹割りの権六', name: 'Gonroku the Bamboo-Splitter', look: 'bandit', hp: 15, boss2: 1.5, w: 32, speed: 120, range: 92, guard: 4, settle: 0.28,
     p1: [['cut', 5], ['combo', 1]], p2: [['combo', 2], ['flurry', 2], ['lunge', 2]], feint: [0, 0.12] },
-  ono: { jp: '案山子の大野', name: 'Ōno the Scarecrow', look: 'spear', hp: 13, w: 32, speed: 95, range: 150, block: 0.15,
+  ono: { jp: '案山子の大野', name: 'Ōno the Scarecrow', look: 'spear', hp: 19, w: 32, speed: 95, range: 150, guard: 4, settle: 0.3,
     p1: [['thrust', 3], ['sweep', 2]], p2: [['dthrust', 2], ['lunge', 2], ['sweep', 2], ['thrust', 1]], feint: [0.08, 0.2] },
-  shizu: { jp: '門番の静', name: 'Shizu the Gatekeeper', look: 'duelist', hp: 14, w: 30, speed: 140, range: 92, block: 0.4,
+  shizu: { jp: '門番の静', name: 'Shizu the Gatekeeper', look: 'duelist', hp: 20, w: 30, speed: 140, range: 92, guard: 4, settle: 0.2,
     p1: [['cut', 2], ['flurry', 2], ['combo', 1]], p2: [['flurry', 2], ['rthrust', 2], ['combo', 2]], feint: [0.3, 0.5] },
-  hyoe: { jp: '灯籠の兵衛', name: 'Hyōe of the Lanterns', look: 'brute', hp: 15, w: 44, speed: 70, range: 100, block: 0, armor: 1,
+  hyoe: { jp: '灯籠の兵衛', name: 'Hyōe of the Lanterns', look: 'brute', hp: 21, w: 44, speed: 70, range: 100, guard: 4, settle: 0.35, armor: 1,
     p1: [['overhead', 3], ['bash', 1], ['sweep', 1]], p2: [['overhead', 2], ['bash', 2], ['combo', 2]], shieldP2: 1, feint: [0, 0.1] },
-  sotetsu: { jp: '早瀬宗鉄', name: 'Hayase Sōtetsu', look: 'master', hp: 18, w: 30, speed: 135, range: 94, block: 0.42,
+  sotetsu: { jp: '早瀬宗鉄', name: 'Hayase Sōtetsu', look: 'master', hp: 25, w: 30, speed: 135, range: 94, guard: 4, settle: 0.2,
     p1: [['cut', 2], ['combo', 2], ['rthrust', 1], ['thrust', 1]], p2: [['flurry', 3], ['lunge', 2], ['sweep', 1], ['overhead', 1]], feint: [0.3, 0.55] },
+};
+
+// Combat rules (sim.js hurtFoe). Every number here is something the player can see happen.
+export const COMBAT = {
+  slash: 1, heavy: 2, counter: 3, arrow: 2, // damage of a landed cut on a regular foe
+  bossQuick: 0.65, // a landed quick cut on a boss, as a share of a normal hit
+  riposteBoss: 3, // a riposte on an opened boss (regular foes die to it)
+  surpriseBossStun: 0.5, // a boss caught before he has fought: a full cut and a long stagger (regular foes die)
+  bossFlinch: 0.22, // the first landed quick cut of a combo staggers a boss this long
+  bossPoise: 1.4, // after that flinch he will not flinch again from quick cuts for this long
+  bossAnswer: [0.12, 0.8], // a boss back on his feet (from a flinch or an opening) attacks again this soon (seconds, min..max)
+  stun: 0.32, stagger: 0.9, // a regular foe's flinch from a quick cut, and from a heavy one
+  block: 0.3, recoil: 0.28, // a block: the foe holds the parry pose this long; the ronin cannot cut again this long
+  posture: { slash: 0.2, heavy: 1, counter: 1.5 }, // landed hits fill a boss's guard meter too
+  postureRest: 2, postureEbb: 0.7, // seconds without pressure before the meter ebbs, then pips per second
+  openBroken: 1.25, openBrokenBoss: 0.95, // how long a broken guard stays open for the riposte
+  reachIn: 30, // a melee foe starts his windup from this far outside his reach (he closes it while winding)
+  counterHit: 1.34, // a boss's blow that lands while the ronin is mid-swing (he cut into the glint) deals this many times its damage
+  // pace: recovery after a strike (x the attack's rec) and the pause before the next one (x a 0.4..1.3 s roll), [phase 1, phase 2]
+  bossRec: [1, 0.85], bossReady: [1.2, 0.6], foeRec: 1, foeReady: 1,
 };
 
 // Ground profiles are [x, height] (height up, px). Events are triggered as the ronin reaches them.

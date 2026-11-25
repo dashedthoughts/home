@@ -94,12 +94,14 @@ function constrain(st, T, cons, o) {
 // a hem chain; a gusset that fills between the thighs above the split. Returns targets; the caller steps the chains.
 export function hakamaTargets(q) {
   const { H, legs, f, nf, dn, sc, bulk, hl, groundY } = q;
-  const st = q.stride || 0, Bh = 110 * sc, wW = 15 * sc * bulk, wk = 19 * sc * bulk, hemW0 = Math.max((hl >= 0.8 ? 0.17 : 0.11) * Bh, 26 * sc * bulk * Math.min(1, hl + 0.35)), hemW = hemW0 + ((hl >= 0.8 ? 0.168 : 0.11) * Bh - hemW0) * st;
+  const st = q.stride || 0, Bh = 110 * sc, wW = 15 * sc * bulk, wk = 19 * sc * Math.sqrt(bulk), hemW0 = Math.max((hl >= 0.8 ? 0.17 : 0.11) * Bh, 26 * sc * Math.sqrt(bulk) * Math.min(1, hl + 0.35)), hemW = hemW0 + ((hl >= 0.8 ? 0.168 : 0.11) * Bh - hemW0) * st;
   const Wb = [H[0] - nf[0] * wW / 2 - dn[0] * 2 * sc, H[1] - nf[1] * wW / 2 - dn[1] * 2 * sc], Wf = [H[0] + nf[0] * wW / 2 - dn[0] * 2 * sc, H[1] + nf[1] * wW / 2 - dn[1] * 2 * sc];
   // the hips flare out below the cinched waist
   const Hb = [H[0] - nf[0] * (wW / 2 + 3.2 * sc) + dn[0] * 8 * sc, H[1] - nf[1] * (wW / 2 + 3.2 * sc) + dn[1] * 8 * sc], Hf = [H[0] + nf[0] * (wW / 2 + 3.2 * sc) + dn[0] * 8 * sc, H[1] + nf[1] * (wW / 2 + 3.2 * sc) + dn[1] * 8 * sc];
   const S = (p) => (p[0] - H[0]) * f; // position along the facing axis
-  const out = { Bh, wW, wk, hemW, Wb, Wf, Hb, Hf, legs: [], r: 2.5 * sc, stride: st };
+  // when the legs spread (lunge, crouch, standoff, stride) the hakama splits: each leg's panel follows its own leg
+  const legLen = 62 * sc, dA = Math.hypot(legs[0].fx - legs[1].fx, legs[0].fy - legs[1].fy), spread = q.kneel ? 0 : Math.min(1, Math.max(0, (dA / legLen - 0.4) / 0.15));
+  const out = { Bh, wW, wk, hemW, Wb, Wf, Hb, Hf, legs: [], r: 2.5 * sc, stride: st, split: Math.max(st, spread), legLen, dA };
   for (const l of legs) {
     const K = [l.kx, l.ky], A = [l.fx, l.fy], J = [l.hx, l.hy];
     let tx = K[0] - J[0], ty = K[1] - J[1]; const tl = Math.hypot(tx, ty) || 1; tx /= tl; ty /= tl;
@@ -110,19 +112,22 @@ export function hakamaTargets(q) {
     // the floor of the hem: a grounded full-length leg keeps its hem above the foot so the sandal shows
     const floor = lift < 0.5 && hl >= 0.8 && !q.kneel ? Math.min(groundY, A[1]) - 3.9 * sc : groundY;
     // running, a lifted leg's cloth wraps the shin and its hem rises with the foot instead of hanging to the ground
-    const hemYr = hemYl + (Math.min(hemYl, A[1] - 1 * sc) - hemYl) * st;
+    const hemYr = hemYl + (Math.min(hemYl, A[1] - 1 * sc) - hemYl) * Math.max(st, out.split);
     let hemY = hemYg + (hemYr - hemYg) * lift; hemY = Math.min(Math.max(hemY, K[1] + 6 * sc), floor - 1.2);
-    const out1 = l.back ? -1 : 1, cg = S(A) + out1 * 2.5 * sc, kick = 0, cl = S(K) + kick, c = cg + (cl - cg) * lift * (1 - 0.6 * st), hw = hemW / 2;
+    // on a stride each hem swings to its own side: the robe parts in a V
+    const out1 = l.back ? -1 : 1, cg = S(A) + out1 * (2.5 + 6 * st) * sc, kick = 0, cl = S(K) + kick, c = cg + (cl - cg) * lift * (1 - 0.6 * st) * (1 - out.split), hw = hemW / 2;
     let kf = -1e9; for (const r of ring) kf = Math.max(kf, S(r));
-    let rearS = c - hw; if (lift > 0) rearS = Math.min(rearS, rearS + (S(Hb) - rearS) * lift * (1 - st));
-    let frontS = Math.max(c + hw, kf + 1 * sc); if (frontS - rearS > 64 * sc) { const m = (frontS + rearS) / 2; rearS = m - 32 * sc; frontS = m + 32 * sc; }
+    let rearS = c - hw; if (lift > 0) rearS = Math.min(rearS, rearS + (S(Hb) - rearS) * lift * (1 - Math.max(st, out.split)));
+    let frontS = Math.max(c + hw, kf + 1 * sc - (kf + 1 * sc - c - hw) * out.split); // a split leg is its own tube: its hem is not held in front of the knee if (frontS - rearS > 64 * sc) { const m = (frontS + rearS) / 2; rearS = m - 32 * sc; frontS = m + 32 * sc; }
     const T = []; for (let i = 0; i < 4; i++) { const s = rearS + (frontS - rearS) * i / 3; T.push([H[0] + f * s, hemY]); }
     // running, a lifted leg's cloth is a tapered wrap: the hem leaves the ankle and trails back and up along a diagonal,
     // so the leg reads as a narrow wedge from hip to ankle, never a block
     const wr = st * lift; if (wr > 0) { const an = 1.05, L = Math.max(hemW, 0.2 * Bh); for (let i = 0; i < 4; i++) { const u = 1 - i / 3, tx = A[0] + f * 3 * sc - f * Math.cos(an) * L * u, ty = Math.min(A[1] - 1.5 * sc - Math.sin(an) * L * u, floor - 1.2); T[i][0] += (tx - T[i][0]) * wr; T[i][1] += (ty - T[i][1]) * wr; } }
-    const cons = T.map((t) => { const dT = Math.hypot(t[0] - K[0], t[1] - K[1]); return { K, dmin: dT * 0.55, dmax: dT * 1.2 + 2 * sc, dev: Math.max(7 * sc, dT * 0.9) }; });
+    const cons = T.map((t) => { const dT = Math.hypot(t[0] - K[0], t[1] - K[1]); return { K, dmin: dT * 0.55, dmax: dT * 1.2 + 2 * sc, dev: Math.max(6 * sc, dT * (0.9 - 0.65 * out.split)) }; });
     // a full-length hakama always wraps the shin down to the ankle: the foot can never float free of the cloth
-    const ank = q.full ? [[A[0] - 3.5 * sc, A[1] - 6.5 * sc], [A[0] + 3.5 * sc, A[1] - 6.5 * sc], [A[0], A[1] - 3.2 * sc]] : [];
+    // the cloth wraps the shin to the ankle, never thinner than the leg inside it
+    const sx = A[0] - K[0], sy = A[1] - K[1], sl = Math.hypot(sx, sy) || 1, nx = -sy / sl, ny = sx / sl, cy = (v) => Math.min(v, groundY - 1);
+    const ank = q.full ? [[A[0] - 3.5 * sc, A[1] - 6.5 * sc], [A[0] + 3.5 * sc, A[1] - 6.5 * sc], [A[0], A[1] - 3.2 * sc], [A[0] - sx / sl * 4 * sc + nx * 5.5 * sc, cy(A[1] - sy / sl * 4 * sc + ny * 5.5 * sc)], [A[0] - sx / sl * 4 * sc - nx * 5.5 * sc, cy(A[1] - sy / sl * 4 * sc - ny * 5.5 * sc)]] : [];
     out.legs.push({ K, A, J, ring, ank, T, cons, lift, back: l.back, hemY, floor, wrap: st * lift });
   }
   return out;
@@ -131,24 +136,28 @@ export function hakamaTargets(q) {
 export function hakamaPolys(G, chains) {
   const legs = G.legs.map((l, i) => {
     // on a running stride each leg's panel takes its own half of the waist, so the two legs part and read as legs
-    const st = G.stride || 0, L2 = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
+    const st = G.split || 0, L2 = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
     const waist = st > 0 ? (l.back ? [G.Wb, G.Hb, L2(G.Wb, G.Wf, 1 - 0.45 * st), L2(G.Hb, G.Hf, 1 - 0.45 * st)] : [L2(G.Wb, G.Wf, 0.45 * st), L2(G.Hb, G.Hf, 0.45 * st), G.Wf, G.Hf]) : [G.Wb, G.Wf, G.Hb, G.Hf];
-    const hem = chains[i], top = [...waist, ...l.ring, ...l.ank];
+    // the thigh: this leg's half of the waist to the knee; the shin: the knee down to the hem (reaching up to the waist
+    // when the legs are together, so a standing hakama stays one hanging garment)
+    const hem = chains[i], top = [...waist.map((w) => L2(w, l.K, st * 0.92)), ...l.ring, ...l.ank], thigh = soften(hull([...waist, ...l.ring]), G.r);
     // the hem is never narrower than the cloth above it: if the chain has swung so that the envelope would narrow
     // toward the hem, its two ends are carried outward along the hem line (the cloth hangs from the knee, it does
     // not pinch under it)
     let e0 = hem[0], e3 = hem[3]; const W = [(G.Wb[0] + G.Wf[0]) / 2, (G.Wb[1] + G.Wf[1]) / 2];
-    for (let it = 0; it < (l.wrap > 0.3 ? 0 : 5); it++) { // a running wrap is a tapered wedge by design
+    for (let it = 0; it < (l.wrap > 0.3 || st > 0.5 ? 0 : 5); it++) { // a split leg or a running wrap is a tube on its own axis // a running wrap is a tapered wedge by design
       const P = hull([...top, e0, hem[1], hem[2], e3]), hc = [(e0[0] + e3[0]) / 2, (e0[1] + e3[1]) / 2];
       const dx = e3[0] - e0[0], dy = e3[1] - e0[1], dl = Math.hypot(dx, dy) || 1, d = [dx / dl, dy / dl];
-      const ws = legWidths(P, W, hc, 10, d); let mx = 0; for (const v of ws) mx = Math.max(mx, v);
-      const def = mx - ws[ws.length - 1]; if (def < 0.4) break;
-      const k = def * 0.6 + 0.5; e0 = [e0[0] - d[0] * k, e0[1] - d[1] * k]; e3 = [e3[0] + d[0] * k, e3[1] + d[1] * k];
+      // a split leg is a tube along its own axis (knee to hem), measured across that axis
+      const ws = legWidths(P, st > 0.5 ? l.K : W, hc, 10, d); let mx = 0; for (const v of ws) mx = Math.max(mx, v);
+      const def = mx - ws[ws.length - 1] + G.r * 0.8; if (def < 0.4) break; // a margin for the rounded corners
+      const k = def * 0.6 + 0.5; // a split leg widens only on its outer side, never into the gap between the legs
+      if (st > 0.5) { if (l.back) e0 = [e0[0] - d[0] * k * 2, e0[1] - d[1] * k * 2]; else e3 = [e3[0] + d[0] * k * 2, e3[1] + d[1] * k * 2]; } else { e0 = [e0[0] - d[0] * k, e0[1] - d[1] * k]; e3 = [e3[0] + d[0] * k, e3[1] + d[1] * k]; }
     }
-    return { hull: soften(hull([...top, e0, hem[1], hem[2], e3]), G.r), hem, ends: [e0, e3], l };
+    return { hull: soften(hull([...top, e0, hem[1], hem[2], e3]), G.r), thigh, hem, ends: [e0, e3], l };
   });
   // the gusset fills between the thighs; on a running stride it reaches only part way down, so the robe opens up the front
-  const [B, F] = G.legs, gk = 1 - 0.65 * (G.stride || 0), kB = [B.J[0] + (B.K[0] - B.J[0]) * gk, B.J[1] + (B.K[1] - B.J[1]) * gk], kF = [F.J[0] + (F.K[0] - F.J[0]) * gk, F.J[1] + (F.K[1] - F.J[1]) * gk];
+  const [B, F] = G.legs, gk = 1 - 0.8 * (G.split || 0), kB = [B.J[0] + (B.K[0] - B.J[0]) * gk, B.J[1] + (B.K[1] - B.J[1]) * gk], kF = [F.J[0] + (F.K[0] - F.J[0]) * gk, F.J[1] + (F.K[1] - F.J[1]) * gk];
   const mid = [(kB[0] + kF[0]) / 2, (kB[1] + kF[1]) / 2 + 2];
   const gusset = soften(hull([G.Wb, G.Wf, G.Hb, G.Hf, kB, kF, mid]), G.r);
   return { legs, gusset };
@@ -185,14 +194,24 @@ export function legWidths(poly, top, bot, n = 8, across) {
 // Assert the garment rules on one drawn frame. G is fig.garment. Returns a list of failures (empty when good).
 export function checkGarment(G, o = {}) {
   const bad = [], sc = G.sc || 1, Bh = G.Bh, fin = (P) => P.every((q) => isFinite(q[0]) && isFinite(q[1]));
-  const polys = [['gusset', G.gusset], ...G.legs.map((l, i) => ['leg' + i, l.poly]), ...G.sleeves.map((s) => ['sleeve' + s.k, s.poly])];
+  const polys = [['gusset', G.gusset], ...G.legs.map((l, i) => ['leg' + i, l.poly]), ...G.legs.filter((l) => l.thigh).map((l, i) => ['thigh' + i, l.thigh]), ...G.sleeves.map((s) => ['sleeve' + s.k, s.poly])];
   for (const [n, P] of polys) { if (!P || P.length < 3 || !fin(P)) { bad.push(n + ': degenerate'); continue; } if (selfIntersects(P)) bad.push(n + ': self-intersection'); }
   const W = [(G.HG.Wb[0] + G.HG.Wf[0]) / 2, (G.HG.Wb[1] + G.HG.Wf[1]) / 2];
+  // legs apart: the hakama is split, so the paper between the two shins is open (no sheet stretched between the legs).
+  // Tested midway between the two shins whenever they are more than two trouser-legs apart.
+  if (!G.kneel && G.HG && G.HG.dA > 0.6 * G.HG.legLen) { const [a, b] = G.legs, ma = [(a.K[0] + a.A[0]) / 2, (a.K[1] + a.A[1]) / 2], mb = [(b.K[0] + b.A[0]) / 2, (b.K[1] + b.A[1]) / 2];
+    const segD = (p, a2, b2) => { const vx = b2[0] - a2[0], vy = b2[1] - a2[1], t = Math.max(0, Math.min(1, ((p[0] - a2[0]) * vx + (p[1] - a2[1]) * vy) / (vx * vx + vy * vy || 1))); return Math.hypot(p[0] - a2[0] - vx * t, p[1] - a2[1] - vy * t); };
+    const p = [(ma[0] + mb[0]) / 2, (ma[1] + mb[1]) / 2], clear = G.legs.every((l) => segD(p, l.J, l.K) > 13 * sc && segD(p, l.K, l.A) > 13 * sc);
+    if (clear && Math.hypot(ma[0] - mb[0], ma[1] - mb[1]) > 24 * sc) {
+      const hit = [['gusset', G.gusset], ...G.legs.map((l, i) => ['shin' + i, l.poly]), ...G.legs.map((l, i) => ['thigh' + i, l.thigh])].find(([, P]) => P && insideConvex(P, p, 0)); if (hit) bad.push(`cloth stretched between the legs (a tent: ${hit[0]})`); } }
   G.legs.forEach((l, i) => {
     const hc = [(l.hem[0][0] + l.hem[3][0]) / 2, (l.hem[0][1] + l.hem[3][1]) / 2];
-    const hx = l.hem[3][0] - l.hem[0][0], hy = l.hem[3][1] - l.hem[0][1], hl2 = Math.hypot(hx, hy) || 1, ws = legWidths(l.poly, W, hc, 8, [hx / hl2, hy / hl2]), tol = 1.5 * sc;
-    if (!(l.wrap > 0.3)) for (let j = 1; j < ws.length; j++) if (ws[j] < ws[j - 1] - tol) { bad.push(`leg${i}: width shrinks toward the hem (${ws.map((v) => v.toFixed(1)).join(' ')})`); break; }
-    const ax = hc[0] - W[0], ay = hc[1] - W[1], al = Math.hypot(ax, ay) || 1, kw = chord(l.poly, l.K, [-ay / al, ax / al]);
+    const hx = l.hem[3][0] - l.hem[0][0], hy = l.hem[3][1] - l.hem[0][1], hl2 = Math.hypot(hx, hy) || 1, sp = G.HG && G.HG.split > 0.5, ws = sp ? legWidths(l.poly, l.K, [l.K[0] + (hc[0] - l.K[0]) * 0.75, l.K[1] + (hc[1] - l.K[1]) * 0.75], 8) : legWidths(l.poly, W, hc, 8, [hx / hl2, hy / hl2]), tol = 1.5 * sc;
+    // a hanging leg widens monotonically to the hem; a split leg is a tube on its own axis and must not pinch
+    if (sp && G.full) { let mx = 0; for (let j = 0; j < ws.length; j++) { if (ws[j] < 0.85 * mx - tol) { bad.push(`leg${i}: split leg pinches (${ws.map((v) => v.toFixed(1)).join(' ')})`); break; } mx = Math.max(mx, ws[j]); } }
+    else if (!sp && !(l.wrap > 0.3)) for (let j = 1; j < ws.length; j++) if (ws[j] < ws[j - 1] - tol) { bad.push(`leg${i}: width shrinks toward the hem (${ws.map((v) => v.toFixed(1)).join(' ')})`); break; }
+    const ax = hc[0] - W[0], ay = hc[1] - W[1], al = Math.hypot(ax, ay) || 1; let kw = chord(l.poly, l.K, [-ay / al, ax / al]);
+    if (sp && l.J) { const tx = l.K[0] - l.J[0], ty = l.K[1] - l.J[1], tl = Math.hypot(tx, ty) || 1, d2 = [-ty / tl, tx / tl]; kw = Math.max(chord(l.poly, l.K, d2), l.thigh ? chord(l.thigh, l.K, d2) : 0); }
     if (kw < 1.6 * 8 * sc) bad.push(`leg${i}: knee envelope ${kw.toFixed(1)} < 1.6x leg`);
     const hw = Math.hypot(l.hem[3][0] - l.hem[0][0], l.hem[3][1] - l.hem[0][1]);
     if (G.hl >= 0.8 && hw < 0.16 * Bh - 0.5) bad.push(`leg${i}: hem ${hw.toFixed(1)} < 0.16 body`);

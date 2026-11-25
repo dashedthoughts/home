@@ -27,8 +27,8 @@ export const POSE = {
   bow: mk({ grip: [8, -50], sw: 0.9, sheath: 1, lean: 0.95, head: 0.3, ff: [6, 0], fb: [-6, 0], hy: -49 }),
   sit: mk({ grip: [10, -24], sw: 0.9, sheath: 1, lean: 0.05, hy: -24, kneel: 1, ff: [-14, 0], fb: [-14, 0] }),
   kneel: mk({ grip: [24, -6], sw: 0.0, sheath: 0, lean: 0.25, head: 0.35, hy: -24, kneel: 1, ff: [-14, 0], fb: [-14, 0] }),
-  focus: mk({ grip: [8, -42], sw: 0.95, sheath: 1, lean: 0.5, ff: [30, 0], fb: [-34, 0], hy: -32, head: 0.15 }),
-  iai: mk({ grip: [50, -60], sw: 0.04, lean: 0.26, head: 0.2, ff: [42, 0], fb: [-36, -4], hy: -34 }),
+  focus: mk({ grip: [9, -44], sw: 0.95, sheath: 1, lean: 0.5, ff: [27, 0], fb: [-46, 0], hy: -34, head: -0.42 }),
+  iai: mk({ grip: [50, -60], sw: 0.04, lean: 0.26, head: -0.15, ff: [42, 0], fb: [-40, -3], hy: -35 }),
   heal: mk({ grip: [10, -40], sw: 0.9, sheath: 1, lean: 0.25, hy: -30, head: 0.35, kneel: 1, ff: [-10, 0], fb: [-14, 0] }),
   dead: mk({ grip: [10, -8], sw: 0.1, lean: -1.45, head: -0.3, hy: -12, ff: [24, 0], fb: [18, 0] }),
   // bow (archer)
@@ -201,21 +201,21 @@ function ik(ax, ay, bx, by, l1, l2, bend, out) {
   const an = base + a * bend; out[0] = ax + Math.cos(an) * l1; out[1] = ay + Math.sin(an) * l1;
   out[2] = ax + (dx / d) * dd; out[3] = ay + (dy / d) * dd; return out;
 }
-const PAPER = '#efe7d4', SKIN = '#d3b083';
+const PAPER = '#efe7d4', SKIN = '#d9c3a0';
 // The cast. kind: which pose set it uses. Colours are ink washes; one accent each. sc: size, bulk: width.
 export const LOOKS = {
-  ronin: { kind: 'ronin', sc: 1.18, bulk: 1, kim: '#323846', hak: '#4a4f5b', slv: '#3a4050', skin: SKIN, hat: 'kasa', hatW: 1.35, hatCol: '#b9a57a', weapon: 'katana', hl: 1, scarf: 1, obi: '#93402a', gourd: 1 },
+  ronin: { kind: 'ronin', sc: 1.18, bulk: 1, kim: '#1d1a17', hak: '#3f3a35', slv: '#25211d', skin: SKIN, hat: 'kasa', hatW: 1.6, hatCol: '#6d604c', weapon: 'katana', hl: 1, scarf: 0 },
   bandit: { kind: 'bandit', sc: 1.0, bulk: 1.12, kim: '#655d55', hak: '#655d55', slv: '#5a5249', skin: '#d6c3a3', hat: 'band', acc: '#8e3f2a', weapon: 'katana', hl: 0.42, shins: 1, head: 1.15, obi: '#3b342d' },
   spear: { kind: 'spear', sc: 1.12, bulk: 1, kim: '#55575c', hak: '#727274', slv: '#4b4d52', skin: '#d9c8aa', hat: 'jingasa', acc: '#1c1a19', weapon: 'spear', hl: 0.82, armor: 1, shins: 1, head: 1.2 },
   archer: { kind: 'archer', sc: 1.02, bulk: 0.92, kim: '#68664f', hak: '#86836b', slv: '#5e5c47', skin: '#d9c8aa', hat: 'jingasa', acc: '#1c1a19', weapon: 'bow', hl: 0.8, quiver: 1, shins: 1, head: 1.2 },
   brute: { kind: 'brute', sc: 1.3, bulk: 1.45, kim: '#4e4036', hak: '#6a5b4f', slv: '#463a31', skin: '#c9ab88', hat: 'bald', acc: '#7a5634', weapon: 'club', shield: 1, hl: 0.85, shins: 1 },
-  duelist: { kind: 'duelist', sc: 1.12, bulk: 0.95, kim: '#2c262b', hak: '#5a525c', slv: '#3b3039', skin: '#d5b68c', hat: 'chonmage', acc: '#5a3a52', weapon: 'katana', hl: 1, coat: '#3e313c' },
+  duelist: { kind: 'duelist', sc: 1.12, bulk: 0.95, kim: '#2c262b', hak: '#5a525c', slv: '#3b3039', skin: '#ddd0b8', hat: 'chonmage', acc: '#5a3a52', weapon: 'katana', hl: 1, coat: '#3e313c' },
   // bosses: each its own shape language
   gonroku: { kind: 'bandit', sc: 1.3, bulk: 1.55, kim: '#3f352d', hak: '#5f5145', slv: '#382f28', skin: '#cfb18c', hat: 'band', acc: '#8e3f2a', weapon: 'odachi', hl: 0.8, shins: 1, beard: 'dark' },
   ono: { kind: 'spear', sc: 1.42, bulk: 0.9, kim: '#46423b', hak: '#615c53', slv: '#3e3a34', skin: '#d6c4a4', hat: 'kasa', hatW: 1.25, hatCol: '#7d6c4c', acc: '#3a3328', weapon: 'spear', hl: 0.86, mino: '#7a6948', shins: 1 },
-  shizu: { kind: 'duelist', sc: 1.1, bulk: 0.78, kim: '#24212a', hak: '#77717d', slv: '#2f2b35', skin: '#d9ba90', hat: 'longhair', weapon: 'naginata', hl: 1.06, upright: 1, band: '#efe7d4', tasuki: 1 },
+  shizu: { kind: 'duelist', sc: 1.1, bulk: 0.78, kim: '#24212a', hak: '#77717d', slv: '#2f2b35', skin: '#e3d7c0', hat: 'longhair', weapon: 'naginata', hl: 1.06, upright: 1, band: '#efe7d4', tasuki: 1 },
   hyoe: { kind: 'brute', sc: 1.27, bulk: 1.35, kim: '#3a3535', hak: '#57504d', slv: '#332f2f', skin: '#cdb593', hat: 'bald', weapon: 'club', shield: 1, acc: '#5a4a3a', hl: 0.86, lantern: 1, hunch: 0.3, shins: 1 },
-  master: { kind: 'master', sc: 1.12, bulk: 0.82, kim: '#252220', hak: '#625d58', slv: '#2e2a27', skin: '#d2b48a', hat: 'white', weapon: 'katana', hl: 1.04, coat: '#47433f', coatLong: 1, beard: 'white' },
+  master: { kind: 'master', sc: 1.12, bulk: 0.82, kim: '#252220', hak: '#625d58', slv: '#2e2a27', skin: '#e2d6bf', hat: 'white', weapon: 'katana', hl: 1.04, coat: '#47433f', coatLong: 1, beard: 'white' },
 };
 export const BOSSLOOK = { gonroku: 'gonroku', ono: 'ono', shizu: 'shizu', hyoe: 'hyoe', sotetsu: 'master' };
 
@@ -270,20 +270,37 @@ function mass(g, P, o) {
   if (o.tex !== 0 && !FLATC) {
     g.save(); g.clip();
     const pat = grain(g); if (pat) { if (pat.setTransform && typeof DOMMatrix !== 'undefined') pat.setTransform(new DOMMatrix([0.3, 0, 0, 0.3, o.ox || 0, o.oy || 0])); g.globalAlpha = A * (o.tex ?? 0.9); g.fillStyle = cc(pat); g.fill(); }
-    g.globalAlpha = A * 0.28; g.strokeStyle = cc(INK); g.lineWidth = (o.lw || 2) * 2.4; g.stroke();
+    g.globalAlpha = A * 0.16; g.strokeStyle = cc(INK); g.lineWidth = (o.lw || 2) * 2.4; g.stroke();
     if (o.inside) o.inside(g);
     g.restore();
   }
-  if (o.ink !== null) {
-    // the outline: split into a few strokes with gaps where the brush lifts
-    const m = S.length, cuts = o.strokes || 3, off = Math.floor(hash(1, o.seed) * m);
-    for (let k = 0; k < cuts; k++) {
-      const s0 = off + Math.floor((k * m) / cuts), s1 = off + Math.floor(((k + 1) * m) / cuts) + 2, seg = [];
-      for (let i = s0; i <= s1; i++) seg.push(S[i % m]);
-      brushLine(g, seg, o.lw || 2, cc(o.ink || INK), A * 0.95, o.seed + k * 17, { t0: 0.15, outline: 1 });
-    }
-  }
+  if (o.ink !== null) contour(g, S, o.lw || 2, cc(o.ink || INK), A * 0.95, o.seed);
   g.globalAlpha = 1;
+}
+// The contour of a mass, painted, not outlined: the brush is heaviest where the form turns away from the light (lit from
+// the upper left) or sits in shadow, thins to a hair where it turns toward the light, and lifts off entirely on the lit
+// side; each run of the stroke enters and leaves thin.
+const LIGHT = [-0.55, -0.83];
+function contour(g, S, lw, col, a, seed) {
+  const m = S.length; if (m < 4) return; let ar = 0; for (let i = 0; i < m; i++) { const p = S[i], q = S[(i + 1) % m]; ar += p[0] * q[1] - q[0] * p[1]; } const sg = ar > 0 ? 1 : -1;
+  const wt = new Float32Array(m);
+  for (let i = 0; i < m; i++) { const p = S[(i - 1 + m) % m], q = S[(i + 1) % m]; let nx = (q[1] - p[1]) * sg, ny = -(q[0] - p[0]) * sg; const l = Math.hypot(nx, ny) || 1; nx /= l; ny /= l;
+    const lit = nx * LIGHT[0] + ny * LIGHT[1]; wt[i] = lit > 0.62 + (hash(Math.floor(i / 4), seed) - 0.5) * 0.3 ? 0 : clamp((0.62 - lit) / 1.4, 0.06, 1); }
+  // start the walk at a gap, so every run is whole
+  let s0 = 0; for (let i = 0; i < m; i++) if (wt[i] === 0) { s0 = i; break; }
+  let run = [], ws = [];
+  const flush = () => { if (run.length >= 3) { const n = run.length, flat = []; for (const q of run) flat.push(q[0], q[1]);
+    ribbon(g, flat, (u) => { const i = Math.min(n - 1, Math.round(u * (n - 1))), e = Math.min(1, u * n / 3, (1 - u) * n / 3); return lw * (0.3 + 1.8 * ws[i]) * Math.max(0.15, e); }, col, a, 0); } run = []; ws = []; };
+  for (let k = 0; k <= m; k++) { const i = (s0 + k) % m; if (wt[i] > 0 && k < m) { run.push(S[i]); ws.push(wt[i]); } else flush(); }
+}
+// the same painted contour along an open run of a closed polygon P (its orientation sets which side is outside)
+function contourOpen(g, run, P, lw, col, a, seed) {
+  let ar = 0; for (let i = 0; i < P.length; i++) { const p = P[i], q = P[(i + 1) % P.length]; ar += p[0] * q[1] - q[0] * p[1]; } const sg = ar > 0 ? 1 : -1, m = run.length;
+  const wt = []; for (let i = 0; i < m; i++) { const p = run[Math.max(0, i - 1)], q = run[Math.min(m - 1, i + 1)]; let nx = (q[1] - p[1]) * sg, ny = -(q[0] - p[0]) * sg; const l = Math.hypot(nx, ny) || 1; nx /= l; ny /= l;
+    const lit = nx * LIGHT[0] + ny * LIGHT[1]; wt.push(lit > 0.62 + (hash(Math.floor(i / 4), seed) - 0.5) * 0.3 ? 0 : clamp((0.62 - lit) / 1.4, 0.08, 1)); }
+  let r = [], ws = []; const flush = () => { if (r.length >= 3) { const n = r.length, flat = []; for (const q of r) flat.push(q[0], q[1]);
+    ribbon(g, flat, (u) => { const i = Math.min(n - 1, Math.round(u * (n - 1))), e = Math.min(1, u * n / 3, (1 - u) * n / 3); return lw * (0.3 + 1.7 * ws[i]) * Math.max(0.15, e); }, col, a, 0); } r = []; ws = []; };
+  for (let i = 0; i <= m; i++) { if (i < m && wt[i] > 0) { r.push(run[i]); ws.push(wt[i]); } else flush(); }
 }
 // a sweeping open stroke (hair, folds, cords, tails)
 function sweep(g, P, w, col, a, seed, k = 4) { brushLine(g, openCurve(P, k), w, col, a, seed, { t0: 0.2 }); }
@@ -308,7 +325,8 @@ export function drawFigure(g, x, y, look, pose, fig, o) {
   // down; only kneels, crouches, rolls, falls and the standoff crouch go lower.
   const lift = pose.kneel || pose.hy > -30 ? 0 : 6 * clamp((-pose.hy - 30) / 18, 0, 1) + 3.5;
   const upright = !pose.kneel && (pose.hy <= -38 || pose.gait) && Math.abs(lean) < 0.75;
-  const hdT = clamp(pose.head || 0, -0.45, 0.45) + (L.hunch ? 0.2 : 0), na = lean + hdT * 0.5, ha = lean + hdT;
+  // the head turns at most about 19 degrees on the neck: the shoulders and hips take a recoil
+  const hdT = clamp(pose.head || 0, -0.33, 0.33) + (L.hunch ? 0.2 : 0), na = lean + hdT * 0.5, ha = lean + hdT;
   let hyU = pose.hy - lift; if (upright) hyU = Math.min(hyU, -0.47 * STAND_H, -(0.945 * STAND_H - TORSO * Math.cos(lean) - NECK * Math.cos(na) - 9.6 * Math.cos(ha)));
   const rise = hyU - (pose.hy - lift); // how much the hips were lifted to keep the stance tall (units, <= 0)
   const H = [x + f * pose.hx * sc, y + hyU * sc + breath * 0.4];
@@ -337,8 +355,19 @@ export function drawFigure(g, x, y, look, pose, fig, o) {
   else if (L.weapon === 'bow') hand2 = [lerp(G[0] - f * 4 * sc, H[0] - f * 2 * sc, o.draw || 0), lerp(G[1], G[1] - 6 * sc, o.draw || 0)];
   else if (L.weapon === 'club') hand2 = null;
   else hand2 = [G[0] - dx * 12 * sc, G[1] - dy * 12 * sc];
-  if (pose.sheath && (L.weapon === 'katana' || L.weapon === 'odachi')) { const swing = o.walkPh != null && !o.running ? Math.sin(o.walkPh) * 6 * sc : 0; hand2 = o.running ? [H[0] + f * 3 * sc, H[1] - 3 * sc] : [H[0] - nfx * (4 * sc) + f * swing, H[1] + 12 * sc]; }
+  if (pose.sheath && (L.weapon === 'katana' || L.weapon === 'odachi')) { const swing = o.walkPh != null && !o.running ? Math.sin(o.walkPh) * 6 * sc : 0; hand2 = o.running ? [H[0] + f * 10.5 * sc, H[1] - 4.5 * sc] : [H[0] - nfx * (4 * sc) + f * swing, H[1] + 12 * sc]; }
   if (pose.open) hand2 = [N[0] - f * 28 * sc, N[1] + 6 * sc];
+  // the archer's shot (kyudo): the bow raised overhead (uchiokoshi), then lowered while drawing until the string
+  // hand is behind the ear at full draw; after the loose the bow turns in the hand
+  if (L.weapon === 'bow' && (o.draw > 0 || o.loosed > 0)) {
+    const d = o.draw || 0, E2 = (u) => u * u * (3 - 2 * u), up = E2(clamp(d / 0.35, 0, 1)), dn = E2(clamp((d - 0.35) / 0.65, 0, 1));
+    const hi = [H[0] + f * 10 * sc, N[1] - 34 * sc], full = [N[0] + f * 31 * sc, N[1] + 3 * sc];
+    const gx = d > 0 ? lerp(lerp(G[0], hi[0], up), full[0], dn) : full[0], gy = d > 0 ? lerp(lerp(G[1], hi[1], up), full[1], dn) : full[1];
+    G[0] = gx; G[1] = gy;
+    const ear = [Hd[0] - f * 5 * sc, Hd[1] + 3 * sc], nh = [G[0] - f * 7 * sc, G[1] + 2 * sc];
+    hand2 = d > 0 ? [lerp(nh[0], ear[0], dn), lerp(nh[1], ear[1], dn)] : [ear[0] - f * 6 * sc * o.loosed, ear[1] + 4 * sc * (1 - o.loosed)];
+    o._ear = hand2;
+  }
   // ---- behind the body: scarf, hair, quiver, lantern pole ----
   if (L.scarf && fig.scarf) {
     const ch = fig.scarf; ch[0][0] = N[0] - f * 2 * sc; ch[0][1] = N[1] + 2 * sc; const pts = []; for (const q of ch) pts.push(q[0], q[1]);
@@ -365,7 +394,7 @@ export function drawFigure(g, x, y, look, pose, fig, o) {
     const ex = T4b[0], ey = T4b[1], wx = T4b[2], wy = T4b[3];
     const ux = ex - S[0], uy = ey - S[1], ul = Math.hypot(ux, uy) || 1, px = -uy / ul, py = ux / ul;
     const vx2 = wx - ex, vy2 = wy - ey, vl = Math.hypot(vx2, vy2) || 1, qx = -vy2 / vl, qy = vx2 / vl;
-    const w = (tiedSl ? 5 : 6) * sc * Math.sqrt(bulk), cu = tiedSl ? 0.14 : 0.9, cuff = [lerp(ex, wx, cu), lerp(ey, wy, cu)];
+    const w = (tiedSl ? 5 : 6) * sc * Math.sqrt(bulk), cu = tiedSl ? 0.14 : (back ? 0.85 : 0.62), cuff = [lerp(ex, wx, cu), lerp(ey, wy, cu)];
     const drop = tiedSl ? 4.5 * sc : 0.12 * Bh;
     const T2 = [[lerp(ex, cuff[0], 0.15), Math.max(lerp(ey, cuff[1], 0.15), ey) + drop], [lerp(ex, cuff[0], 0.85), Math.max(lerp(ey, cuff[1], 0.85), cuff[1]) + drop * 0.85]];
     const st = fig.slv[k] || (fig.slv[k] = {}); if (st.f != null && st.f !== f && st.p) { st.p.reverse(); st.v.reverse(); } st.f = f;
@@ -373,18 +402,24 @@ export function drawFigure(g, x, y, look, pose, fig, o) {
     stepChain(st, T2, cons, { dt: o.dt ?? 0.016, wind, reduced: o.reduced, floor: groundY, far: 70 * sc, w: 11, z: 0.38 });
     const bag = st.p;
     const S2 = [S[0] + ux / ul * 2.5 * sc, S[1] + uy / ul * 2.5 * sc]; // the sleeve hangs from just below the shoulder point, so the shoulder slopes
-    const P = soften(hull([[S2[0] + px * w * 0.7, S2[1] + py * w * 0.7], [S2[0] - px * w * 0.7, S2[1] - py * w * 0.7], [ex + px * w * 0.9, ey + py * w * 0.9], [ex - px * w * 0.9, ey - py * w * 0.9],
+    const uw = back ? 0.7 : 0.55; const P = soften(hull([[S2[0] + px * w * uw, S2[1] + py * w * uw], [S2[0] - px * w * uw, S2[1] - py * w * uw], [ex + px * w * 0.85, ey + py * w * 0.85], [ex - px * w * 0.85, ey - py * w * 0.85],
       [cuff[0] + qx * w * 0.85, cuff[1] + qy * w * 0.85], [cuff[0] - qx * w * 0.85, cuff[1] - qy * w * 0.85], bag[0], bag[1]]), 5 * sc);
     if (fig.garment) fig.garment.sleeves.push({ k, poly: P, bag: bag.map((q) => [q[0], q[1]]), E: [ex, ey], W: [wx, wy], cuff, tied: tiedSl, drop });
-    // forearm: bare, pale, tapering to the wrist
-    rib(g, [cuff[0], cuff[1], wx, wy], (u) => (5 - u * 1.6) * sc, back ? mix(L.skin, '#000000', 0.18) : L.skin, A, 0); g.globalAlpha = A; g.strokeStyle = cc(INK); g.lineWidth = 1.1 * sc; g.stroke();
-    mo(P, back ? mix(L.slv, '#000000', 0.25) : mix(L.slv, PAPER, 0.2), { k: 40 + k, lw: 1.7 * sc, raw: 1, inside: (q) => {
+    const fore = () => { rib(g, [cuff[0], cuff[1], wx, wy], (u) => (5 - u * 1.6) * sc, back ? mix(L.skin, '#000000', 0.18) : L.skin, A, 0); g.globalAlpha = A; g.strokeStyle = cc(INK); g.lineWidth = 1.1 * sc; g.stroke(); };
+    if (back) fore();
+    // the near sleeve sits a clear value step lighter than the torso, so the arm reads against the chest
+    mo(P, back ? mix(L.slv, '#000000', 0.25) : mix(L.slv, PAPER, 0.34), { k: 40 + k, lw: 1.7 * sc, raw: 1, inside: (q) => {
       // folds only where the cloth works: a raised arm pulls a fold from shoulder to elbow; a hanging bag gathers under the elbow
       if (ey < S[1] - 4 * sc) sweep(q, [[S[0] - px * w * 0.3, S[1] - py * w * 0.3], [lerp(S[0], ex, 0.55) - px * w * 0.5, lerp(S[1], ey, 0.55) - py * w * 0.5], [ex - px * w * 0.2, ey - py * w * 0.2]], 1.3 * sc, PAPER, A * 0.45, seed + k);
       else sweep(q, [[ex, ey + 2 * sc], [lerp(ex, bag[0][0], 0.6), lerp(ey, bag[0][1], 0.6)], [lerp(cuff[0], bag[1][0], 0.7), lerp(cuff[1], bag[1][1], 0.7)]], 1.2 * sc, PAPER, A * 0.4, seed + k);
     } });
-    // the cuff opening: a darker lip where the forearm leaves the sleeve
+    // the cuff opening: a pale inner lining showing in the mouth of the sleeve, a dark lip, the forearm coming out of it
+    if (!back) { const c0 = [cuff[0] + qx * w * 0.75, cuff[1] + qy * w * 0.75], c1 = [cuff[0] - qx * w * 0.75, cuff[1] - qy * w * 0.75], cm = [cuff[0] - vx2 / vl * 2.4 * sc, cuff[1] - vy2 / vl * 2.4 * sc];
+      g.globalAlpha = A; g.fillStyle = cc(mix(L.slv, PAPER, 0.72)); g.beginPath(); g.moveTo(c0[0], c0[1]); g.quadraticCurveTo(cm[0], cm[1], c1[0], c1[1]); g.closePath(); g.fill(); }
     sweep(g, [[cuff[0] + qx * w * 0.8, cuff[1] + qy * w * 0.8], [cuff[0] - qx * w * 0.8, cuff[1] - qy * w * 0.8]], 1.4 * sc, INK, A * 0.85, seed + 44 + k, 2);
+    if (!back) fore();
+    // tied back for the fight: the tasuki cord binds the sleeve above the elbow
+    if (tiedSl && !back) { const t0 = [lerp(S2[0], ex, 0.7) + px * w * 0.7, lerp(S2[1], ey, 0.7) + py * w * 0.7], t1 = [lerp(S2[0], ex, 0.78) - px * w * 0.7, lerp(S2[1], ey, 0.78) - py * w * 0.7]; sweep(g, [t0, t1], 1.3 * sc, L.tasuki ? '#efe7d4' : '#8c7a58', A * 0.95, seed + 46 + k, 2); }
     // hand: a pale mass with a knuckle line
     const hxp = wx + (wx - ex) / vl * 2.5 * sc, hyp = wy + (wy - ey) / vl * 2.5 * sc;
     mo([[hxp - 3.6 * sc, hyp - 2.6 * sc], [hxp + 3.2 * sc, hyp - 3.2 * sc], [hxp + 4 * sc, hyp + 2 * sc], [hxp - 1 * sc, hyp + 3.6 * sc], [hxp - 4 * sc, hyp + 1 * sc]], L.skin, { k: 50 + k, tex: 0.15, lw: 1.3 * sc, strokes: 2 });
@@ -406,8 +441,9 @@ export function drawFigure(g, x, y, look, pose, fig, o) {
   if (!fig.hem) fig.hem = { f, c: [{}, {}] };
   if (fig.hem.f !== f) { for (const c of fig.hem.c) if (c.p) { c.p.reverse(); c.v.reverse(); } fig.hem.f = f; }
   const chains = HG.legs.map((l, i) => stepChain(fig.hem.c[i], l.T, l.cons, { dt: o.dt ?? 0.016, wind, reduced: o.reduced, minSpan: hl >= 0.8 ? 0.165 * Bh : 0, floor: l.floor, f, far: 90 * sc }).p);
-  const HK = hakamaPolys(HG, chains), legP = HK.legs.map((q) => q.hull), gus = HK.gusset, all = [gus, legP[0], legP[1]];
-  Object.assign(fig.garment, { full: !L.shins, look, groundY, Bh, hl, sc, bulk, f, kneel: !!pose.kneel, HG, legs: HK.legs.map((q, i) => ({ poly: q.hull, hem: chains[i].map((p) => [p[0], p[1]]), K: HG.legs[i].K, A: HG.legs[i].A, T: HG.legs[i].T, cons: HG.legs[i].cons, lift: HG.legs[i].lift, wrap: HG.legs[i].wrap, back: HG.legs[i].back })), gusset: gus });
+  const HK = hakamaPolys(HG, chains), legP = HK.legs.map((q) => q.hull), thP = HK.legs.map((q) => q.thigh), gus = HK.gusset, all = [gus, thP[0], legP[0], thP[1], legP[1]];
+  const backP = [thP[0], legP[0]], frontP = [thP[1], legP[1]], polyPath = (Ps) => { g.beginPath(); for (const P of Ps) { P.forEach((q, i) => (i ? g.lineTo(q[0], q[1]) : g.moveTo(q[0], q[1]))); g.closePath(); } };
+  Object.assign(fig.garment, { full: !L.shins, look, groundY, Bh, hl, sc, bulk, f, kneel: !!pose.kneel, HG, legs: HK.legs.map((q, i) => ({ poly: q.hull, thigh: q.thigh, hem: chains[i].map((p) => [p[0], p[1]]), K: HG.legs[i].K, J: HG.legs[i].J, A: HG.legs[i].A, T: HG.legs[i].T, cons: HG.legs[i].cons, lift: HG.legs[i].lift, wrap: HG.legs[i].wrap, back: HG.legs[i].back })), gusset: gus });
   if (L.shins) for (const l of legs) { const F = [l.fx, l.fy], d = Math.hypot(F[0] - l.kx, F[1] - l.ky) || 1, nx = -(F[1] - l.ky) / d, ny = (F[0] - l.kx) / d;
     mo([[l.kx + nx * 3.4 * sc, l.ky + ny * 3.4 * sc], [l.kx - nx * 3.4 * sc, l.ky - ny * 3.4 * sc], [F[0] - nx * 2.4 * sc, F[1] - 4 * sc - ny * 2.4 * sc], [F[0] + nx * 2.4 * sc, F[1] - 4 * sc + ny * 2.4 * sc]], l.back ? mix(L.skin, '#000000', 0.15) : L.skin, { k: 60 + l.back, tex: 0.1, lw: 1.3 * sc, strokes: 2 }); }
   // feet in tabi and straw sandals, below the hem
@@ -427,8 +463,8 @@ export function drawFigure(g, x, y, look, pose, fig, o) {
       g.save(); path(); g.clip();
       const pat = grain(g); if (pat) { if (pat.setTransform && typeof DOMMatrix !== 'undefined') pat.setTransform(new DOMMatrix([0.3, 0, 0, 0.3, x, y])); g.globalAlpha = A * 0.9; g.fillStyle = cc(pat); g.fill(); }
       // the back leg's cloth sits a shade deeper in the fold behind the front leg
-      g.globalAlpha = A * (0.22 + 0.2 * HG.stride); g.fillStyle = cc(INK); g.beginPath(); legP[0].forEach((q, i) => (i ? g.lineTo(q[0], q[1]) : g.moveTo(q[0], q[1]))); g.closePath(); g.fill();
-      g.globalAlpha = A; g.fillStyle = cc(L.hak); g.beginPath(); legP[1].forEach((q, i) => (i ? g.lineTo(q[0], q[1]) : g.moveTo(q[0], q[1]))); g.closePath(); g.fill();
+      g.globalAlpha = A * (0.22 + 0.2 * HG.split); g.fillStyle = cc(INK); polyPath(backP); g.fill();
+      g.globalAlpha = A; g.fillStyle = cc(L.hak); polyPath(frontP); g.fill();
       if (pat) { g.globalAlpha = A * 0.9; g.fillStyle = cc(pat); g.fill(); }
       // five long pleats, waist to hem, as tapered strokes (two on the back leg, three on the front)
       const Wb = HG.Wb, Wf = HG.Wf;
@@ -446,11 +482,17 @@ export function drawFigure(g, x, y, look, pose, fig, o) {
     // where it shows, from the knees down
     const edge = (P, others, pick, w, col, al, sd) => { const n = P.length, cov = P.map((q) => others.some((O) => insideConvex(O, q, 0.5)));
       let s0 = cov.indexOf(true); if (s0 < 0) s0 = 0; let run = [];
-      for (let i = 0; i <= n; i++) { const j = (s0 + i) % n, q = P[j], on = pick(q, cov[j]); if (on) run.push(q); if ((!on || i === n) && run.length > 2) { brushLine(g, run, w, col, A * al, sd + i, { t0: 0.12, outline: 1 }); run = []; } else if (!on) run = []; } };
-    edge(gus, [legP[0], legP[1]], (q, c) => !c, 2.1 * sc, INK, 0.95, seed + 71);
-    edge(legP[0], [gus, legP[1]], (q, c) => !c, 2.3 * sc, INK, 0.95, seed + 73);
-    edge(legP[1], [gus, legP[0]], (q, c) => !c, 2.3 * sc, INK, 0.95, seed + 75);
-    edge(legP[1], [legP[0]], (q, c) => c && q[1] > (HG.stride > 0.3 ? HG.Hf[1] + 4 * sc : kneeY + 3 * sc) && !insideConvex(gus, q, 0.5), (HG.stride > 0.3 ? 1.8 : 1.2) * sc, INK, 0.85, seed + 77);
+      // the silhouette is painted with the same light-weighted, broken contour as every mass
+      const keep = P.map((q, j) => pick(q, cov[j])), Q = P.filter((q, j) => keep[j]);
+      if (Q.length < 3) return; const S2 = []; for (let i = 0; i < n; i++) { const j = (s0 + i) % n; if (keep[j]) S2.push(P[j]); else if (S2.length && S2[S2.length - 1] !== null) S2.push(null); }
+      let part = []; const go = () => { if (part.length >= 3) contourOpen(g, part, P, w, col, A * al, sd); part = []; };
+      for (const q of S2) { if (q === null) go(); else part.push(q); } go(); };
+    // the outer silhouette of each leg is a brush contour; where the front leg crosses the back one, a lighter inner edge
+    all.forEach((P, i) => edge(P, all.filter((_, j) => j !== i), (q, c) => !c, (i ? 2.3 : 2.1) * sc, INK, 0.95, seed + 71 + i * 2));
+    for (const P of frontP) edge(P, backP, (q, c) => c && q[1] > (HG.split > 0.3 ? HG.Hf[1] + 4 * sc : kneeY + 3 * sc) && !insideConvex(gus, q, 0.5), (HG.split > 0.3 ? 1.5 : 1.2) * sc, INK, 0.6, seed + 77);
+    if (HG.split > 0.3) for (const P of backP) edge(P, [...frontP, gus], (q, c) => !c && q[1] > HG.Hb[1] + 2 * sc, 1.1 * sc, mix(L.hak, PAPER, 0.55), 0.6 * HG.split, seed + 79);
+    // folds radiating from the crotch into each thigh when the legs part
+    if (HG.split > 0.3) { const cr = [(HG.Hb[0] + HG.Hf[0]) / 2, (HG.Hb[1] + HG.Hf[1]) / 2 + 3 * sc]; for (const l of HG.legs) for (const t of [0.35, 0.6]) sweep(g, [cr, [lerp(cr[0], l.K[0], t), lerp(cr[1], l.K[1], t) + 1.5 * sc]], 1.0 * sc, INK, A * 0.35 * HG.split, seed + 90 + t * 10, 2); }
     // the stiff back board at the waist, and the side vent showing the kimono beneath
     const Wb = HG.Wb, up = [ax, ay];
     mo([[Wb[0] + f * 1 * sc, Wb[1]], [Wb[0] - f * 2.6 * sc + up[0] * 1 * sc, Wb[1] + up[1] * 1 * sc], [Wb[0] - f * 2.2 * sc + up[0] * 9 * sc, Wb[1] + up[1] * 9 * sc], [Wb[0] + f * 1.6 * sc + up[0] * 9 * sc, Wb[1] + up[1] * 9 * sc]], mix(L.hak, '#000000', 0.2), { k: 74, lw: 1.3 * sc, strokes: 2, tex: 0.4 });
@@ -474,6 +516,9 @@ export function drawFigure(g, x, y, look, pose, fig, o) {
   if (L.coatLong) mo([tp(1, -tw * 0.52), tp(0.5, -tw * 0.62), tp(0.1, -tw * 0.5), tp(0.25, tw * 0.1), tp(0.98, 0)], L.coat, { k: 96, lw: 2 * sc });
   if (L.tasuki) { sweep(g, [tp(0.95, -tw * 0.5), tp(0.25, tw * 0.45)], 1.2 * sc, '#efe7d4', A, seed + 172); sweep(g, [tp(0.95, tw * 0.4), tp(0.25, -tw * 0.5)], 1.2 * sc, '#efe7d4', A, seed + 173); }
   // the white under-collar: untouched paper in the dark mass
+  // running, the far hand holds the scabbards at the hip: a pale hand on the dark saya, past the body's outline
+  if (o.running && hand2 && pose.sheath && (L.weapon === 'katana' || L.weapon === 'odachi')) { const hx = hand2[0], hy = hand2[1];
+    mo([[hx - 3.4 * sc, hy - 2.4 * sc], [hx + 3 * sc, hy - 3 * sc], [hx + 3.8 * sc, hy + 1.8 * sc], [hx - 0.8 * sc, hy + 3.4 * sc], [hx - 3.8 * sc, hy + 1]], mix(L.skin, '#000000', 0.15), { k: 58, tex: 0.15, lw: 1.3 * sc, strokes: 2 }); }
   // neck: a column that sits down into the collar
   { const nb = tp(0.98, tw * 0.04), nt = [Hd[0] - f * 0.8 * sc, Hd[1] + 5.5 * sc]; const nx2 = nfx * 3.6 * sc, ny2 = nfy * 3.6 * sc;
     mo([[nb[0] - nx2, nb[1] - ny2], [nb[0] + nx2, nb[1] + ny2], [nt[0] + nx2 * 0.85, nt[1] + ny2 * 0.85], [nt[0] - nx2 * 0.9, nt[1] - ny2 * 0.9]], mix(L.skin, '#000000', 0.12), { k: 100, tex: 0.1, lw: 1.3 * sc, strokes: 2 }); }
@@ -498,8 +543,14 @@ export function drawFigure(g, x, y, look, pose, fig, o) {
   // ---- neck, head, hair, face ----
   const hc = Math.cos(ha), hs = Math.sin(ha) * f, hk = 1.0 * sc * (L.head || 1), HP = (u, v) => [Hd[0] + (u * hc - v * hs) * hk * f, Hd[1] + (u * hs * f + v * hc) * hk];
   // head: skull, jaw toward the front; face is a pale mass
-  const headP = [HP(-7, -1.5), HP(-5.6, -7.6), HP(0, -9.6), HP(5, -8), HP(7, -3.2), HP(7.6, 0.6), HP(6.9, 4.4), HP(4.4, 7.6), HP(0.8, 8.6), HP(-2.8, 7), HP(-6.4, 3)];
-  mo(headP, L.skin, { k: 102, tex: 0.12, lw: 1.6 * sc, strokes: 2 });
+  const headP = HEADUV.map(([u, v]) => HP(u, v));
+  if (fig.garment) { let w0 = 1e9, w1 = -1e9, v0 = 1e9, v1 = -1e9; for (const [u, v] of HEADUV) { w0 = Math.min(w0, u); w1 = Math.max(w1, u); v0 = Math.min(v0, v); v1 = Math.max(v1, v); } fig.garment.head = { aspect: (v1 - v0) / (w1 - w0), brim: HATBRIM[L.hat] ?? null, top: v0, chin: v1 }; }
+  mo(headP, mix(PAPER, L.skin, 0.6), { k: 102, tex: 0.05, ink: null });
+  // one tapering stroke for the back of the skull and the cheek on the shadow side; bald heads show the crown too
+  sweep(g, [HP(-6.6, -2.5), HP(-7, 1.5), HP(-5.6, 5), HP(-2.4, 7.6)], 1.3 * sc, INK, A * 0.9, seed + 103);
+  if (L.hat === 'bald') { sweep(g, [HP(-7, -1), HP(-6, -7), HP(-1, -9.6), HP(3.5, -8.6)], 1.0 * sc, INK, A * 0.75, seed + 104);
+    g.save(); g.beginPath(); closedCurve(headP, 2).forEach((q, i) => (i ? g.lineTo(q[0], q[1]) : g.moveTo(q[0], q[1]))); g.closePath(); g.clip(); g.globalAlpha = A * 0.16; g.fillStyle = cc(INK);
+    for (let i = 0; i < 70; i++) { const q = HP(-7 + hash(i, 11) * 13, -9.5 + hash(i, 13) * 10); g.fillRect(q[0], q[1], 0.45 * sc, 0.45 * sc); } g.restore(); }
   if (L.hat !== 'bald' && L.hat !== 'kasa' && L.hat !== 'jingasa' && L.hat !== 'hood') {
     // hair as a solid black mass over the back and top of the skull, plus sweeping strands
     const hcol = L.hat === 'white' ? '#e4ddcf' : '#141210';
@@ -507,8 +558,8 @@ export function drawFigure(g, x, y, look, pose, fig, o) {
     if (L.hat === 'chonmage') { mo([HP(-7.2, 3.5), HP(-7.4, -2.5), HP(-4.5, -4), HP(-3, 1), HP(-4, 4.5)], '#141210', { k: 105, tex: 0.3, lw: 1.3 * sc, strokes: 2 }); sweep(g, [HP(-4, -8.6), HP(-0.5, -9.6), HP(3, -9.2)], 2.6 * sc, '#141210', A, seed + 106); }
     const knot = HP(-3, -10.5);
     if (L.hat === 'tail') sweep(g, [knot, HP(-9, -8), [knot[0] - f * 14 * sc + cloth * 1.4, knot[1] + 10 * sc], [knot[0] - f * 22 * sc + cloth * 2.2, knot[1] + 22 * sc]], 4.2 * sc, '#141210', A, seed + 105);
-    else if (L.hat === 'band') { sweep(g, [knot, HP(-4, -13), HP(1, -14.5)], 3.8 * sc, '#141210', A, seed + 106); sweep(g, [knot, HP(-7, -13), HP(-9, -15.5)], 2.6 * sc, '#141210', A, seed + 107); }
-    else sweep(g, [knot, HP(-1.5, -12.5), HP(1.5, -12)], 3.4 * sc, hcol, A, seed + 108);
+    else if (L.hat === 'band') { sweep(g, [knot, HP(-4.5, -13.2), HP(-7.5, -14.6)], 3.6 * sc, '#141210', A, seed + 106); sweep(g, [knot, HP(-6.5, -12.4), HP(-9.5, -12.8)], 2.4 * sc, '#141210', A, seed + 107); }
+    else sweep(g, [knot, HP(-3.5, -13), HP(-6.5, -13.6)], 3.2 * sc, hcol, A, seed + 108);
   }
   if (L.hat === 'band' || L.hat === 'bald' && L.acc && L.shield && !L.lantern) {
     if (L.hat === 'band') { const b0 = HP(-6.8, -3), b1 = HP(6.4, -3.6); rib(g, [b0[0], b0[1], b1[0], b1[1]], () => 3.2 * sc, L.acc, A, 0); sweep(g, [b0, [b0[0] - f * 8 * sc + cloth * 1.2, b0[1] + 2 * sc], [b0[0] - f * 15 * sc + cloth * 2, b0[1] + 5 * sc]], 2.2 * sc, L.acc, A, seed + 109); }
@@ -534,17 +585,27 @@ export function drawFigure(g, x, y, look, pose, fig, o) {
     if (L === LOOKS.ronin) { g.globalAlpha = A * 0.32; for (let i = 0; i < 16; i++) { const q = HP(-0.5 + (i % 4) * 1.6 + hash(i, 3) * 0.6, 4.6 + Math.floor(i / 4) * 1.0 + hash(i, 5) * 0.5); g.fillRect(q[0], q[1], 0.5 * sc, 0.5 * sc); } }
     const ns = HP(5.6, 1.6), ns2 = HP(7.4, 3.4), ns3 = HP(5.8, 3.6); g.globalAlpha = A * 0.25; g.beginPath(); g.moveTo(ns[0], ns[1]); g.lineTo(ns2[0], ns2[1]); g.lineTo(ns3[0], ns3[1]); g.closePath(); g.fill();
     g.restore(); }
-  sweep(g, [HP(2.2, -2.4), HP(4.6, -2.7), HP(6.8, -2.5)], 1.2 * sc, INK, A * 0.95, seed + 174, 2); // the brow, straight
+  sweep(g, [HP(2.3, -2.0), HP(4.8, -2.7), HP(6.9, -3.1)], (L.hat === 'bald' ? 2.0 : 1.2) * sc, INK, A * 0.95, seed + 174, 2); // the brow, one angled stroke
   sweep(g, [HP(6.6, -1.6), HP(8.1, 2.6), HP(6.5, 3.4)], 1.15 * sc, INK, A * 0.9, seed + 116, 2); // the nose, an angled line
-  if (o.expr === 'hurt') sweep(g, [HP(3.7, 5.6), HP(4.6, 5.2), HP(5.4, 5.7), HP(6.2, 5.2)], 1.0 * sc, INK, A * 0.85, seed + 118, 2); // gritted
-  else sweep(g, [HP(3.9, 5.7), HP(6.1, 5.4)], 1.0 * sc, INK, A * 0.8, seed + 118, 2); // a firm mouth
+  sweep(g, [HP(3.9, 5.7), HP(6.1, o.expr === 'hurt' ? 5.9 : 5.4)], (o.expr === 'hurt' ? 1.3 : 1.0) * sc, INK, A * 0.8, seed + 118, 2); // the mouth: one short stroke
   sweep(g, [HP(-3.4, 3.2), HP(-0.6, 7.4), HP(3.6, 8.4)], 1.2 * sc, INK, A * 0.75, seed + 117, 2); // the jaw
   sweep(g, [HP(-1.6, -0.6), HP(-0.4, 0.4), HP(-0.8, 2.4), HP(-2, 2.8)], 1.0 * sc, INK, A * 0.7, seed + 122, 2); // the ear
-  const ex = o.expr || 'calm', eye = HP(4.4, -0.6);
-  if (ex === 'wide') { sweep(g, [[eye[0] - f * 1.6 * sc, eye[1] - 1.2 * sc], [eye[0] + f * 1.8 * sc, eye[1] - 1.5 * sc]], 1.2 * sc, INK, A, seed + 111); dr(g, eye[0] + f * 0.6 * sc, eye[1] + 0.2 * sc, 0.9 * sc, INK, A); }
-  else if (ex === 'hurt') { sweep(g, [[eye[0] - f * 2 * sc, eye[1] - 1.4 * sc], [eye[0] + f * 0.6 * sc, eye[1]], [eye[0] - f * 2 * sc, eye[1] + 1.2 * sc]], 1.2 * sc, INK, A, seed + 112); const m = HP(3.4, 5); dr(g, m[0], m[1], 1.1 * sc, INK, A); }
-  else if (ex === 'win') { sweep(g, [[eye[0] - f * 2 * sc, eye[1] - 0.2 * sc], [eye[0], eye[1] + 0.8 * sc], [eye[0] + f * 1.6 * sc, eye[1] - 0.1 * sc]], 1.1 * sc, INK, A, seed + 113); const m = HP(3.3, 5.2); sweep(g, [[m[0] - f * 1.4 * sc, m[1]], [m[0] + f * 1.2 * sc, m[1] - 0.4 * sc]], 0.9 * sc, INK, A * 0.8, seed + 114); }
-  else sweep(g, [[eye[0] - f * 1.8 * sc, eye[1] + 0.2 * sc], [eye[0] + f * 1.8 * sc, eye[1] - 0.6 * sc]], 1.3 * sc, INK, A, seed + 115);
+  // the eyes: an almond suggested by an upper lid heavier at the outer corner, a dark iris dab touching the lid and
+  // looking forward, a faint lower lid on the near eye; the far eye in 3/4 view a shorter stroke. Narrowed in a fight,
+  // wide with white showing when struck, closed lines at peace.
+  const ex = o.expr || 'calm', fierce = ex === 'calm' && !pose.sheath, wide = ex === 'wide' || ex === 'hurt';
+  const lid = (u0, u1, v, arc, w0, w1, al, sd) => { const a2 = HP(u0, v), m = HP((u0 + u1) / 2, v - arc), b2 = HP(u1, v + arc * 0.3); rib(g, [a2[0], a2[1], m[0], m[1], b2[0], b2[1]], (u) => (w0 + (w1 - w0) * u) * sc * Math.min(1, (1 - u) * 6 + 0.35), INK, A * al, 0); };
+  if (ex === 'win') { lid(5.9, 2.9, -0.4, -0.5, 0.35, 1.1, 0.9, 115); lid(7.9, 6.6, -0.6, -0.3, 0.3, 0.7, 0.7, 119); }
+  else {
+    const arc = wide ? 1.3 : fierce ? 0.25 : 0.7, v = fierce ? -0.4 : -0.7;
+    if (wide) { const w0 = HP(5.9, v), w1 = HP(4.4, v - arc), w2 = HP(2.9, v), w3 = HP(4.4, v + 1.2); g.globalAlpha = A; g.fillStyle = cc(PAPER); g.beginPath(); g.moveTo(w0[0], w0[1]); g.quadraticCurveTo(w1[0], w1[1], w2[0], w2[1]); g.quadraticCurveTo(w3[0], w3[1], w0[0], w0[1]); g.fill(); }
+    lid(5.9, 2.9, v, arc, 0.4, fierce ? 1.35 : 1.15, 0.95, 111);
+    // the iris: a dark dab under the lid, toward the front, touching it (smaller and free of the lid when wide)
+    const ir = HP(wide ? 4.7 : 5.0, v + (wide ? 0.2 : fierce ? 0.15 : 0.05)), r = (wide ? 0.85 : 1.05) * sc; dr(g, ir[0], ir[1], r, INK, A);
+    if (!fierce) { const l0 = HP(3.3, v + (wide ? 1.3 : 0.9)), l1 = HP(5.5, v + (wide ? 1.2 : 0.8)); rib(g, [l0[0], l0[1], l1[0], l1[1]], (u) => 0.45 * sc * Math.sin(Math.PI * u), INK, A * 0.4, 0); }
+    // the far eye, foreshortened behind the bridge of the nose
+    lid(7.6, 6.5, v - 0.2, arc * 0.6, 0.3, 0.8, 0.8, 113);
+  }
   if (!o.noHat) drawHat(g, L, HP, Hd, f, sc, A, cloth, t, seed, bn, amp, mo, o);
   // ---- front: shield, weapon, front arm ----
   if (L.shield) {
@@ -563,7 +624,7 @@ export function drawFigure(g, x, y, look, pose, fig, o) {
     drawWeapon(g, L, G, dx, dy, f, sc, A, pose, o, seed, H, cloth);
   }
   const pump = o.walkPh != null ? -Math.sin(o.walkPh) : 0;
-  if (!(L.shield)) arm(Sf, pose.sheath && L.weapon !== 'spear' && L.weapon !== 'bow' ? H[0] + f * (9 + pump * (o.running ? 14 : 6)) * sc : G[0], pose.sheath && L.weapon !== 'spear' && L.weapon !== 'bow' ? H[1] - (4 + (o.running ? 8 + pump * 6 : 0)) * sc : G[1], 0, 2);
+  if (!(L.shield)) arm(Sf, pose.sheath && L.weapon !== 'spear' && L.weapon !== 'bow' ? H[0] + f * (10 + pump * (o.running ? 19 : 6)) * sc : G[0], pose.sheath && L.weapon !== 'spear' && L.weapon !== 'bow' ? H[1] - (4 + (o.running ? 8 + pump * 6 : 0)) * sc : G[1], 0, 2);
   else if (L.weapon === 'club') arm(Sb, G[0], G[1], 0, 4);
   g.restore(); g.globalAlpha = 1;
   let top = 1e9, bot = -1e9; for (const q of headP) { top = Math.min(top, q[1]); bot = Math.max(bot, q[1]); }
@@ -571,6 +632,9 @@ export function drawFigure(g, x, y, look, pose, fig, o) {
   return { G, dx, dy, N, H, Hd, hand2, headTop: top, chin: bot, sc };
 }
 const T4 = [0, 0, 0, 0], T4b = [0, 0, 0, 0];
+// the skull in head units (u forward, v down), and where each hat's brim sits on it (v)
+const HEADUV = [[-7, -1.5], [-5.6, -7.6], [0, -9.6], [5, -8], [7, -3.2], [7.6, 0.6], [6.9, 4.4], [4.4, 7.6], [0.8, 8.6], [-2.8, 7], [-6.4, 3]];
+const HATBRIM = { kasa: -3.2, jingasa: -3.2, hood: -3.5 };
 // the body's measures, in units of sc: leg bones, torso, neck; STAND_H is the standing height to the top of the skull
 export const LEG = 31, TORSO = 34, NECK = 13, STAND_H = 60.5 + TORSO + NECK + 9.6;
 
@@ -578,7 +642,7 @@ function drawHat(g, L, HP, Hd, f, sc, A, cloth, t, seed, bn, amp, mo, o) {
   if (L.hat === 'kasa') {
     // a wide straw hat: one mass, dark underside, straw strokes from the crown, and a cord that swings late
     // seated on the skull: the crown comes down to the brow, the brim about 2.2 head-widths, shallow, drooping at the edges
-    const k = L.hatW || 1, P = [HP(-16.5 * k, -0.4), HP(-12 * k, -3.6), HP(-6.5, -9.6), HP(-2, -12), HP(3, -12), HP(7.5, -9.4), HP(13 * k, -4.2), HP(17.5 * k, -0.8), HP(9, -1.6), HP(-9, -1.4)];
+    const k = L.hatW || 1, lf = o.running ? 3.2 : 0, P = [HP(-16.5 * k, -0.4 + lf * 0.4), HP(-12 * k, -3.6), HP(-6.5, -9.6), HP(-2, -12), HP(3, -12), HP(7.5, -9.4), HP(13 * k, -4.2 - lf * 0.5), HP(17.5 * k, -0.8 - lf), HP(9, -3.3), HP(-9, -3.1)];
     mo(P, o.hatCol || L.hatCol, { k: 130, lw: 2.3 * sc, strokes: 3, inside: (q) => {
       for (let i = -4; i <= 4; i++) sweep(q, [HP(i * 1.1 + 0.5, -11.5), HP(i * 3.8 * k + 0.5, -1.2)], 0.9 * sc, i % 2 ? PAPER : INK, A * 0.32, seed + 131 + i, 2);
       rib(q, [HP(-15 * k, -0.6)[0], HP(-15 * k, -0.6)[1], HP(0, -1.2)[0], HP(0, -1.2)[1], HP(16 * k, -1)[0], HP(16 * k, -1)[1]], () => 2.4 * sc, INK, A * 0.5, 0);
@@ -586,7 +650,7 @@ function drawHat(g, L, HP, Hd, f, sc, A, cloth, t, seed, bn, amp, mo, o) {
     const c0 = HP(-5.5, -1.2), c1 = HP(-1, 8.6), c2 = HP(3.5, 9.2); sweep(g, [c0, [c1[0] + cloth * 0.15, c1[1]], c2], 0.7 * sc, INK, A * 0.8, seed + 140); // the chin cord, brim to under the jaw
   } else if (L.hat === 'jingasa') {
     const k = L.hatW || 1;
-    mo([HP(-15 * k, -1), HP(-11 * k, -6.5), HP(-3, -9.5), HP(3, -9.5), HP(11 * k, -6.5), HP(15 * k, -1.5), HP(6, 0.5), HP(-6, 0.5)], L.acc, { k: 132, lw: 2.1 * sc, inside: (q) => sweep(q, [HP(-10 * k, -2.5), HP(0, -9), HP(10 * k, -2.5)], 1 * sc, PAPER, A * 0.35, seed + 133) });
+    mo([HP(-15 * k, -1.4), HP(-10 * k, -6.4), HP(-2.5, -12.8), HP(2.5, -12.8), HP(10 * k, -6.4), HP(15.5 * k, -1.8), HP(7, -3.3), HP(-7, -3.1)], L.acc, { k: 132, lw: 2.1 * sc, inside: (q) => sweep(q, [HP(-10 * k, -2.5), HP(0, -9), HP(10 * k, -2.5)], 1 * sc, PAPER, A * 0.35, seed + 133) });
   } else if (L.hat === 'hood') {
     mo([HP(-8.5, 7), HP(-9, -5), HP(-3, -10.5), HP(5, -9), HP(7.5, -3), HP(4, -3.5), HP(1, 1), HP(-1, 8)], L.acc, { k: 134, lw: 1.8 * sc });
   }
@@ -631,10 +695,10 @@ function drawWeapon(g, L, G, dx, dy, f, sc, A, pose, o, seed, H, cloth) {
     o._tip = e;
   } else if (L.weapon === 'bow') {
     const Lb = 150 * sc, up = [Math.sin(-0.08) * f, -Math.cos(0.08)], top = [G[0] + up[0] * Lb * 0.66, G[1] + up[1] * Lb * 0.66], bot = [G[0] - up[0] * Lb * 0.34, G[1] - up[1] * Lb * 0.34];
-    const bend = 9 * sc * (1 + (o.draw || 0) * 0.5);
+    const lz = o.loosed || 0, bend = 9 * sc * (1 + (o.draw || 0) * 0.5) * (1 - 1.6 * lz); // after the loose the bow turns in the hand
     // asymmetric: the long upper limb bows out more than the short lower one
     sweep(g, [bot, [G[0] + f * bend * 0.7, lerp(G[1], bot[1], 0.5)], [G[0] + f * 2 * sc, G[1]], [G[0] + f * bend, lerp(G[1], top[1], 0.45)], top], 3.2 * sc, INK, A, seed + 155, 6);
-    const ear = [H[0] - f * 2 * sc, G[1] - 6 * sc], nock = (o.draw || 0) > 0.1 ? [lerp(G[0], ear[0], o.draw), lerp(G[1], ear[1], o.draw)] : [G[0] - f * 2 * sc, G[1]];
+    const ear = o._ear || [H[0] - f * 2 * sc, G[1] - 6 * sc], dd = o.draw || 0, pull = clamp((dd - 0.35) / 0.65, 0, 1), nock = dd > 0.1 ? [lerp(G[0] - f * 2 * sc, ear[0], pull), lerp(G[1], ear[1], pull)] : [G[0] - f * 2 * sc + f * 10 * sc * lz, G[1]];
     g.globalAlpha = A * 0.9; g.strokeStyle = cc(INK); g.lineWidth = 0.7 * sc; g.beginPath(); g.moveTo(top[0], top[1]); g.lineTo(nock[0], nock[1]); g.lineTo(bot[0], bot[1]); g.stroke();
     if (o.draw > 0.1) sweep(g, [nock, [G[0] + f * 16 * sc, G[1] - 1 * sc]], 1.4 * sc, INK, A, seed + 156, 2);
     o._tip = [G[0] + f * 14 * sc, G[1]]; o._nock = nock;
@@ -691,7 +755,7 @@ export function drawFoxFig(g, x, y, f, run, t, seed, n, reduced) {
 // A cycle is two steps. The stance foot moves back exactly as fast as the ground passes (no sliding): the phase comes
 // from distance travelled, never from time. Swing feet travel on an eased arc with the knee lifted.
 const GAITS = {
-  ronin: { ws: 38, rs: 84, wd: 0.6, rd: 0.34, wl: 7, rl: 13, wb: 1.8, rb: 6, wn: 0.06, rn: 0.32, hy: 2, low: 6 },
+  ronin: { ws: 38, rs: 50, wd: 0.6, rd: 0.28, wl: 7, rl: 20, wb: 1.8, rb: 5, wn: 0.06, rn: 0.5, hy: 2, low: 6, kick: 15, reach: 12 },
   bandit: { ws: 30, rs: 40, wd: 0.58, rd: 0.4, wl: 8, rl: 12, wb: 3, rb: 5, wn: 0.22, rn: 0.32, hy: 5 },
   spear: { ws: 32, rs: 40, wd: 0.6, rd: 0.42, wl: 7, rl: 9, wb: 0.6, rb: 1.2, wn: 0.06, rn: 0.1, hy: 1 },
   brute: { ws: 30, rs: 36, wd: 0.66, rd: 0.5, wl: 10, rl: 12, wb: 4, rb: 6, wn: 0.1, rn: 0.14, hy: 2, stomp: 1 },
@@ -701,12 +765,16 @@ export function walkLegs(pose, dist, speed, st, look = 'ronin', acc = 0) {
   if (speed < 8 || !(st === 'move' || st === 'enter' || st === 'ready' || st === 'approach' || st === 'idle' || st === 'wind')) return -1;
   const G = GAITS[look] || GAITS.ronin, L = LOOKS[look] || LOOKS.ronin, sc = L.sc, run = speed > 200;
   const step = run ? G.rs : G.ws, C = step * 2, u = ((dist / C) % 1 + 1) % 1, d = run ? G.rd : G.wd, lift = run ? G.rl : G.wl, bob = run ? G.rb : G.wb;
+  // a sprint: after toe-off the heel kicks high behind, then the leg reaches long in front before it lands
+  const kick = run ? G.kick || 0 : 0, reach = run ? G.reach || 0 : 0;
   const foot = (q) => { q = ((q % 1) + 1) % 1; if (q < d) return [(d * C / 2 - q * C) / sc, 0];
-    const k = (q - d) / (1 - d), e = k * k * (3 - 2 * k); return [lerp(-d * C / 2, d * C / 2, e) / sc, -lift * Math.sin(Math.PI * k) / sc * (k < 0.5 ? 1.15 : 0.85)]; };
+    const k = (q - d) / (1 - d), e = k * k * (3 - 2 * k), sk = Math.sin(Math.PI * k);
+    return [(lerp(-d * C / 2, d * C / 2, e) - kick * sk * (1 - k) * 2 + reach * sk * k * 2) / sc, -lift * sk / sc * (k < 0.5 ? 1.25 : 0.7)]; };
   pose.ff = foot(u); pose.fb = foot(u + 0.5); pose.gait = 1; // a walking or running body stays tall
+  if (run && G.kick) { const back = 9; pose.ff[0] -= back; pose.fb[0] -= back; pose.hx = (pose.hx || 0) + 2; } // the sprint leans from the ankles: the feet drive from behind the hips
   // the hips drop just after each contact and rise in the passing and flight poses
   pose.hy += G.hy + bob * Math.cos(2 * Math.PI * (2 * u - 0.16)) - (run ? 3 : 0) + (run ? G.low || 0 : 0); // a swordsman runs low
   pose.lean += (run ? G.rn : G.wn) + clamp(acc / 2600, -0.22, 0.16);
-  pose.head = (pose.head || 0) - (run ? 0.1 : 0); // head steady and low under the hat
+  pose.head = (pose.head || 0) + (run ? -0.12 : 0); // the head stays up, eyes ahead, under the tipped brim
   return u;
 }

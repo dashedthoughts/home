@@ -1,6 +1,6 @@
 // KAZE simulation: pure, deterministic, fixed 60 Hz. No DOM, no Math.random, no wall clock.
 // State is a plain object. step(s, input) advances one tick and pushes render/audio cues into s.cues.
-import { DIFF, ATK, FOES, BOSSES, CHAPTERS, groundH, HAIKU } from './data.js';
+import { DIFF, ATK, FOES, BOSSES, CHAPTERS, groundH, HAIKU, COMBAT } from './data.js';
 export const DT = 1 / 60;
 const KEYS = ['left', 'right', 'up', 'down', 'run', 'dodge', 'slash', 'heavy', 'parry', 'focus', 'interact', 'wind', 'heal', 'confirm', 'cancel'];
 export const blankInput = () => { const o = { choose: 0 }; for (const k of KEYS) o[k] = false; return o; };
@@ -24,10 +24,10 @@ export function createSim(o = {}) {
     ch: 0, len: 0, ev: [], foes: [], arrows: [], arena: null, cp: 0, cpX: 120, so: null, hk: null, fox: null,
     wind: { w: 0, gust: 0, gt: 0, cd: 0, tx: 0, dir: 1 }, card: null, hint: null, hintsSeen: {}, near: null,
     resMax: Math.min(5, Math.max(3, o.resMax ?? 3)), charms: (o.charms || []).slice(), hidden: (o.hidden || []).slice(), haikus: [],
-    nid: 1, token: 0, tokenCD: 0, slow: 0, cues: [], prev: blankInput(), stats: { tele: {}, teleMin: 9, teleViol: 0, kills: 0, deaths: 0, parries: 0, standoffWins: 0, hits: 0 },
+    nid: 1, token: 0, tokenCD: 0, slow: 0, cues: [], prev: blankInput(), stats: { tele: {}, teleMin: 9, teleViol: 0, kills: 0, deaths: 0, parries: 0, standoffWins: 0, hits: 0, blocks: 0, blindBlocks: 0, guardBreaks: 0, surprise: 0, nothing: 0 },
     done: false, endT: 0, lethalUnlocked: false, idle: 0,
   };
-  s.p = { x: 120, y: 0, vx: 0, vy: 0, face: 1, hp: 4, hpMax: 4, res: 1, resF: 0, st: 'idle', stt: 0, combo: 0, buf: null, bufT: 0, parryT: 9, parryOk: false, lastRel: -9, ifr: 0, hitDone: false, ox: 120, oy: 0, drawn: false };
+  s.p = { x: 120, y: 0, vx: 0, vy: 0, face: 1, hp: 4, hpMax: 4, res: 1, resF: 0, st: 'idle', stt: 0, combo: 0, buf: null, bufT: 0, parryT: 9, parryOk: false, lastRel: -9, ifr: 0, hitDone: false, ox: 120, oy: 0, drawn: false, recoil: 0, cid: 0 };
   loadChapter(s, o.chapter ?? 0, o.checkpoint ?? 0);
   if (o.prologue) { s.prologue = true; s.phase = 'narr'; s.card = null; }
   return s;
@@ -51,7 +51,7 @@ export function loadChapter(s, ch, cp = 0) {
   placePlayer(s, x); s.phase = 'play'; s.pt = 0; s.card = { ch, t: cp === 0 ? 0 : 3.2 };
   s.wind.w = C.wind; s.wind.gust = 0;
 }
-function placePlayer(s, x) { const p = s.p; p.x = p.ox = x; p.y = p.oy = 0; p.vx = p.vy = 0; p.st = 'idle'; p.stt = 0; p.face = 1; p.ifr = 0; p.buf = null; }
+function placePlayer(s, x) { const p = s.p; p.x = p.ox = x; p.y = p.oy = 0; p.vx = p.vy = 0; p.st = 'idle'; p.stt = 0; p.face = 1; p.ifr = 0; p.buf = null; p.recoil = 0; }
 
 // ---------- input helpers ----------
 const pressed = (s, I, k) => I[k] && !s.prev[k];
@@ -163,7 +163,10 @@ function makeFoe(s, type, x, boss) {
   const B = boss ? BOSSES[boss] : null, F = B ? null : FOES[type];
   const hpM = B ? B.hp : F.hp;
   const f = { id: s.nid++, type: B ? B.look : type, boss: boss || null, x, ox: x, y: 0, oy: 0, face: -1, hp: hpM, hpMax: hpM, st: 'enter', stt: 0, atk: null, hitDone: false,
-    readyT: 0.6 + rnd(s) * 0.6, phase: 1, shield: B ? 0 : (F.shield ? 1 : 0), w: B ? B.w : F.w, feinting: false, blockCD: 0, tx: x, vx: 0, retreat: 0, fearT: 0 };
+    readyT: 0.6 + rnd(s) * 0.6, phase: 1, shield: B ? 0 : (F.shield ? 1 : 0), w: B ? B.w : F.w, feinting: false, tx: x, vx: 0, retreat: 0, fearT: 0,
+    // guard: 0..1, how far his guard is raised (only a fully raised guard blocks); gm: his guard meter (blocked hits so far);
+    // engaged: he has fought (swung, blocked or been cut); until then a clean cut is a surprise. kb: knockback velocity.
+    guard: 0, gm: 0, gmT: 9, engaged: false, turnT: 0, kb: 0, lastCid: -1 };
   return f;
 }
 function startFight(s, e) {
@@ -189,12 +192,14 @@ function canAct(p) { return p.st === 'idle' || p.st === 'move' || p.st === 'air'
 
 function updatePlayer(s, I) {
   const p = s.p, d = D(s);
-  p.stt += DT; if (p.ifr > 0) p.ifr -= DT; p.parryT += DT;
+  p.stt += DT; if (p.ifr > 0) p.ifr -= DT; p.parryT += DT; if (p.recoil > 0) p.recoil -= DT;
   wantAction(s, I);
+  // after a block the ronin is thrown back: no new cut until the recoil passes (a buffered cut waits for it)
+  if (p.recoil > 0 && (p.buf === 'slash' || p.buf === 'heavy')) p.bufT = Math.max(p.bufT, DT * 2);
   const dir = (I.right ? 1 : 0) - (I.left ? 1 : 0);
   const inFight = !!s.arena; p.drawn = inFight || s.phase === 'standoff';
   // resolve counter: heavy while guarding, spends a pip.
-  if (p.st === 'guard' && p.buf === 'heavy' && p.res >= 1) { p.res -= 1; p.buf = null; setP(p, 'counter'); p.ifr = 0.5; cue(s, 'counter', { x: p.x }); }
+  if (p.st === 'guard' && p.buf === 'heavy' && p.res >= 1) { p.res -= 1; p.buf = null; p.cid++; setP(p, 'counter'); p.ifr = 0.5; cue(s, 'counter', { x: p.x }); }
   switch (p.st) {
     case 'idle': case 'move': case 'air': {
       const sp = I.run ? P.run : P.walk;
@@ -204,8 +209,8 @@ function updatePlayer(s, I) {
       if (p.buf === 'dodge') { p.buf = null; setP(p, 'dodge'); p.dodgeDir = dir || p.face; p.ifr = Math.max(p.ifr, P.dodgeIfr); cue(s, 'dodge', { x: p.x }); break; }
       if (p.buf === 'parry' || (I.parry && p.y <= 0 && p.st !== 'air' && p.buf === null && !s.prev.parry)) { p.buf = null; startGuard(s); break; }
       if (I.parry && p.y <= 0 && s.prev.parry && p.stt > 0.05) { startGuard(s, true); break; }
-      if (p.buf === 'heavy') { p.buf = null; setP(p, 'heavy'); break; }
-      if (p.buf === 'slash') { p.buf = null; p.combo = 0; setP(p, 'slash'); break; }
+      if (p.buf === 'heavy' && p.recoil <= 0) { p.buf = null; p.cid++; setP(p, 'heavy'); break; }
+      if (p.buf === 'slash' && p.recoil <= 0) { p.buf = null; p.combo = 0; p.cid++; setP(p, 'slash'); break; }
       if (p.buf === 'up' && p.y <= 0) { p.buf = null; p.vy = P.jumpV; p.y = 0.01; p.st = 'air'; p.stt = 0; cue(s, 'jump', { x: p.x }); }
       if (p.buf === 'heal' && p.res >= 1 && p.hp < p.hpMax && p.y <= 0) { p.buf = null; p.res -= 1; setP(p, 'heal'); break; }
       if (p.buf === 'interact' && s.near && p.y <= 0) { p.buf = null; interact(s); break; }
@@ -227,7 +232,7 @@ function updatePlayer(s, I) {
       p.vx += ((p.stt < A.wind + A.act ? p.face * 70 : 0) - p.vx) * Math.min(1, DT * 12);
       if (!p.hitDone && p.stt >= A.wind) { p.hitDone = true; playerHit(s, 'slash', A.reach, p.combo); }
       if (p.stt >= A.wind + A.act) {
-        if (p.buf === 'slash' && p.combo < 2) { p.buf = null; p.combo++; setP(p, 'slash', true); break; }
+        if (p.buf === 'slash' && p.combo < 2 && p.recoil <= 0) { p.buf = null; p.combo++; setP(p, 'slash', true); break; }
         if (p.buf === 'dodge' || p.buf === 'parry') { setP(p, 'idle'); break; }
       }
       if (p.stt >= A.wind + A.act + A.rec) setP(p, 'idle');
@@ -285,39 +290,88 @@ function playerHit(s, kind, reach, combo) {
   const p = s.p; let any = false;
   cue(s, 'swing', { kind, combo, x: p.x, face: p.face });
   for (const f of s.foes) {
-    if (f.st === 'dead' || f.st === 'enter' || f.st === 'shift') continue;
+    if (f.st === 'dead') continue; // a foe still walking in, or a boss between phases, can be cut like anyone else
     const dx = (f.x - p.x) * p.face; if (dx < -12 || dx > reach + f.w / 2) continue;
     any = true; hurtFoe(s, f, kind);
   }
+  if (!any && s.foes.some((f) => f.st !== 'dead' && Math.abs(f.x - p.x) < reach + 40)) s.stats.nothing++; // a near miss: nobody in the blade's arc
   return any;
 }
 
+// ---------- combat rules: what blocks, what lands ----------
+// No hidden rolls: whether a cut is blocked depends only on what the player can see (his stance, which way he faces, his
+// guard meter), so the same situation always gives the same result.
+export function foeGuardMax(f) {
+  const F = foeDef(f); if (!F.guard) return 0;
+  return F.shield || F.shieldP2 ? (f.shield ? F.guard : 0) : F.guard; // a shield-bearer's guard is the shield
+}
+// He can block only from a raised guard: squared up and standing (not walking in), facing the ronin, guard fully up.
+export function foeGuarded(s, f) {
+  return foeGuardMax(f) > 0 && f.guard >= 1 && (f.st === 'ready' || f.st === 'block') && (s.p.x - f.x) * f.face > 0;
+}
+// committed: deep in his own windup or mid-strike; he trades through a quick cut instead of flinching
+function committed(f) { return f.st === 'act' || (f.st === 'wind' && (f.boss || f.stt > 0.12)); }
+
 function hurtFoe(s, f, kind) {
-  const p = s.p;
-  const facing = (p.x - f.x) * f.face > 0;
+  const p = s.p, F = foeDef(f), C = COMBAT, away = f.x >= p.x ? 1 : -1, mid = (f.x + p.x) / 2;
+  const blade = kind === 'slash' || kind === 'heavy' || kind === 'counter';
+  // 1. an opened foe (parried, or his guard broken): the riposte. Regular foes die; a boss takes a deep cut.
   if (f.st === 'opened' && kind !== 'arrow') {
-    const dmg = f.boss ? 3 : 99; f.hp -= dmg; cue(s, 'riposte', { x: f.x, id: f.id }); s.slow = 0.35;
+    f.engaged = true; f.hp -= f.boss ? C.riposteBoss : 99; s.stats.hits++; cue(s, 'riposte', { x: f.x, id: f.id }); s.slow = 0.35;
     if (f.hp <= 0) return killFoe(s, f, 'riposte');
-    setF(s, f, 'stagger'); f.stunT = 0.8; return;
+    setF(s, f, 'stagger'); f.stunT = 0.8; f.kb = away * 160; return;
   }
-  if (f.shield && facing && (kind === 'slash')) { cue(s, 'clash', { x: (f.x + p.x) / 2, shield: 1 }); setP(p, 'hit'); p.stt = P.hitT * 0.55; p.vx = -p.face * 150; hint(s, 'heavy'); f.readyT = Math.min(f.readyT, 0.25); return; }
-  if (f.shield && facing && (kind === 'heavy' || kind === 'counter')) { f.shield = 0; cue(s, 'guardbreak', { x: f.x }); setF(s, f, 'stagger'); f.stunT = 1.4; return; }
-  const F = f.boss ? BOSSES[f.boss] : FOES[f.type];
-  // a boss cut again and again raises its guard: mashing quick cuts gets blocked and countered
-  if (kind === 'slash' && facing && f.blockCD <= 0 && (f.st === 'ready' || f.st === 'approach' || f.st === 'rec' && f.stt > 0.25 || f.boss && f.st === 'stun') && rnd(s) < (F.block || 0) * (f.phase === 2 ? 1.3 : 1) + (f.boss ? 0.22 * (f.streak || 0) : 0)) {
-    setF(s, f, 'block'); f.blockCD = f.boss ? 0.5 : 1.1; f.streak = 0; cue(s, 'clash', { x: (f.x + p.x) / 2 }); p.vx = -p.face * 110; return;
+  // 2. a surprise: he has not fought yet and his guard is not up (walking in, turned away, still squaring up)
+  if (!f.engaged && blade && !foeGuarded(s, f)) {
+    f.engaged = true; s.stats.hits++; s.stats.surprise++; cue(s, 'surprise', { x: f.x, id: f.id, boss: f.boss });
+    if (!f.boss) { const hp = f.hp; f.hp = 0; cue(s, 'cut', { x: f.x, id: f.id, kind, dmg: Math.max(2, hp), surprise: 1 }); return killFoe(s, f, 'surprise'); }
+    const dmg = kind === 'slash' ? C.slash : kind === 'heavy' ? C.heavy : C.counter;
+    f.hp -= dmg; cue(s, 'cut', { x: f.x, id: f.id, kind, dmg, surprise: 1 });
+    if (f.hp <= 0) return killFoe(s, f, kind);
+    setF(s, f, 'stagger'); f.stunT = C.surpriseBossStun; f.kb = away * 200; f.lastCid = p.cid; return;
   }
-  // against a boss a quick cut only grazes: the duel is won with parries, ripostes and heavy cuts
-  const dmg = (kind === 'slash' ? 1 : kind === 'arrow' ? 2 : kind === 'heavy' ? 2 : 3) * (f.boss && kind === 'slash' ? 0.42 : 1);
+  f.engaged = true;
+  // 3. a raised guard blocks. Each block fills his guard meter; the hit that fills it breaks the guard and opens him.
+  if ((kind === 'slash' || kind === 'heavy') && foeGuarded(s, f)) {
+    const max = foeGuardMax(f);
+    f.gm += kind === 'heavy' ? (f.shield ? max : 2) : 1; f.gmT = 0;
+    if (f.gm >= max - 1e-6) {
+      f.gm = 0; f.guard = 0; f.shield = 0; s.stats.guardBreaks++;
+      cue(s, 'guardbreak', { x: f.x, id: f.id, boss: f.boss });
+      setF(s, f, 'opened'); f.openT = f.boss ? C.openBrokenBoss : C.openBroken; f.kb = away * 120; hint(s, 'riposte');
+      return;
+    }
+    s.stats.blocks++; if (!(f.guard >= 1)) s.stats.blindBlocks++;
+    cue(s, 'clash', { x: mid, id: f.id, gm: f.gm, max, heavy: kind === 'heavy' ? 1 : 0, shield: f.shield ? 1 : 0 });
+    setF(s, f, 'block'); f.guard = 1; f.kb = away * 90;
+    // both recoil: the ronin is thrown back and cannot cut again at once; the foe answers (his counter is telegraphed as usual)
+    p.recoil = C.recoil; p.vx = -p.face * 170; p.buf = null;
+    if (f.shield || F.shield) hint(s, 'heavy');
+    return;
+  }
+  // 4. it lands. Every landed hit costs him health, shows the cut, and moves him.
+  const base = kind === 'slash' ? C.slash : kind === 'arrow' ? C.arrow : kind === 'heavy' ? C.heavy : C.counter;
+  const dmg = base * (f.boss && kind === 'slash' ? C.bossQuick : 1);
   f.hp -= dmg; s.stats.hits++; cue(s, 'cut', { x: f.x, id: f.id, kind, dmg });
   if (f.hp <= 0) return killFoe(s, f, kind);
+  f.kb = away * (kind === 'slash' ? (f.boss ? 50 : 110) : 190);
+  if (f.st === 'shift') return; // the boss is already reeling back into his second stance
   if (f.boss && f.phase === 1 && f.hp <= f.hpMax / 2) { setF(s, f, 'shift'); f.phase = 2; cue(s, 'phase2', { x: f.x, boss: f.boss }); if (BOSSES[f.boss].shieldP2) f.shield = 1; return; }
-  // bosses shrug off quick cuts and answer them; heavier blows still stagger
-  // bosses shrug off quick cuts and answer them; a heavy cut or a riposte is how you make them stagger
-  if (f.boss && kind === 'slash') { f.streak = (f.streak || 0) + 1; if (f.phase === 2 && (f.st === 'ready' || f.st === 'approach')) f.readyT = Math.min(f.readyT, 0.35); return; }
-  // a foe already committed to its attack trades through a quick cut; only heavier blows break a windup
-  const armored = (F.armor || f.boss || kind === 'slash') && (f.st === 'wind' && f.stt > 0.12 || f.st === 'act');
-  if (!armored && f.st !== 'act') { setF(s, f, kind === 'slash' ? 'stun' : 'stagger'); f.stunT = kind === 'slash' ? 0.32 : 0.9; }
+  if (f.boss) {
+    // posture: landed hits push him back and fill his guard meter; when it is full the guard breaks and he is open
+    const max = foeGuardMax(f) || 4; f.gm += C.posture[kind] || 0; f.gmT = 0;
+    if (f.gm >= max - 1e-6) { f.gm = 0; f.guard = 0; s.stats.guardBreaks++; cue(s, 'guardbreak', { x: f.x, id: f.id, boss: f.boss, posture: 1 }); setF(s, f, 'opened'); f.openT = C.openBrokenBoss; return; }
+    if (committed(f) || f.st === 'opened') return; // he trades through it: the cut shows, his blow still comes
+    if (kind !== 'slash') { setF(s, f, 'stagger'); f.stunT = 0.6; f.lastCid = p.cid; return; }
+    // the first landed quick cut of a combo staggers him briefly (once per exchange); the rest cut and push him, and a
+    // boss pressed like that answers with his next attack at once
+    if (f.lastCid !== p.cid && s.t >= (f.flinchAt || -9)) { f.lastCid = p.cid; f.flinchAt = s.t + C.bossPoise; setF(s, f, 'stun'); f.stunT = C.bossFlinch; return; }
+    f.lastCid = p.cid; if (f.st === 'ready' || f.st === 'approach') f.readyT = Math.min(f.readyT, bossAnswer(s));
+    return;
+  }
+  // regular foes: committed to a strike, an armored foe (or anyone against a quick cut) trades through; otherwise he reels
+  if ((F.armor || kind === 'slash') && committed(f)) return;
+  if (f.st !== 'act') { setF(s, f, kind === 'slash' ? 'stun' : 'stagger'); f.stunT = kind === 'slash' ? C.stun : C.stagger; }
 }
 function killFoe(s, f, how) {
   if (s.token === f.id) s.token = 0;
@@ -326,43 +380,56 @@ function killFoe(s, f, how) {
 }
 function setF(s, f, st) {
   if (s.token === f.id && st !== 'act' && st !== 'wind') { s.token = 0; s.tokenCD = 0.35 / D(s).aggr; }
-  f.st = st; f.stt = 0; f.hitDone = false; if (st !== 'wind' && st !== 'act' && st !== 'rec') f.feinting = false;
+  f.st = st; f.stt = 0; f.hitDone = false; f.openT = 0; if (st !== 'wind' && st !== 'act' && st !== 'rec') f.feinting = false;
 }
 
 // ---------- foes ----------
 function foeDef(f) { return f.boss ? BOSSES[f.boss] : FOES[f.type]; }
 function windupOf(s, name) { const d = D(s); return Math.max(d.react, ATK[name].wind * d.wind); }
 
+// how soon a boss back on his feet strikes again: quick, but not to the frame (his AI varies; his blocks never do)
+function bossAnswer(s) { const [a, b] = COMBAT.bossAnswer; return a + rnd(s) * (b - a); }
+function recoverGuard(s, f) { if (foeGuardMax(f) > 0 && (s.p.x - f.x) * f.face > 0) { f.guard = 1; cue(s, 'guardup', { x: f.x, id: f.id }); } }
 function updateFoe(s, f) {
   const p = s.p, d = D(s), F = foeDef(f), A = f.atk ? ATK[f.atk] : null;
-  f.stt += DT; if (f.blockCD > 0) f.blockCD -= DT;
+  f.stt += DT; f.gmT += DT;
+  if (f.gmT > COMBAT.postureRest && f.gm > 0) f.gm = Math.max(0, f.gm - DT * COMBAT.postureEbb); // the guard meter ebbs once he is left alone
   const dx = p.x - f.x, dist = Math.abs(dx);
   const lo = s.arena ? s.arena.x0 - 60 : -1e9, hi = s.arena ? s.arena.x1 + 60 : 1e9;
   let mv = 0;
   switch (f.st) {
     case 'enter': {
       const to = f.tx - f.x; mv = Math.sign(to) * Math.min(Math.abs(to) / DT, F.speed * 1.3); f.face = Math.sign(to) || f.face;
-      if (Math.abs(to) < 4 || f.stt > 4) { setF(s, f, 'ready'); f.readyT = f.boss ? 1.6 + rnd(s) * 0.4 : 0.5 + rnd(s) * 0.5; } // a boss holds his stance before the first cut
+      // walking in he stops when he meets the ronin instead of walking through him
+      if (Math.abs(to) < 4 || f.stt > 4 || (dist < (f.w + 26) / 2 + 24 && Math.sign(to) === Math.sign(dx))) { setF(s, f, 'ready'); f.readyT = f.boss ? 1.6 + rnd(s) * 0.4 : 0.5 + rnd(s) * 0.5; } // a boss holds his stance before the first cut
       break;
     }
     case 'ready': case 'approach': {
-      f.face = dx >= 0 ? 1 : -1;
+      // he turns to face the ronin, but not instantly: a foe the ronin rolled past is turned away for a moment
+      const toP = dx >= 0 ? 1 : -1;
+      if (toP !== f.face) { f.turnT += DT; if (f.turnT >= 0.2 || dist > 160) { f.face = toP; f.turnT = 0; f.guard = 0; } } else f.turnT = 0;
       const keep = F.keep;
       let want = 0;
       if (keep) { if (dist < keep[0]) want = -1; else if (dist > keep[1]) want = 1; }
       else if (dist > F.range * 0.85) want = 1; else if (dist < F.range * 0.45) want = -0.6;
       // in a group, the ones without the token hang back a little
       if (s.token && s.token !== f.id && !keep && dist < F.range * 1.5) want = -0.4;
-      mv = want * F.speed * f.face * (keep && want < 0 ? 1.1 : 1);
+      // inside his own striking distance he closes with a short guarded shuffle; from further out he walks in, guard down
+      const shuffle = want > 0 && !keep && dist <= F.range + 12;
+      mv = want * F.speed * f.face * (keep && want < 0 ? 1.1 : shuffle ? 0.45 : 1);
+      // walking in he is 'approach' (no guard); standing, shuffling or giving ground he is 'ready' and his guard comes up
+      f.st = want > 0 && !shuffle ? 'approach' : 'ready';
+      if (f.st === 'ready' && f.turnT === 0 && foeGuardMax(f) > 0) { const was = f.guard; f.guard = Math.min(1, f.guard + DT / (F.settle || 0.3)); if (was < 1 && f.guard >= 1) cue(s, 'guardup', { x: f.x, id: f.id }); }
+      else f.guard = 0;
       f.readyT -= DT * d.aggr;
-      const inRange = keep ? dist < 640 : dist <= F.range + 6;
+      const inRange = keep ? dist < 640 : dist <= F.range + COMBAT.reachIn; // he steps in during the windup to close the rest
       if (f.readyT <= 0 && inRange && !s.token && s.tokenCD <= 0 && p.st !== 'dead' && s.phase === 'play') {
         const list = f.boss ? (f.phase === 2 ? F.p2 : F.p1) : F.moves;
         f.atk = pick(s, f.boss && (p.turtle || 0) >= 2 ? list.map((m) => [m[0], m[1] * (ATK[m[0]].red ? 4 : 1)]) : list);
         if (f.boss && ATK[f.atk].red) p.turtle = 0;
         const fe = f.boss ? F.feint[f.phase - 1] : (F.feint || 0);
         f.feinting = rnd(s) < fe * d.feint; f.feintT = 0.18 + rnd(s) * 0.14;
-        s.token = f.id; setF(s, f, 'wind'); f.windT = windupOf(s, f.atk);
+        s.token = f.id; setF(s, f, 'wind'); f.windT = windupOf(s, f.atk); f.engaged = true; f.guard = 0;
         cue(s, 'tell', { x: f.x, id: f.id, red: !!ATK[f.atk].red, feint: f.feinting });
         if (s.ch === 0) hint(s, ATK[f.atk].red ? 'dodge' : 'parry'); else if (ATK[f.atk].red) hint(s, 'dodge');
         if (ATK[f.atk].low) hint(s, 'jump');
@@ -392,21 +459,30 @@ function updateFoe(s, f) {
       break;
     }
     case 'rec': {
-      if (f.stt >= A.rec * (d.rec || 1) * (f.phase === 2 ? 0.85 : 1)) {
+      if (f.stt >= A.rec * (d.rec || 1) * (f.boss ? COMBAT.bossRec[f.phase - 1] : COMBAT.foeRec)) {
         if (A.next) { f.atk = A.next; s.token = f.id; setF(s, f, 'wind'); f.windT = windupOf(s, f.atk); cue(s, 'tell', { x: f.x, id: f.id, red: !!ATK[f.atk].red }); }
-        else { if (s.token === f.id) s.token = 0; setF(s, f, 'ready'); f.readyT = (0.4 + rnd(s) * 0.9) * (f.boss ? (f.phase === 2 ? 0.6 : 1.2) : 1); f.atk = null; }
+        else { if (s.token === f.id) s.token = 0; setF(s, f, 'ready'); f.readyT = (0.4 + rnd(s) * 0.9) * (f.boss ? COMBAT.bossReady[f.phase - 1] : COMBAT.foeReady); f.atk = null; }
       }
       break;
     }
-    case 'stun': case 'stagger': case 'block': {
-      if (f.st !== 'block') mv = -f.face * 40 * (1 - f.stt * 2);
-      if (f.stt >= (f.st === 'block' ? 0.34 : f.stunT)) { const wasBlock = f.st === 'block'; setF(s, f, 'ready'); f.readyT = wasBlock ? (f.boss ? (f.phase === 2 ? 0.12 : 0.25) : 0.15) : 0.3 + rnd(s) * 0.4; }
+    case 'stun': case 'stagger': {
+      mv = -f.face * 40 * Math.max(0, 1 - f.stt * 2);
+      // he recovers into his guard stance (the flinch animation ends in it), and a boss answers quickly
+      if (f.stt >= f.stunT) { setF(s, f, 'ready'); f.readyT = f.boss ? bossAnswer(s) : 0.3 + rnd(s) * 0.4; recoverGuard(s, f); }
       break;
     }
-    case 'opened': if (f.stt >= (f.boss ? 0.95 : 1.25)) { setF(s, f, 'ready'); f.readyT = 0.4; } break;
-    case 'shift': mv = -f.face * 160 * Math.max(0, 1 - f.stt * 1.5); if (f.stt >= 1.5) { setF(s, f, 'ready'); f.readyT = 0.3; } break;
+    case 'block': {
+      // he holds the parry pose, then answers at once: the block opens his counter window (a normal, telegraphed attack)
+      if (f.stt >= COMBAT.block) { setF(s, f, 'ready'); f.readyT = 0; }
+      break;
+    }
+    case 'opened': if (f.stt >= (f.openT || (f.boss ? 0.95 : 1.25))) { setF(s, f, 'ready'); f.readyT = f.boss ? bossAnswer(s) : 0.4; recoverGuard(s, f); } break;
+    // he leaps back out of reach into his second stance
+    case 'shift': mv = -f.face * 520 * Math.max(0, 1 - f.stt * 2); if (f.stt >= 1.5) { setF(s, f, 'ready'); f.readyT = 0.3; } break;
     case 'dead': break;
   }
+  if (f.st !== 'ready' && f.st !== 'approach' && f.st !== 'block') f.guard = 0; // only a squared-up foe holds a guard
+  if (f.kb) { mv += f.kb; f.kb *= Math.exp(-DT * 9); if (Math.abs(f.kb) < 4) f.kb = 0; } // knocked back by a hit or a clash
   f.vx = mv;
   f.x = Math.max(lo, Math.min(hi, f.x + mv * DT));
   // foes do not overlap one another
@@ -439,7 +515,10 @@ function strikePlayer(s, f, A, cont) {
     if (A.dmg > 1 && d.chip) { p.hp -= d.chip; cue(s, 'chip', { x: p.x }); if (p.hp <= 0) die(s); }
     return;
   }
-  hurtPlayer(s, A.dmg * d.dmg * (f.boss && f.phase === 2 ? Math.min(d.boss2 || 1, BOSSES[f.boss].boss2 || 9) : 1), f.x, A.push);
+  // a boss's blow that catches the ronin mid-swing (he cut into the glint instead of answering it) is a counter-hit
+  const caught = f.boss && (p.st === 'slash' || p.st === 'heavy') ? COMBAT.counterHit : 1;
+  if (caught > 1) cue(s, 'counterhit', { x: p.x, id: f.id });
+  hurtPlayer(s, A.dmg * d.dmg * caught * (f.boss && f.phase === 2 ? Math.min(d.boss2 || 1, BOSSES[f.boss].boss2 || 9) : 1), f.x, A.push);
 }
 function hurtPlayer(s, dmg, fromX, push) {
   const p = s.p; p.hp -= dmg; p.ifr = P.ifrHit; setP(p, 'hit'); p.vy = 0; const dir = p.x >= fromX ? 1 : -1; p.vx = dir * (push || 190);

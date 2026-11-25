@@ -249,6 +249,18 @@ function house(g, R, x, base, s, o = {}) {
   stroke(g, [[x - 42 * s, base - 19 * s, 0.6], [x + 42 * s, base - 19 * s, 0.6]], { w: 2.5 * s, alpha: a, dry: 0.5, seed: Math.floor(R() * 1e6), color: ink });
   stroke(g, [[x - 20 * s, base - 51 * s, 1], [x + 20 * s, base - 51 * s, 1]], { w: 4 * s, alpha: a, dry: 0.4, seed: Math.floor(R() * 1e6), color: ink });
 }
+// [inkfx petals] an old cherry in full bloom: a gnarled dry-brush trunk, dark ink branches, blossom as soft pink washes
+function oldCherry(g, R, x, base, h, pink) {
+  const lean = (R() - 0.5) * 0.5, T = [[x, base, 1], [x + lean * h * 0.15 + (R() - 0.5) * 16, base - h * 0.28, 0.95], [x + lean * h * 0.3 + (R() - 0.5) * 22, base - h * 0.5, 0.75]];
+  const ends = [];
+  // blossom first (behind the branches): overlapping soft washes, a darker heart in a few, and loose dabs at the edges
+  const masses = [];
+  for (let k = 0; k < 7; k++) { const q = T[1 + (k % 2)], ang = -Math.PI / 2 + (R() - 0.5) * 2.6, L = h * (0.28 + R() * 0.3); masses.push([q[0] + Math.cos(ang) * L, q[1] + Math.sin(ang) * L * 0.55, q, ang, L]); }
+  for (const [mx, my] of masses) for (let i = 0; i < 5; i++) { const r = h * (0.09 + R() * 0.1), px = mx + (R() - 0.5) * h * 0.22, py = my + (R() - 0.5) * h * 0.12, rg = g.createRadialGradient(px, py, 0, px, py, r); rg.addColorStop(0, rgba(pink, 0.3 + R() * 0.15)); rg.addColorStop(0.7, rgba(pink, 0.16)); rg.addColorStop(1, rgba(pink, 0)); g.fillStyle = rg; g.fillRect(px - r, py - r, r * 2, r * 2); }
+  stroke(g, T, { w: h * 0.07, alpha: 0.6, dry: 0.65, seed: Math.floor(R() * 1e6), taper: [0, 0.4] });
+  for (const [ex, ey, q] of masses) { stroke(g, [[q[0], q[1], 0.75], [lerp(q[0], ex, 0.5) + (R() - 0.5) * 18, lerp(q[1], ey, 0.5) + (R() - 0.5) * 10, 0.5], [ex, ey, 0.15]], { w: h * 0.022, alpha: 0.5, dry: 0.6, seed: Math.floor(R() * 1e6) }); ends.push([ex, ey]); }
+  for (const [mx, my] of masses) for (let i = 0; i < 10; i++) { const px = mx + (R() - 0.5) * h * 0.3, py = my + (R() - 0.5) * h * 0.16; drop(g, px, py, 1.2 + R() * 2.4, R() < 0.2 ? mix(pink, INK, 0.25) : pink, 0.35 + R() * 0.3); }
+}
 function cherry(g, R, x, base, h, o = {}) {
   const ink = o.ink || INK, a = o.a ?? 0.8, pink = o.pink || '#d48a9c';
   const pts = [[x, base, 1], [x + (R() - 0.5) * 20, base - h * 0.35, 0.9], [x + (R() - 0.5) * 30, base - h * 0.6, 0.6]];
@@ -292,10 +304,12 @@ function terraces(g, R, x0, x1, top, rows, o) {
     const pts = []; for (let x = x0; x <= x1; x += 40) pts.push([x, y + Math.sin((x - x0) * 0.006 + r) * amp + (fbm(x * 0.004, sd) - 0.5) * 22, 0.4 + 0.6 * noise1(x * 0.01, sd)]);
     // water in the paddy below each wall catches the sky
     if (acc) { g.save(); g.globalAlpha = 0.16 + R() * 0.16; g.fillStyle = acc; g.beginPath(); g.moveTo(pts[0][0], pts[0][1]); for (const q of pts) g.lineTo(q[0], q[1] + 2); for (let i = pts.length - 1; i >= 0; i--) g.lineTo(pts[i][0], pts[i][1] + dy * 0.8); g.fill(); g.restore(); }
-    g.save(); g.globalAlpha = 0.1 + r * 0.012; g.fillStyle = ink; g.beginPath(); g.moveTo(pts[0][0], pts[0][1]); for (const q of pts) g.lineTo(q[0], q[1]); for (let i = pts.length - 1; i >= 0; i--) g.lineTo(pts[i][0], pts[i][1] + 3 + r * 0.6); g.fill(); g.restore();
-    stroke(g, pts, { w: 1.4 + r * 0.35, alpha: 0.35 + r * 0.05, dry: 0.65, seed: sd, color: ink, taper: [0.02, 0.02], tip: 0.6, step: 3 });
-    // rice tufts on the edge
-    for (let i = 0; i < pts.length; i += 1) if (R() < 0.6) grassClump(g, R, pts[i][0] + R() * 30, pts[i][1], 4 + r * 1.2, ink, 0.25 + r * 0.03, 4);
+    // [inkfx ground] the wet earth under each bank as a soft hanging wash, the bank one broken stroke of varying weight
+    hangWash(g, pts, 5 + r * 1.2, ink, 0.12 + r * 0.015, 4);
+    { let run = []; const fl = () => { if (run.length > 1) stroke(g, run, { w: 1.3 + r * 0.35, alpha: 0.32 + r * 0.05, dry: 0.6, seed: sd + Math.floor(run[0][0]), color: ink, taper: [0.2, 0.2], tip: 0.3, step: 3 }); run = []; };
+      for (const q of pts) { if (noise1(q[0] * 0.013, sd) < 0.22) fl(); else run.push([q[0], q[1], 0.35 + 0.8 * noise1(q[0] * 0.03, sd + 2)]); } fl(); }
+    // rice: a few thin stalks in loose clusters where the field is thick, bare elsewhere
+    for (let i = 0; i < pts.length; i++) if (fbm(pts[i][0] * 0.006, sd + 4, 3) > 0.55 && R() < 0.55) { const bx = pts[i][0] + R() * 30, by = pts[i][1], n = 2 + Math.floor(R() * 3); for (let k = 0; k < n; k++) { const x = bx + (k - n / 2) * (1.5 + R() * 2), h = (3 + r * 1.1) * (0.6 + R() * 0.7), l = (R() - 0.5) * 0.4; stroke(g, [[x, by, 1], [x + l * h, by - h, 0.1]], { w: 0.8 + r * 0.12, alpha: 0.22 + r * 0.03, dry: 0.3, seed: sd + i * 7 + k, edge: 0, taper: [0, 0.7], color: ink }); } }
     y += dy;
   }
 }
@@ -306,6 +320,10 @@ function lanternPost(g, R, x, base, h, o = {}) {
 }
 
 // ---------- skies (screen space) ----------
+function mistLobe(g, x, y, rx, ry, col, a) {
+  const rg = g.createRadialGradient(x, y, 0, x, y, rx); rg.addColorStop(0, rgba(col, a)); rg.addColorStop(0.6, rgba(col, a * 0.55)); rg.addColorStop(1, rgba(col, 0));
+  g.save(); g.translate(x, y); g.scale(1, ry / rx); g.translate(-x, -y); g.fillStyle = rg; g.fillRect(x - rx, y - rx, rx * 2, rx * 2); g.restore();
+}
 function sunBloom(g, R, x, y, r, col, a) {
   // wet core: soft, with a faint pooled ring where the pigment gathered as it dried
   let rg = g.createRadialGradient(x, y, 0, x, y, r * 1.25); rg.addColorStop(0, rgba(col, a * 0.82)); rg.addColorStop(0.62, rgba(col, a * 0.72)); rg.addColorStop(0.8, rgba(col, a * 0.5)); rg.addColorStop(1, rgba(col, 0));
@@ -362,7 +380,7 @@ export function paintSky(g, W, H, k, ch, paper) {
 export function buildScene(ch) {
   const C = CHAPTERS[ch], paper = C.paper, acc = C.accent, key = C.key, L = C.len;
   const R = rng(1000 + ch * 31);
-  const bands = [];
+  const bands = [], lights = []; // [inkfx] lights: lantern fireboxes for the flame flicker
   const night = key === 'snow';
   const ink = INK;
   // far peaks: pale, high, few
@@ -395,6 +413,8 @@ export function buildScene(ch) {
   // near band (f .32): chapter-specific mid-ground
   {
     const f = 0.32, objs = [], span = L * f + 1400;
+    // [inkfx grade] a sea of mist lobes behind this range (drawn first, so the near peaks rise out of it and the far ranges sink into it)
+    for (let x = -800; x < span + 200; x += 70 + R() * 110) { const cx = x, cy = -30 + R() * 50, rx = 90 + R() * 150, ry = 14 + R() * 22, al = (night ? 0.32 : 0.42) + R() * 0.18; objs.push(obj(cx - rx, cx + rx, 0, (g) => mistLobe(g, cx, cy, rx, ry, night ? '#3d4049' : paper, al))); }
     if (key === 'bamboo') {
       for (let x = -700; x < span; x += 8 + R() * 18) { if (fbm(x * 0.006, 41) < 0.5) continue; const sd = Math.floor(R() * 1e9), h = 300 + R() * 160, w = 2.5 + R() * 2.5, cx = x; objs.push(obj(cx - 60, cx + 60, sd, (g, r) => bamboo(g, r, cx, 60, h, w, { a: 0.12 + r() * 0.1, leaves: 0.7, wash: acc, leafScale: 0.8 }))); }
     } else if (key === 'terraces') {
@@ -426,6 +446,8 @@ export function buildScene(ch) {
       for (let x = -700; x < span; x += 70 + R() * 140) { const sd = Math.floor(R() * 1e9), cx = x, h = 140 + R() * 120; objs.push(obj(cx - 80, cx + 80, sd, (g, r) => { pine(g, r, cx, 70, h, { a: 0.75, ink: '#16181d' }); snowOnPine(g, r, cx, 70, h, paper); })); }
     } else if (key === 'castle') {
       for (let x = -700; x < span; x += 140 + R() * 220) { const sd = Math.floor(R() * 1e9), cx = x; objs.push(obj(cx - 110, cx + 110, sd, (g, r) => cherry(g, r, cx, 70, 130 + r() * 60, { a: 0.6, pink: acc }))); }
+      // [inkfx petals] the grove: old cherries in full bloom where the road nears the castle (band x = world x * f)
+      { const bx = (C.ev.find((e) => e.t === 'boss') || { x: L }).x; for (let wx = bx - 1500; wx < bx + 900; wx += 420 + R() * 260) { const sd = Math.floor(R() * 1e9), cx = wx * f + (R() - 0.5) * 40, h = 300 + R() * 110; objs.push(obj(cx - h, cx + h, sd, (g, r) => oldCherry(g, r, cx, 74, h, acc))); } }
     }
     objs.push(obj(-1e5, 1e5, 6, (g) => mist(g, -1e5, 2e5, -40, 100, night ? '#55575c' : paper, night ? 0.45 : 0.9)));
     bands.push(new Band(f, -560, 100, 0.9, objs));
@@ -446,14 +468,14 @@ export function buildScene(ch) {
     }
     if (key === 'torii') {
       // stone steps on the slopes and lanterns along the path
-      for (let x = 0; x < L; x += 300 + R() * 200) { const cx = x, sd = Math.floor(R() * 1e9); objs.push(obj(cx - 30, cx + 30, sd, (g, r) => stoneLantern(g, r, cx, gy(cx) + 4, 52 + r() * 14, { a: 0.7 }))); }
+      for (let x = 0; x < L; x += 300 + R() * 200) { const cx = x, sd = Math.floor(R() * 1e9); lights.push({ x: cx, base: gy(cx) + 4, h: 52 + rng(sd)() * 14, ph: (sd % 1000) / 159 }); objs.push(obj(cx - 30, cx + 30, sd, (g, r) => stoneLantern(g, r, cx, gy(cx) + 4, 52 + r() * 14, { a: 0.7 }))); }
     }
     if (key === 'castle') for (let x = C.bridge[0]; x <= C.bridge[1]; x += 110) { const cx = x, sd = Math.floor(R() * 1e9); objs.push(obj(cx - 10, cx + 120, sd, (g, r) => bridgeRail(g, r, cx, gy, x === C.bridge[0], x + 110 > C.bridge[1]))); }
     const range = (i) => { let lo = 1e9, hi = -1e9; for (let x = i * TW - 40; x <= (i + 1) * TW + 40; x += 32) { const y = gy(x); lo = Math.min(lo, y); hi = Math.max(hi, y); } return [Math.floor(lo - 260), Math.ceil(hi + 260)]; };
     bands.push(new Band(1, 0, 0, 1, objs, { range, max: 6 }));
   }
   [2.6, 2.1, 1.7, 1.4, 1.15].forEach((gn, i) => { if (bands[i]) bands[i].redGain = gn; });
-  return { ch, key, paper, accent: acc, night, bands };
+  return { ch, key, paper, accent: acc, night, bands, lights };
 }
 function snowCaps(g, R, cx, base, ph, hw, paper, o = {}) {
   // snow is paper left bare: lift the wash off the upper slopes, ragged where it meets rock
@@ -470,7 +492,11 @@ function snowOnPine(g, R, x, base, h, paper) {
   for (let k = 0; k < 14; k++) { const t = 0.35 + R() * 0.62, y = base - h * t, w = h * 0.2 * (1.1 - t); const cx = x + (R() - 0.5) * w * 2; g.globalAlpha = 0.55 + R() * 0.35; g.beginPath(); g.moveTo(cx - w * 0.5, y); g.quadraticCurveTo(cx - w * 0.2, y - 3 - R() * 3, cx, y - 2); g.quadraticCurveTo(cx + w * 0.3, y - 4 - R() * 3, cx + w * 0.5, y + 1); g.quadraticCurveTo(cx, y + 2, cx - w * 0.5, y); g.fill(); }
   g.restore();
 }
-function reeds(g, R, x, base, h, a) { for (let i = 0; i < 9; i++) { const bx = x + (R() - 0.5) * 30, l = h * (0.6 + R() * 0.6), ang = -Math.PI / 2 + (R() - 0.5) * 0.5; stroke(g, [[bx, base, 1], [bx + Math.cos(ang) * l * 0.5, base + Math.sin(ang) * l * 0.5, 0.6], [bx + Math.cos(ang) * l, base + Math.sin(ang) * l, 0.1]], { w: 1.6, alpha: a, dry: 0.4, seed: Math.floor(R() * 1e6) }); } }
+function reeds(g, R, x, base, h, a) { // [inkfx flora] thin stalks of different heights in a loose cluster, a couple bowing over
+  const n = 3 + Math.floor(R() * 5);
+  for (let i = 0; i < n; i++) { const bx = x + (R() - 0.5) * 34, l = h * (0.45 + R() * 0.65), bow = R() < 0.3 ? (R() < 0.5 ? -1 : 1) * (0.4 + R() * 0.5) : (R() - 0.5) * 0.25;
+    stroke(g, [[bx, base, 1], [bx + Math.sin(bow) * l * 0.4, base - l * 0.55, 0.65], [bx + Math.sin(bow) * l * 0.9, base - l * Math.cos(bow * 0.8), 0.08]], { w: 1.4, alpha: a * (0.6 + R() * 0.4), dry: 0.35, seed: Math.floor(R() * 1e6), edge: 0, taper: [0, 0.85], tip: 0.05 }); }
+}
 function bridgeRail(g, R, x, gy, first, last) {
   const y0 = gy(x), y1 = gy(x + 110);
   // deck edge: two long strokes; posts with bronze caps (giboshi)
@@ -484,46 +510,81 @@ function bridgeRail(g, R, x, gy, first, last) {
   if (!first && !last && (Math.round(x / 110) % 3 === 0)) { stroke(g, [[x + 50, y0 + 14, 1], [x + 50, y0 + 120, 0.6]], { w: 8, alpha: 0.45, dry: 0.6, seed: Math.floor(R() * 1e6), taper: [0, 0.5] }); }
   for (let i = 0; i < 3; i++) { const yy = y0 + 70 + R() * 90, xx = x + R() * 100; stroke(g, [[xx, yy, 0.3], [xx + 30 + R() * 40, yy, 1], [xx + 70 + R() * 30, yy + 1, 0.2]], { w: 1.4, alpha: 0.25, dry: 0.8, seed: Math.floor(R() * 1e6) }); }
 }
+// [inkfx ground] one 120-unit piece of the play band. Seam-free by construction: fills cover exactly [x0, x1) and follow the
+// ground line (no per-piece gradients), every height is a pure function of x, so neighbouring pieces and tiles meet exactly.
+const jit = (x, ch) => (noise1(x * 0.37, ch * 7 + 1) - 0.5) * 1.2;
+function lineAt(gy, ch, x0, x1, dy, step = 6) { const P = []; for (let x = x0; x <= x1 + 0.01; x += step) P.push([x, gy(x) + dy + jit(x + dy * 13, ch), 1]); return P; }
+// a soft wash hanging below a line: stacked thin bands so the falloff follows the ground, no hard lower edge
+function hangWash(g, P, depth, col, a, bands = 7) {
+  for (let k = 1; k <= bands; k++) {
+    const d = depth * Math.pow(k / bands, 1.6); g.globalAlpha = a / bands; g.fillStyle = col; g.beginPath();
+    g.moveTo(P[0][0], P[0][1]); for (const q of P) g.lineTo(q[0], q[1]); for (let i = P.length - 1; i >= 0; i--) g.lineTo(P[i][0], P[i][1] + d); g.closePath(); g.fill();
+  }
+  g.globalAlpha = 1;
+}
+// a bank: one wet-edged stroke whose weight swells and thins with x and breaks in a few places
+function bankStroke(g, gy, ch, x0, x1, dy, w, a, sd) {
+  // taper only where the bank really breaks, never at a piece boundary
+  let run = null, open0 = false;
+  const flush = (open1) => { if (run && run.length > 1) stroke(g, run, { w, alpha: a, dry: 0.42, seed: sd + Math.floor(run[0][0]), taper: [open0 ? 0 : 0.15, open1 ? 0 : 0.15], tip: open0 && open1 ? 1 : 0.3, step: 2, edge: 0.75 }); run = null; };
+  for (let x = x0 - 2; x <= x1 + 2.01; x += 6) {
+    const gap = noise1(x * 0.011, sd) < 0.2; if (gap) { flush(false); continue; }
+    if (!run) { run = []; open0 = x < x0; }
+    const p = 0.45 + 0.75 * noise1(x * 0.02, sd + 3); run.push([x, gy(x) + dy + jit(x + dy * 13, ch), p]);
+  }
+  flush(true);
+}
 function groundPiece(g, R, ch, x0, x1, gy) {
-  const C = CHAPTERS[ch], key = C.key, night = key === 'snow';
-  const pts = []; for (let x = x0; x <= x1; x += 14) pts.push([x, gy(x) + (R() - 0.5) * 1.2, 0.55 + 0.45 * noise1(x * 0.02, ch)]);
+  const C = CHAPTERS[ch], key = C.key, x1f = x0 + 120;
+  const P = lineAt(gy, ch, x0, x1f, 0);
   // paper below the line: what is behind the path must not show under it
-  const top = Math.min(...pts.map((q) => q[1]));
-  g.beginPath(); g.moveTo(x0 - 1, top + 600); for (const q of pts) g.lineTo(q[0], q[1] + 1); g.lineTo(x1 + 1, top + 600); g.closePath(); g.fillStyle = C.paper; g.fill();
-  // earth wash under the line, fading down
-  const gr = g.createLinearGradient(0, gy(x0), 0, gy(x0) + 160);
-  const wa = key === 'snow' ? 0.0 : key === 'castle' ? 0.06 : 0.16;
-  gr.addColorStop(0, rgba(INK, wa)); gr.addColorStop(1, rgba(INK, 0));
-  g.beginPath(); g.moveTo(x0, top + 200); for (const q of pts) g.lineTo(q[0], q[1]); g.lineTo(x1, top + 200); g.closePath(); g.fillStyle = gr; g.fill();
+  g.fillStyle = C.paper; g.beginPath(); g.moveTo(P[0][0], P[0][1] + 1); for (const q of P) g.lineTo(q[0], q[1] + 1); g.lineTo(x1f, P[P.length - 1][1] + 700); g.lineTo(x0, P[0][1] + 700); g.closePath(); g.fill();
+  const sd = 9000 + ch * 101;
   if (key === 'snow') {
-    // snow is the paper itself; blue-grey shadow washes give it form
-    const sg = g.createLinearGradient(0, gy(x0), 0, gy(x0) + 40); sg.addColorStop(0, rgba(C.accent, 0.22)); sg.addColorStop(1, rgba(C.accent, 0));
-    g.beginPath(); g.moveTo(x0, top + 60); for (const q of pts) g.lineTo(q[0], q[1] + 3); g.lineTo(x1, top + 60); g.closePath(); g.fillStyle = sg; g.fill();
-    stroke(g, pts, { w: 2, alpha: 0.4, dry: 0.75, seed: Math.floor(R() * 1e6), taper: [0, 0], tip: 1, step: 2 });
+    // snow is the paper itself; a blue-grey shadow wash gives it form, the edge a dry grey line
+    hangWash(g, P, 46, C.accent, 0.22, 6);
+    bankStroke(g, gy, ch, x0, x1f, 0, 2, 0.42, sd);
     return;
   }
-  stroke(g, pts, { w: key === 'stone' ? 3.2 : 4.2, alpha: 0.85, dry: 0.5, seed: Math.floor(R() * 1e6), taper: [0, 0], tip: 1, step: 2 });
-  // a second fainter edge gives the path depth
-  stroke(g, pts.map((q) => [q[0], q[1] + 14 + R() * 3, q[2] * 0.6]), { w: 2, alpha: 0.32, dry: 0.8, seed: Math.floor(R() * 1e6), taper: [0, 0], tip: 1, step: 3 });
+  if (key === 'terraces') {
+    // the path: worn earth, a wet-edged bank stroke, a few dry drags of the brush
+    hangWash(g, P, 26, '#6b4f2a', 0.2, 6);
+    bankStroke(g, gy, ch, x0, x1f, 0, 4.4, 0.85, sd);
+    if (R() < 0.6) { const xx = x0 + R() * 90, yy = gy(xx) + 8 + R() * 10; stroke(g, [[xx, yy, 0.2], [xx + 14 + R() * 20, yy + 0.6, 0.9], [xx + 30 + R() * 22, yy + 1, 0.1]], { w: 1.6, alpha: 0.28, dry: 0.85, seed: Math.floor(R() * 1e6), edge: 0, bristles: 5, color: '#4a3b28' }); }
+    // two paddies below: pale water (the paper, faintly holding the sky), a dark wet bank above each
+    for (const [off, deep] of [[30, 0], [96, 1]]) {
+      const W0 = lineAt(gy, ch, x0, x1f, off);
+      hangWash(g, W0, 44, C.accent, 0.12 - deep * 0.03, 5);
+      hangWash(g, W0, 10, '#5a4428', 0.16, 4); // the wet earth just under the bank
+      bankStroke(g, gy, ch, x0, x1f, off, 2.6 - deep * 0.6, 0.62 - deep * 0.1, sd + 17 + deep * 31);
+      // ripples: one or two horizontal dry drags per piece at most, never on a grid
+      const nr = R() < 0.55 ? 1 : R() < 0.5 ? 2 : 0;
+      for (let i = 0; i < nr; i++) { const xx = x0 + R() * 100, yy = gy(xx) + off + 12 + R() * 28, L = 18 + R() * 46; stroke(g, [[xx, yy, 0.15], [xx + L * 0.45, yy + 0.4, 0.8], [xx + L, yy + 0.2, 0.1]], { w: 1.1, alpha: 0.22 + R() * 0.12, dry: 0.85, seed: Math.floor(R() * 1e6), edge: 0, bristles: 4 }); }
+      // rice stalks: thin single verticals with a faint broken reflection under the water line
+      const ns = R() < 0.55 ? 0 : 1 + Math.floor(R() * 2);
+      for (let i = 0; i < ns; i++) {
+        const xx = x0 + R() * 110, yy = gy(xx) + off + 6 + R() * 18, n = 1 + Math.floor(R() * 3);
+        for (let k = 0; k < n; k++) { const bx = xx + (k - n / 2) * (2.5 + R() * 4), h = 5 + R() * 12 - deep * 2, lean = (R() - 0.5) * 0.7;
+          stroke(g, [[bx, yy, 1], [bx + lean * h * 0.4, yy - h * 0.55, 0.7], [bx + lean * h, yy - h * 0.95, 0.06]], { w: 0.95 + R() * 0.4, alpha: 0.4 + R() * 0.3, dry: 0.3, seed: Math.floor(R() * 1e6), edge: 0, taper: [0, 0.85], tip: 0.05 });
+          stroke(g, [[bx, yy + 1.5, 0.6], [bx - lean * h * 0.3, yy + 1.5 + h * 0.4, 0.1]], { w: 0.9, alpha: 0.16, dry: 0.7, seed: Math.floor(R() * 1e6), edge: 0, bristles: 3 }); }
+      }
+    }
+    return;
+  }
+  const wa = key === 'castle' ? 0.06 : 0.15;
+  if (key === 'castle') { const bx = (C.ev.find((e) => e.t === 'boss') || { x: 1e9 }).x; if (x0 > bx - 1550 && x0 < bx + 950) { const n = 10 + Math.floor(R() * 14); for (let i = 0; i < n; i++) { const x = x0 + R() * 120, y = gy(x) + 1 + R() * R() * 26; const pk = R() < 0.25 ? mix(C.accent, INK, 0.2) : mix(C.accent, '#ffffff', 0.35); g.globalAlpha = 0.35 + R() * 0.35; g.fillStyle = pk; g.beginPath(); g.ellipse(x, y, 1.6 + R() * 1.4, 0.8 + R() * 0.5, (R() - 0.5) * 0.8, 0, 6.2832); g.fill(); } g.globalAlpha = 1; } } // [inkfx petals] the fallen carpet
+  hangWash(g, P, 150, INK, wa, 8);
+  bankStroke(g, gy, ch, x0, x1f, 0, key === 'stone' ? 3.2 : 4.2, 0.85, sd);
+  // a fainter second edge gives the stone path depth (broken, not a ruled line)
+  if (key === 'stone') bankStroke(g, gy, ch, x0, x1f, 15, 1.8, 0.22, sd + 77);
   if (key === 'stone') {
     // steps: short verticals where the path climbs
-    for (let x = x0; x < x1; x += 18) { const y = gy(x), y2 = gy(x + 18); if (y - y2 > 1.2) { stroke(g, [[x + 18, y2, 1], [x + 18, y + 1, 1]], { w: 1.6, alpha: 0.6, dry: 0.5, seed: Math.floor(R() * 1e6), taper: [0, 0], tip: 1 }); } }
+    for (let x = x0; x < x1f; x += 18) { const y = gy(x), y2 = gy(x + 18); if (y - y2 > 1.2) { stroke(g, [[x + 18, y2, 1], [x + 18, y + 1, 1]], { w: 1.6, alpha: 0.6, dry: 0.5, seed: Math.floor(R() * 1e6), taper: [0, 0], tip: 1 }); } }
   }
-  if (key === 'terraces') {
-    for (const [off, deep] of [[30, 0], [96, 1]]) {
-      const wall = pts.map((q) => [q[0], q[1] + off + Math.sin(q[0] * 0.01 + deep) * 3, 0.5 + 0.5 * q[2]]);
-      const wtop = gy(x0) + off;
-      const wg = g.createLinearGradient(0, wtop, 0, wtop + 52); wg.addColorStop(0, rgba(C.accent, 0.34 - deep * 0.08)); wg.addColorStop(1, rgba(C.accent, 0.04));
-      g.beginPath(); g.moveTo(wall[0][0], wall[0][1]); for (const q of wall) g.lineTo(q[0], q[1]); g.lineTo(x1, wtop + 60); g.lineTo(x0, wtop + 60); g.closePath(); g.fillStyle = wg; g.fill();
-      stroke(g, wall, { w: 3.2 - deep, alpha: 0.7, dry: 0.6, seed: Math.floor(R() * 1e6), taper: [0, 0], tip: 1, step: 2 });
-      for (let i = 0; i < 3; i++) { const xx = x0 + R() * (x1 - x0), yy = wtop + 12 + R() * 34; stroke(g, [[xx, yy, 0.2], [xx + 20 + R() * 30, yy, 1], [xx + 50 + R() * 30, yy + 0.5, 0.2]], { w: 1.2, alpha: 0.35, dry: 0.7, seed: Math.floor(R() * 1e6) }); }
-      for (let i = 0; i < 5; i++) { const xx = x0 + R() * (x1 - x0); grassClump(g, R, xx, wall[Math.min(wall.length - 1, Math.floor((xx - x0) / 14))][1] - 1, 8 + R() * 6, INK, 0.55, 5); }
-    }
-  }
-  if (key === 'grass' || key === 'earth') {
-    for (let i = 0; i < 3; i++) { const x = x0 + R() * (x1 - x0); grassClump(g, R, x, gy(x) + 1, 10 + R() * 14, INK, 0.55, 6); }
-    for (let i = 0; i < 4; i++) { const x = x0 + R() * (x1 - x0); drop(g, x, gy(x) + 1 + R() * 3, 0.9 + R() * 1.4, INK, 0.75); }
-    if (R() < 0.2) { const x = x0 + R() * (x1 - x0); rock(g, R, x, gy(x) + 4, 18 + R() * 16, 7 + R() * 6, { a: 0.7 }); }
+  if (key === 'grass') {
+    // a few pebbles, now and then a stone; the grass itself is the painted clumps in the prop layer
+    for (let i = 0; i < 2; i++) if (R() < 0.6) { const x = x0 + R() * 120; drop(g, x, gy(x) + 2 + R() * 4, 0.8 + R() * 1.2, INK, 0.55); }
+    if (R() < 0.18) { const x = x0 + R() * 120; rock(g, R, x, gy(x) + 4, 18 + R() * 16, 7 + R() * 6, { a: 0.7 }); }
   }
 }
 

@@ -8,7 +8,7 @@ import { ATK, BOSSES, FOES } from './data.js';
 
 const noop = () => {};
 const grad = { addColorStop: noop };
-export const SCALES = { n: 0 }; export const MEAS = [];
+export const SCALES = { n: 0 }; export const DUMP = {}; export const MEAS = [];
 export const mockCtx = new Proxy({}, { get: (t, k) => (k in t ? t[k] : k === 'scale' ? () => { SCALES.n++; } : k.startsWith('create') ? () => grad : noop), set: (t, k, v) => { t[k] = v; return true; } });
 // standing, walking, running and guard animations: these keep the body's full height
 const TALL = /^(idle|idle-drawn|walk|run|run-start|run-stop|turn|guard|parry|sheathe|reduced-run|gust)$|^(?!archer).*:(approach|ready)$/;
@@ -38,9 +38,14 @@ function run(name, look, isPlayer, frames, fails, counts) {
       // the body's measures: a visible neck always; a head about a seventh of the standing height; tall stances
       const Hs = STAND_H * G.sc, neck = Math.hypot(geo.Hd[0] - geo.N[0], geo.Hd[1] - geo.N[1]) - (geo.chin - geo.Hd[1]), hh = (geo.chin - geo.headTop) / Hs;
       if (neck < 2 * G.sc) b.push(`neck hidden: ${neck.toFixed(1)}`);
+      // the head keeps a skull's proportions and a hat sits on it, leaving at least half the face below the brim
+      if (G.head) { if (G.head.aspect < 1.2 || G.head.aspect > 1.35) b.push(`head aspect ${G.head.aspect.toFixed(2)}`); if (G.head.brim != null && (G.head.chin - G.head.brim) / (G.head.chin - G.head.top) < 0.5) b.push('hat crushes the face'); }
+      // the head is drawn at its full size: its height on screen matches the skull's, so nothing flattens it
+      { const want = (G.head ? G.head.chin - G.head.top : 18.2) * (LOOKS[G.look] ? (LOOKS[G.look].head || 1) : 1) * G.sc, got = geo.chin - geo.headTop, c = Math.abs(Math.cos(geo.ha || 0)); if (got < want * 0.7) b.push(`head flattened: ${got.toFixed(1)} of ${want.toFixed(1)}`); }
       if (hh < 0.12 || hh > 0.22) b.push(`head ${hh.toFixed(3)} of standing height`);
       if (TALL.test(name)) { const hip = (G.groundY - geo.H[1]) / Hs, tot = (G.groundY - geo.headTop) / Hs; if (hip < 0.46) b.push(`hips pressed down: ${hip.toFixed(3)}`); if (tot < 0.93) b.push(`figure pressed down: ${tot.toFixed(3)} of standing height`); }
       MEAS.push([name, neck / G.sc, hh, (G.groundY - geo.H[1]) / Hs, (G.groundY - geo.headTop) / Hs]); }
+    if (b.length && !DUMP[name]) { const G = fig.garment, bb = (P) => { let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9; for (const q of P) { x0 = Math.min(x0, q[0]); x1 = Math.max(x1, q[0]); y0 = Math.min(y0, q[1]); y1 = Math.max(y1, q[1]); } return [x0, x1, y0, y1].map((v) => v.toFixed(0) - (fr.x || 0) * 0).join(','); }; DUMP[name] = { x: fr.x, split: G.HG.split.toFixed(2), dA: G.HG.dA.toFixed(0), K: G.legs.map((l) => l.K.map((v) => v.toFixed(0))), J: G.legs.map((l) => l.J.map((v) => v.toFixed(0))), A: G.legs.map((l) => l.A.map((v) => v.toFixed(0))), hem: G.legs.map((l) => l.hem.map((q) => q.map((v) => v.toFixed(0)).join(':')).join(' ')), T: G.legs.map((l) => l.T.map((q) => q.map((v) => v.toFixed(0)).join(':')).join(' ')), shin: G.legs.map((l) => bb(l.poly)), b: b[0] }; }
     n++; if (b.length) fails.push(`${name} f${n}: ${b[0]}${b.length > 1 ? ` (+${b.length - 1})` : ''}`);
   }
   counts.push([name, n]);

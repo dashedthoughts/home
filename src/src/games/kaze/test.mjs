@@ -4,9 +4,11 @@
 // 3 standoff windows are winnable: releasing inside the window wins, on a feint or late is punished;
 // 4 no softlocks: watchdogs over 20 seeds with a capable bot and a random "monkey";
 // 5 save/load round-trips (and survives broken storage); 6 determinism.
-import { createSim, step, DT, blankInput, standoffPose, digest } from './sim.js';
+// 11 combat honesty: unready foes cannot block, a raised guard always blocks visibly (clash cue, counter), guard meters
+// break within 4 hits, bosses take damage from every landed quick cut, and no block in real play comes without a raised guard.
+import { createSim, step, DT, blankInput, standoffPose, digest, foeGuarded, foeGuardMax } from './sim.js';
 import { makeBot, botInput, makePersona, personaInput } from './bot.js';
-import { DIFF, ATK, CHAPTERS, HAIKU } from './data.js';
+import { DIFF, ATK, CHAPTERS, HAIKU, FOES, BOSSES, COMBAT } from './data.js';
 import { makeStore, DEFAULT_PROGRESS } from './save.js';
 import { makePlates, plateStep } from './plates.js';
 import { runClothCheck } from './clothcheck.mjs';
@@ -215,6 +217,103 @@ console.log('9. plates');
   const r = runClothCheck((m) => console.log('  ' + m));
   ok(r.total > 8000 && r.anims > 100, 'cloth checker covered too little');
   ok(r.fails.length === 0, `cloth rules broken on ${r.fails.length} frames`);
+}
+
+// ---- 11. combat honesty: what blocks and what lands comes only from what the player can see ----
+console.log('11. combat honesty');
+{
+  // a fight with one foe (or a boss) in chapter 1, the ronin at x, the foe placed in front of him in a chosen state
+  const duel = (type, o = {}) => {
+    const s = createSim({ seed: o.seed ?? 3, difficulty: o.diff ?? 'blade', chapter: 0 });
+    const e = s.ev.find((q) => q.t === (BOSSES[type] ? 'boss' : 'fight'));
+    for (const q of s.ev) if (q !== e) q.done = true;
+    if (!BOSSES[type]) e.foes = [type];
+    s.p.x = s.p.ox = e.x - 80; step(s, blankInput()); s.cues.length = 0;
+    const f = s.foes[0]; s.p.face = 1; f.face = -1; f.x = f.ox = s.p.x + (o.dist ?? 70);
+    f.st = o.st ?? 'ready'; f.stt = 0.5; f.readyT = 99; f.engaged = o.engaged ?? true; f.guard = o.guard ?? 0;
+    if (o.turned) f.face = 1;
+    if (o.atk) { f.atk = o.atk; f.windT = 0.6; f.stt = o.stt ?? 0.2; }
+    s.tokenCD = 99; // keep him from starting a new attack mid-test
+    return { s, f };
+  };
+  // press the cut (or heavy) and run until it has resolved; returns the cues it caused for that foe
+  // let the ronin finish whatever he was doing (the foe is held in place meanwhile)
+  const ready = (s, f) => { const st = f.st, g = f.guard; for (let i = 0; i < 120 && (!(s.p.st === 'idle' || s.p.st === 'move') || s.p.recoil > 0); i++) { step(s, blankInput()); s.cues.length = 0; } f.st = st; f.guard = g; f.x = s.p.x + 70; f.face = -1; };
+  const strike = (s, f, key = 'slash') => {
+    const I = blankInput(); I[key] = true; const out = [];
+    for (let i = 0; i < 40; i++) { step(s, i === 0 ? I : blankInput()); for (const c of s.cues) out.push(c); s.cues.length = 0; if (out.some((c) => c.k === 'swing') && i > 2) break; }
+    return out.filter((c) => c.id === f.id || c.k === 'swing');
+  };
+  const landed = (cs) => cs.some((c) => c.k === 'cut' || c.k === 'kill' || c.k === 'riposte');
+  const regular = ['bandit', 'spear', 'archer', 'brute', 'duelist'], bosses = Object.keys(BOSSES);
+  let n = 0;
+  // a. a cut on a foe who is walking in, still entering, turned away or not yet squared up always lands
+  for (const type of [...regular, ...bosses]) for (const [label, o] of [...(type === 'archer' ? [] : [['walking in', { st: 'approach', dist: 112 }]]), ['entering', { st: 'enter', dist: 90 }], ['turned away', { st: 'ready', guard: 1, turned: true }], ['squaring up', { st: 'ready', guard: 0 }], ['mid-windup', { st: 'wind', atk: BOSSES[type] ? 'cut' : FOES[type].moves[0][0] }]])
+    for (const engaged of [false, true]) for (let seed = 1; seed <= 3; seed++) {
+      const { s, f } = duel(type, Object.assign({ seed, engaged }, o)); if (o.st === 'enter') f.tx = s.p.x - 300;
+      const hp0 = f.hp, cs = strike(s, f); n++;
+      ok(landed(cs) && !cs.some((c) => c.k === 'clash'), `${type} ${label} (engaged ${engaged}): the cut did not land (${cs.map((c) => c.k).join(',')})`);
+      ok(f.hp < hp0 || f.st === 'dead', `${type} ${label}: a landed cut cost him no health`);
+      if (!engaged && o.st !== 'wind') ok(cs.some((c) => c.k === 'surprise') && (BOSSES[type] ? f.st === 'stagger' : f.st === 'dead'), `${type} ${label}: a surprise cut should ${BOSSES[type] ? 'stagger' : 'kill'} him (st ${f.st})`);
+    }
+  // b. a raised guard always blocks, always with a clash cue (sparks, ring, both recoil), and his counter comes next
+  let blocks = 0;
+  for (const type of [...regular, ...bosses]) {
+    const { s, f } = duel(type, { guard: 1 }); if (FOES[type] && FOES[type].shield) f.shield = 1; if (type === 'hyoe') { f.shield = 1; f.phase = 2; }
+    if (!foeGuardMax(f)) { const cs = strike(s, f); ok(landed(cs), `${type} has no guard, so the cut must land`); continue; }
+    ok(foeGuarded(s, f), `${type} squared up with guard 1 reads as guarded`);
+    const px = s.p.x, cs = strike(s, f), cl = cs.find((c) => c.k === 'clash'); blocks++;
+    ok(!!cl && !landed(cs) && f.st === 'block', `${type}: a cut into a raised guard must be a visible block (${cs.map((c) => c.k).join(',')}, st ${f.st})`);
+    ok(cl && cl.gm === 1 && cl.max === foeGuardMax(f), `${type}: the clash cue carries the guard meter (${cl && cl.gm}/${cl && cl.max})`);
+    ok(s.p.recoil > 0 || s.p.x < px, `${type}: the ronin recoils from the block`);
+    // the counter window: once the block pose ends he attacks with a normal telegraph
+    s.tokenCD = 0; let told = false; for (let i = 0; i < 60 && !told; i++) { step(s, blankInput()); told = s.cues.some((c) => c.k === 'tell' && c.id === f.id); s.cues.length = 0; }
+    ok(told, `${type}: a block opens his counter (he attacks within a second)`);
+    // determinism: the same situation gives the same result whatever the RNG state
+    for (let seed = 2; seed <= 6; seed++) { const d2 = duel(type, { guard: 1, seed }); if (type === 'hyoe') { d2.f.shield = 1; d2.f.phase = 2; } if (FOES[type] && FOES[type].shield) d2.f.shield = 1; ok(strike(d2.s, d2.f).some((c) => c.k === 'clash'), `${type} seed ${seed}: same guard, same block`); }
+  }
+  // c. the guard meter breaks within 4 quick hits (2 heavy), and the broken foe is open for the riposte
+  for (const type of [...regular, ...bosses]) for (const key of ['slash', 'heavy']) {
+    const { s, f } = duel(type, { guard: 1 }); if (FOES[type] && FOES[type].shield) f.shield = 1; if (type === 'hyoe') { f.shield = 1; f.phase = 2; }
+    if (!foeGuardMax(f)) continue;
+    let hits = 0, broke = false;
+    for (; hits < 8 && !broke; ) {
+      f.st = 'ready'; f.guard = 1; ready(s, f); hits++;
+      const cs = strike(s, f, key); broke = cs.some((c) => c.k === 'guardbreak');
+      if (!broke) ok(cs.some((c) => c.k === 'clash'), `${type} ${key} hit ${hits}: neither a block nor a break`);
+    }
+    ok(broke && hits <= (key === 'heavy' ? 2 : 4), `${type}: guard broke after ${hits} ${key} hits (must be <= ${key === 'heavy' ? 2 : 4})`);
+    ok(f.st === 'opened', `${type}: a broken guard leaves him open (st ${f.st})`);
+    ready(s, f); const hp0 = f.hp, cs = strike(s, f); ok(cs.some((c) => c.k === 'riposte') && (f.boss ? f.hp <= hp0 - COMBAT.riposteBoss + 1e-9 : f.st === 'dead'), `${type}: the riposte after a guard break ${f.boss ? 'cuts deep' : 'kills'}`);
+  }
+  // d. bosses take damage from every landed quick cut (at least 0.6 of a normal hit), whatever they are doing
+  for (const type of bosses) for (const [st, o] of [['ready', { guard: 0 }], ['approach', { dist: 112 }], ['rec', { atk: 'cut', stt: 0.05 }], ['stun', {}], ['wind', { atk: 'cut' }], ['act', { atk: 'cut', stt: 0.01 }], ['shift', {}]]) {
+    const { s, f } = duel(type, Object.assign({ st }, o)); if (st === 'stun') f.stunT = 0.6; if (st === 'act') { f.hitDone = true; s.p.ifr = 2; }
+    const hp0 = f.hp, cs = strike(s, f), c = cs.find((q) => q.k === 'cut');
+    ok(!!c && hp0 - f.hp >= 0.6 - 1e-9, `${type} in ${st}: a quick cut must land for >= 0.6 (got ${c ? (hp0 - f.hp).toFixed(2) : 'no cut: ' + cs.map((q) => q.k).join(',')})`);
+  }
+  // the first landed quick cut of a combo staggers a boss who is not committed to a strike
+  for (const type of bosses) { const { s, f } = duel(type, { st: 'ready', guard: 0 }); strike(s, f); ok(f.st === 'stun', `${type}: first quick cut of a combo staggers him (st ${f.st})`); }
+  // e. regular foes die in 2 to 3 clean cuts (unguarded, already fighting)
+  for (const type of ['bandit', 'spear', 'duelist', 'archer']) {
+    const { s, f } = duel(type, { st: 'stun' }); f.stunT = 9; let cuts = 0; while (f.st !== 'dead' && cuts < 6) { ready(s, f); strike(s, f); cuts++; if (f.st !== 'dead') { f.st = 'stun'; f.stunT = 9; } }
+    ok(cuts >= 2 && cuts <= 3, `${type} died in ${cuts} clean cuts (band 2 to 3)`);
+  }
+  // f. no block without a visible guard, over real play: persona runs and the capable bot, every clash checked against the pre-step state
+  let clashes = 0, blind = 0;
+  for (const [kind, seed] of [['masher', 1], ['learner', 2], ['competent', 3], ['bot', 4], ['learner', 5]]) {
+    const s = createSim({ seed, difficulty: 'blade', chapter: seed % 3 }); const m = kind === 'bot' ? makeBot() : makePersona(kind, seed);
+    for (let i = 0; i < 60 * 60 * 3; i++) {
+      const pre = new Map(s.foes.map((f) => [f.id, { st: f.st, guard: f.guard, face: f.face, x: f.x }]));
+      step(s, kind === 'bot' ? botInput(s, m) : personaInput(s, m));
+      for (const c of s.cues) if (c.k === 'clash') { clashes++; const b = pre.get(c.id); if (!b || !(b.guard >= 1) || (b.st !== 'ready' && b.st !== 'block')) blind++; }
+      s.cues.length = 0;
+    }
+    blind += s.stats.blindBlocks;
+  }
+  ok(blind === 0, `${blind} blocks happened without a raised guard`);
+  ok(clashes > 10, `blocks were exercised in real play (${clashes})`);
+  console.log(`  ${n} cuts on unready foes all landed; ${blocks} guard types block with a clash and counter; meters break in <= 4 quick / 2 heavy; ${clashes} blocks in play, all from a raised guard`);
 }
 
 // ---- 7. personas: human-like players on the default difficulty (Blade), 8 seeds each ----
