@@ -49,21 +49,21 @@ export function bloomKit() {
   kit = {
     shapes, SZ,
     // a tinted pair (wash body, rim) for shape i
-    get(i, col) { const key = i + col; let v = cache.get(key); if (!v) { const s = shapes[i % N_SHAPES]; v = { fill: tint(s.fill, col), rim: tint(s.rim, col) }; cache.set(key, v); if (cache.size > 16) cache.delete(cache.keys().next().value); } return v; },
+    get(i, col) { const key = i + col; let v = cache.get(key); if (!v) { const s = shapes[i % N_SHAPES]; v = { fill: tint(s.fill, col), rim: tint(s.rim, col) }; cache.set(key, v); if (cache.size > 28) cache.delete(cache.keys().next().value); } return v; },
     // draw a bloom centred at (x, y) with radius r (pixels); body and rim alphas separate so it can dry (rim outlives the body)
     draw(g, i, col, x, y, r, aBody, aRim, rot = 0) {
       const v = this.get(i, col), s = (r * 2) / (SZ * 0.8);
       if (rot) { g.save(); g.translate(x, y); g.rotate(rot); x = 0; y = 0; }
       const w = SZ * s;
-      if (aBody > 0.003) { g.globalAlpha = aBody; g.drawImage(v.fill, x - w / 2, y - w / 2, w, w); }
-      if (aRim > 0.003) { g.globalAlpha = aRim; g.drawImage(v.rim, x - w / 2, y - w / 2, w, w); }
+      if (aBody > 0.01) { g.globalAlpha = aBody; g.drawImage(v.fill, x - w / 2, y - w / 2, w, w); }
+      if (aRim > 0.01) { g.globalAlpha = aRim; g.drawImage(v.rim, x - w / 2, y - w / 2, w, w); }
       if (rot) g.restore();
     },
     // an elliptical bloom (mist banks): rx, ry in pixels
     drawE(g, i, col, x, y, rx, ry, aBody, aRim) {
       const v = this.get(i, col), w = (rx * 2) / 0.8, h = (ry * 2) / 0.8;
-      if (aBody > 0.003) { g.globalAlpha = aBody; g.drawImage(v.fill, x - w / 2, y - h / 2, w, h); }
-      if (aRim > 0.003) { g.globalAlpha = aRim; g.drawImage(v.rim, x - w / 2, y - h / 2, w, h); }
+      if (aBody > 0.01) { g.globalAlpha = aBody; g.drawImage(v.fill, x - w / 2, y - h / 2, w, h); }
+      if (aRim > 0.01) { g.globalAlpha = aRim; g.drawImage(v.rim, x - w / 2, y - h / 2, w, h); }
     },
     // the paper mask for openings and closings: the scene shows through blooms that open from a few points.
     // Drawn at half resolution into `m` (re-used), then laid over the frame.

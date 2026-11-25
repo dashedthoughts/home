@@ -172,24 +172,25 @@ export class Life {
       }
     }
     if (r.fx && r.fx.petals) r.fx.petals.far(g, s, dt, r);
-    const K = bloomKit();
+    const K = bloomKit(); this.kit = K;
     if (K) {
       // slow living blooms in the sky: ink drops into the wet sheet, spread, and dry (the rim outlasts the wash)
       const col = { bamboo: '#5f6356', terraces: '#b98b4a', torii: '#5e5a56', snow: '#9aa3b5', castle: '#c98a9a' }[key];
       const calm = s.arena || s.phase === 'standoff' ? 0 : 1; this.calmK += (calm - this.calmK) * Math.min(1, dt * 0.8);
       for (const B of this.sky) {
         B.t += dt; if (B.t < 0) continue;
-        if (B.t >= B.life) { B.t = -(6 + Math.random() * 10); B.life = 16 + Math.random() * 10; B.x = 0.1 + Math.random() * 0.8; B.y = 0.1 + Math.random() * 0.22; B.r = 0.11 + Math.random() * 0.08; B.i = (Math.random() * 4) | 0; B.vx = (s.wind && s.wind.w < 0 ? -1 : 1) * (0.003 + Math.random() * 0.004); continue; }
+        if (B.t >= B.life) { B.t = -(6 + Math.random() * 10); B.life = 16 + Math.random() * 10; B.x = 0.1 + Math.random() * 0.8; B.y = 0.1 + Math.random() * 0.22; B.r = 0.08 + Math.random() * 0.05; B.i = (Math.random() * 2) | 0; B.vx = (s.wind && s.wind.w < 0 ? -1 : 1) * (0.003 + Math.random() * 0.004); continue; }
         if (B.x === undefined) { B.t = B.life; continue; }
+        if (this.calmK < 0.05) continue; // no sky blooms over a fight
         const u = B.t / B.life, grow = red ? 1 : 0.7 + 0.3 * (1 - Math.pow(1 - Math.min(1, u / 0.35), 3)); if (!red) B.x += B.vx * dt;
         const body = (night ? 0.07 : 0.085) * Math.min(1, u / 0.3) * (1 - clamp((u - 0.3) / 0.5, 0, 1)), rim = (night ? 0.12 : 0.16) * Math.min(1, u / 0.3) * (1 - clamp((u - 0.55) / 0.45, 0, 1));
         K.draw(g, B.i, col, B.x * W - camX * 0.02 * k, B.y * H, B.r * H * grow, body * (1 - r.red) * this.calmK, rim * (1 - r.red) * this.calmK);
       }
       // morning mist that breathes over the far ranges (strongest at dawn: bamboo morning, castle daybreak); thins in a fight
       const mk = ({ bamboo: 1, castle: 0.9, terraces: 0.55, torii: 0.7, snow: 0.45 }[key]) * this.calmK * (1 - r.red);
-      if (mk > 0.02) for (let i = 0; i < 2; i++) {
+      if (mk > 0.05 && !r.lite) for (let i = 0; i < 1; i++) {
         const br = red ? 0.5 : 0.5 + 0.5 * Math.sin(r.time * (0.19 + i * 0.07) + i * 2.1), x = ((W * (0.3 + i * 0.45) - camX * 0.06 * k) % (W * 1.6) + W * 1.6) % (W * 1.6) - W * 0.3;
-        K.drawE(g, i + 1, night ? '#3d4049' : CHAPTERS[r.ch].paper, x, H * (0.6 + i * 0.03), W * (0.34 + br * 0.04), H * (0.075 + br * 0.02), (0.26 + br * 0.16) * mk, 0.05 * mk);
+        K.drawE(g, 2, night ? '#3d4049' : CHAPTERS[r.ch].paper, x, H * 0.6, W * (0.28 + br * 0.03), H * (0.06 + br * 0.015), (0.28 + br * 0.16) * mk, 0);
       }
     }
     if (r.fx) { g.setTransform(1, 0, 0, 1, 0, 0); r.fx.drawMoments(g, r, dt); }

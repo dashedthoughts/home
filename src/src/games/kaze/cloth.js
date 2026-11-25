@@ -94,14 +94,17 @@ function constrain(st, T, cons, o) {
 // a hem chain; a gusset that fills between the thighs above the split. Returns targets; the caller steps the chains.
 export function hakamaTargets(q) {
   const { H, legs, f, nf, dn, sc, bulk, hl, groundY } = q;
-  const st = q.stride || 0, Bh = 110 * sc, wW = 15 * sc * bulk, wk = 19 * sc * Math.sqrt(bulk), hemW0 = Math.max((hl >= 0.8 ? 0.17 : 0.11) * Bh, 26 * sc * Math.sqrt(bulk) * Math.min(1, hl + 0.35)), hemW = hemW0 + ((hl >= 0.8 ? 0.168 : 0.11) * Bh - hemW0) * st;
+  let st = q.stride || 0, Bh = 110 * sc, wW = 15 * sc * bulk, wk = 19 * sc * Math.sqrt(bulk), hemW0 = Math.max((hl >= 0.8 ? 0.17 : 0.11) * Bh, 26 * sc * Math.sqrt(bulk) * Math.min(1, hl + 0.35)), hemW = hemW0 + ((hl >= 0.8 ? 0.168 : 0.11) * Bh - hemW0) * st;
   const Wb = [H[0] - nf[0] * wW / 2 - dn[0] * 2 * sc, H[1] - nf[1] * wW / 2 - dn[1] * 2 * sc], Wf = [H[0] + nf[0] * wW / 2 - dn[0] * 2 * sc, H[1] + nf[1] * wW / 2 - dn[1] * 2 * sc];
   // the hips flare out below the cinched waist
   const Hb = [H[0] - nf[0] * (wW / 2 + 3.2 * sc) + dn[0] * 8 * sc, H[1] - nf[1] * (wW / 2 + 3.2 * sc) + dn[1] * 8 * sc], Hf = [H[0] + nf[0] * (wW / 2 + 3.2 * sc) + dn[0] * 8 * sc, H[1] + nf[1] * (wW / 2 + 3.2 * sc) + dn[1] * 8 * sc];
   const S = (p) => (p[0] - H[0]) * f; // position along the facing axis
   // when the legs spread (lunge, crouch, standoff, stride) the hakama splits: each leg's panel follows its own leg
   const legLen = 62 * sc, dA = Math.hypot(legs[0].fx - legs[1].fx, legs[0].fy - legs[1].fy), spread = q.kneel ? 0 : Math.min(1, Math.max(0, (dA / legLen - 0.4) / 0.15));
-  const out = { Bh, wW, wk, hemW, Wb, Wf, Hb, Hf, legs: [], r: 2.5 * sc, stride: st, split: Math.max(st, spread), legLen, dA };
+  // split legs are trousers, not bell-bottoms: about 1.6 legs wide at the knee, gently flared to about 1.4x that at the hem
+  // the split eases in and out over about 0.15 s, so a garment never pops between a skirt and two trouser legs
+  let spl = Math.max(st, spread); if (q.prevSplit != null && !q.reduced) spl = q.prevSplit + Math.max(-q.dt * 7, Math.min(q.dt * 7, spl - q.prevSplit)); wk += (15 * sc * Math.max(1, Math.sqrt(bulk)) - wk) * spl; hemW += (Math.min(hemW, (hl >= 0.8 ? 0.165 : 0.11) * Bh) - hemW) * spl;
+  const out = { Bh, wW, wk, hemW, Wb, Wf, Hb, Hf, legs: [], r: 2.5 * sc, stride: st, split: spl, legLen, dA };
   for (const l of legs) {
     const K = [l.kx, l.ky], A = [l.fx, l.fy], J = [l.hx, l.hy];
     let tx = K[0] - J[0], ty = K[1] - J[1]; const tl = Math.hypot(tx, ty) || 1; tx /= tl; ty /= tl;
@@ -199,7 +202,7 @@ export function checkGarment(G, o = {}) {
   const W = [(G.HG.Wb[0] + G.HG.Wf[0]) / 2, (G.HG.Wb[1] + G.HG.Wf[1]) / 2];
   // legs apart: the hakama is split, so the paper between the two shins is open (no sheet stretched between the legs).
   // Tested midway between the two shins whenever they are more than two trouser-legs apart.
-  if (!G.kneel && G.HG && G.HG.dA > 0.6 * G.HG.legLen) { const [a, b] = G.legs, ma = [(a.K[0] + a.A[0]) / 2, (a.K[1] + a.A[1]) / 2], mb = [(b.K[0] + b.A[0]) / 2, (b.K[1] + b.A[1]) / 2];
+  if (!G.kneel && G.HG && G.HG.dA > 0.6 * G.HG.legLen && G.HG.split > 0.9) { const [a, b] = G.legs, ma = [(a.K[0] + a.A[0]) / 2, (a.K[1] + a.A[1]) / 2], mb = [(b.K[0] + b.A[0]) / 2, (b.K[1] + b.A[1]) / 2];
     const segD = (p, a2, b2) => { const vx = b2[0] - a2[0], vy = b2[1] - a2[1], t = Math.max(0, Math.min(1, ((p[0] - a2[0]) * vx + (p[1] - a2[1]) * vy) / (vx * vx + vy * vy || 1))); return Math.hypot(p[0] - a2[0] - vx * t, p[1] - a2[1] - vy * t); };
     const p = [(ma[0] + mb[0]) / 2, (ma[1] + mb[1]) / 2], clear = G.legs.every((l) => segD(p, l.J, l.K) > 13 * sc && segD(p, l.K, l.A) > 13 * sc);
     if (clear && Math.hypot(ma[0] - mb[0], ma[1] - mb[1]) > 24 * sc) {

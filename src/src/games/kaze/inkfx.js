@@ -5,6 +5,7 @@ import { rng, clamp, makeCanvas, rgba, mix } from './brush.js';
 import { CHAPTERS, groundH } from './data.js';
 import { bloomKit } from './bloom.js';
 import { Petals } from './petals.js';
+import { Tell } from './tell.js';
 
 const INKW = '#2a231d'; // warm charcoal, never pure black
 const N_STAIN = 96, N_DROP = 20, N_MOTE = 36, N_POOL = 10, N_INK = 80, N_SPLAT = 8;
@@ -55,7 +56,7 @@ export class InkFx {
     this.ink = Array.from({ length: N_INK }, () => ({ on: 0 })); this.ii = 0; this.splats = Array.from({ length: N_SPLAT }, () => ({ on: 0 })); this.spi = 0;
     this.kb = Array.from({ length: 6 }, () => ({ on: 0 })); this.kbi = 0; // ink blooms behind a kill
     this.moments = Array.from({ length: 4 }, () => ({ on: 0 })); this.moi = 0; this.open = { t: 9, life: 1, close: 0 }; this.mask = null; this.lastPhase = '';
-    this.petals = new Petals();
+    this.petals = new Petals(); this.tell = new Tell();
     this.bx = new Float64Array(10); this.nb = 0; // bodies the grass parts around
     this.blots = typeof document === 'undefined' ? [] : [0, 1, 2, 3].map((i) => blotSprite(71 + i * 13, 96, 34));
     this.blotsD = typeof document === 'undefined' ? [] : [0, 1, 2, 3].map((i) => blotSprite(131 + i * 17, 96, 34, false, true));
@@ -75,10 +76,10 @@ export class InkFx {
     for (const M of this.moments) {
       if (!M.on) continue; M.t += dt; if (M.t >= M.life) { M.on = 0; continue; }
       const u = M.t / M.life, grow = r.reduced ? 1 : 0.6 + 0.4 * (1 - Math.pow(1 - Math.min(1, M.t / 1.6), 3)), env = Math.min(1, M.t / 0.6) * (1 - u * u) * (1 - r.red * 0.6);
-      for (const [cx, cy] of sides[M.corner]) K.draw(g, M.i + (cx > 0.5 ? 1 : 0), M.col, cx * W, cy * H, H * 0.34 * grow, M.a * env, M.a * 1.1 * env * (1 - u * 0.6));
+      const [cx, cy] = sides[M.corner][0]; K.draw(g, M.i % 2, M.col, cx * W, cy * H, H * 0.24 * grow, M.a * env, M.a * 1.1 * env * (1 - u * 0.6)); // one side only: it is pigment in the paper, not a frame
     }
   }
-  moment(col, a, life, corner) { this.moi = (this.moi + 1) % this.moments.length; const M = this.moments[this.moi]; M.on = 1; M.t = 0; M.col = col; M.a = a; M.life = life; M.corner = corner; M.i = (Math.random() * 4) | 0; }
+  moment(col, a, life, corner) { life = Math.min(life, 2.8); this.moi = (this.moi + 1) % this.moments.length; const M = this.moments[this.moi]; M.on = 1; M.t = 0; M.col = col; M.a = a; M.life = life; M.corner = corner; M.i = (Math.random() * 4) | 0; }
   killBloom(x, y, boss) { this.kbi = (this.kbi + 1) % this.kb.length; const B = this.kb[this.kbi]; B.on = 1; B.x = x; B.y = y - 40; B.t = 0; B.r = boss ? 120 : 80; B.i = (Math.random() * 4) | 0; B.rot = Math.random() * 6.28; }
   // the strike: a wet blot at the contact point thrown along the cut, a few fat drops and a fan of fine ones, all landing as stains
   burst(x, y, dir, pw, red) {
@@ -100,7 +101,9 @@ export class InkFx {
     // chapter openings bloom in from a few points; the close after a boss closes the same way
     if (s.card && s.card.t < 0.05 && s.cp === 0 && this.open.t > 0.5) { this.open.t = 0; this.open.life = 2.8; this.open.close = 0; }
     if (s.phase === 'narr' && !s.prologue && this.lastPhase === 'play') { this.open.t = 0; this.open.life = 2.2; this.open.close = 1; }
+    if (s.phase === 'credits' && this.lastPhase === 'ending') { this.open.t = 0; this.open.life = 2.4; this.open.close = 1; } // the last page closes over the ending
     this.lastPhase = s.phase;
+    this.tell.pre(s, r, this); this.petals.pre(s, r);
     const red = r.reduced;
     for (const c of s.cues) {
       switch (c.k) {
@@ -168,6 +171,7 @@ export class InkFx {
   }
   // ground layer, world space, drawn under the figures
   ground(g, s, dt, r) {
+    this.tell.ground(g, s, dt, r);
     const red = r.reduced, t = r.time;
     g.globalCompositeOperation = 'source-over';
     // stains and prints dry: dark and glossy while wet, then pale and gone
@@ -248,7 +252,7 @@ export class InkFx {
       if (d.y >= gy) { d.on = 0; this.stain(d.x, gy, 4 + Math.random() * 3, 5); continue; }
       const st = clamp(d.vy / 300, 0.6, 2.4); g.globalAlpha = 0.85; g.beginPath(); g.ellipse(d.x, d.y, 1.4, 1.6 * st, 0, 0, 6.2832); g.fill();
     }
-    this.petals.air(g, s, dt, r);
+    this.petals.air(g, s, dt, r); this.tell.air(g, s, dt, r);
     for (const m of this.motes) {
       if (!m.on) continue; m.t += dt; if (m.t >= m.life) { m.on = 0; continue; }
       m.y += m.vy * dt; const k = m.t / m.life, x = m.x + Math.sin(m.ph + m.t * 0.9) * 10;
@@ -276,6 +280,7 @@ export class InkFx {
   screen(g, s, dt, r) {
     const { W, H } = r.v, K = bloomKit(), C = CHAPTERS[r.ch];
     this.petals.screen(g, s, dt, r);
+    if (s.so || this.tell.st !== 'idle') { if (!this.wash || this.washW !== W || this.washH !== H) { this.wash = edgeWash(W, H, 17); this.washW = W; this.washH = H; } this.tell.screen(g, s, dt, r, this.wash); }
     if (K) {
       g.setTransform(1, 0, 0, 1, 0, 0);
       // openings and closings: the scene blooms out of the bare sheet (or the sheet closes over it)
@@ -289,7 +294,7 @@ export class InkFx {
           this.pts[0].x = 0.46 + j * 0.3; this.pts[1].y = 0.3 + j * 0.2;
           K.reveal(g, this.mask, W, H, C.paper, INKW, p, this.pts);
         }
-      } else if (O.close && s.phase === 'narr') { g.fillStyle = C.paper; g.fillRect(0, 0, W, H); } // closed: hold the bare sheet under the narration
+      } else if (O.close && (s.phase === 'narr' || s.phase === 'credits' || s.phase === 'fin')) { g.fillStyle = C.paper; g.fillRect(0, 0, W, H); } // closed: hold the bare sheet under the narration
     }
     if (this.low < 0.01) return;
     if (!this.wash || this.washW !== W || this.washH !== H) { this.wash = edgeWash(W, H, 17); this.washW = W; this.washH = H; }

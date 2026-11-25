@@ -8,6 +8,15 @@ import { makePlates, plateStep, HINT } from './plates.js';
 import { poseFor, drawFigure, newFig, stepScarf, LOOKS, POSE, lerpPose, BOSSLOOK, drawFoxFig, walkLegs, brushLine } from './figures.js';
 import { P as PT, standoffPose } from './sim.js';
 import { InkFx } from './inkfx.js'; import { floraFor, floraProps, drawGrass } from './flora.js'; import { Life } from './life.js'; // [inkfx] ink effects + ambient life (owned by the ink-effects engineer)
+// the parry: the ronin's blade meets the incoming one at a clear angle, locks, sends it past, and he coils to strike
+const PARRY_K = {
+  high: Object.assign({}, POSE.guard, { grip: [14, -82], sw: -2.35, lean: -0.06, head: -0.1, ff: [20, 0], fb: [-24, 0], hy: -45 }),
+  low: Object.assign({}, POSE.guard, { grip: [26, -40], sw: 0.95, lean: 0.22, head: 0.15, ff: [24, 0], fb: [-22, 0], hy: -41 }),
+  turn: Object.assign({}, POSE.guard, { grip: [8, -64], sw: -1.95, lean: -0.2, head: 0.05, hx: 6, ff: [6, 0], fb: [-30, 0], hy: -44 }),
+};
+const COIL = Object.assign({}, POSE.guard, { grip: [-4, -60], sw: -2.55, lean: 0.24, head: 0.12, ff: [26, 0], fb: [-26, 0], hy: -42 });
+const DEFLECT_K = Object.assign({}, POSE.guard, { grip: [20, -66], sw: -1.55, lean: -0.12, head: -0.05, ff: [16, 0], fb: [-26, 0], hy: -45 });
+const TUCK = Object.assign({}, POSE.guard, { grip: [14, -44], sw: 0.4, lean: 0.55, head: 0.2, ff: [8, -12], fb: [-6, -16], hy: -40 }); // tucked for rolls and somersaults
 const KNEEL_X = Object.assign({}, POSE.knee, { grip: [46, -30], sw: 0.18, lean: 0.22, head: 0.2 });
 const SLIDE_X = Object.assign({}, POSE.dSlide, { grip: [44, -26], sw: 0.12, lean: 0.3, head: 0.25 });
 const WHEEL_W = Object.assign({}, POSE.guard, { grip: [-26, -44], sw: 2.9, lean: -0.05, head: -0.15, ff: [22, 0], fb: [-26, 0], hy: -40 });
@@ -201,13 +210,22 @@ export class Renderer {
   // ---- flourishes: choreography on the sim's own timings and hitboxes. The same button gives different, showy
   // moves by context; never the same flourish twice in a row. ----
   flourish(s, p, fig, pose, dt) {
+    // the parry exchange: contact at a clear angle, a held lock (the hit-stop), the blade sent past, then a coil into the
+    // riposte; the cloth snaps with the impact. A plain deflect is the same, smaller, without the coil.
+    if (fig.pfx) { const X = fig.pfx; if (this.hitstop <= 0) X.t += dt;
+      if (X.t > (X.kind === 'deflect' ? 0.3 : 0.6) || !(p.st === 'guard' || p.st === 'idle' || p.st === 'move')) fig.pfx = null;
+      else { const C = X.kind === 'deflect' ? DEFLECT_K : PARRY_K[X.kind], E2 = (u) => u * u * (3 - 2 * u), P2 = lerpPose(pose, pose, 0, {});
+        if (X.t < 0.05) lerpPose(pose, C, E2(X.t / 0.05), P2); else if (X.kind === 'deflect') lerpPose(C, pose, E2(clamp((X.t - 0.1) / 0.2, 0, 1)), P2);
+        else if (X.t < 0.26) lerpPose(C, COIL, E2((X.t - 0.05) / 0.21), P2); else lerpPose(COIL, pose, E2(clamp((X.t - 0.45) / 0.15, 0, 1)), P2);
+        return { pose: P2, whirl: -p.face * (X.big ? 9 : 5) * Math.max(0, 1 - X.t / 0.25) }; } }
     const near = s.foes.filter((f) => f.st !== 'dead' && f.st !== 'enter' && Math.abs(f.x - p.x) < 150), ahead = near.filter((f) => (f.x - p.x) * p.face > 0);
     const tgt = ahead.sort((a, b) => Math.abs(a.x - p.x) - Math.abs(b.x - p.x))[0];
     const key = p.st + ':' + (p.combo || 0);
     if (key !== fig.flKey || p.stt < (fig.flStt ?? 0) - 1e-6) {
       fig.flKey = key; let kind = null; const last = fig.lastFl;
       const opts = [];
-      if (p.st === 'slash') {
+      if (p.st === 'slash' && p.y > 10) opts.push(p.combo ? 'airspin' : p.vy < 0 ? 'divecut' : 'aircut'); // in the air: a rising cut, a diving cut, a spin cut
+      else if (p.st === 'slash') {
         if (tgt && (tgt.st === 'opened')) opts.push('drawcut');
         if (tgt && tgt.type === 'spear' && (tgt.st === 'wind' || tgt.st === 'act') && (tgt.atk === 'thrust' || tgt.atk === 'lunge')) opts.push('slide');
         if (tgt && tgt.hp <= 1 && (tgt.st === 'stagger' || tgt.st === 'stun')) opts.push('finisher');
@@ -216,11 +234,17 @@ export class Renderer {
         if (Math.abs(fig.lvxStart ?? 0) > 150) opts.push('leap');
         if (tgt && tgt.hp <= 2 && tgt.st !== 'ready') opts.push('finisher');
         if (near.length >= 2) opts.push('spin');
-      } else if (p.st === 'dodge' && near.some((f) => (f.x - p.x) * (p.dodgeDir || p.face) < 0 && Math.abs(f.x - p.x) < 120)) opts.push('flip');
+      } else if (p.st === 'dodge' && near.some((f) => (f.x - p.x) * (p.dodgeDir || p.face) > 0 && Math.abs(f.x - p.x) < 95)) opts.push('overflip'); // a somersault over the foe
+      else if (p.st === 'dodge' && near.some((f) => (f.x - p.x) * (p.dodgeDir || p.face) < 0 && Math.abs(f.x - p.x) < 120)) { fig.shieldKick = near.some((f) => f.shield && Math.abs(f.x - p.x) < 90); opts.push('flip'); }
       kind = opts.find((k) => k !== last) || null;
-      fig.fl = kind ? { kind, t: 0 } : null; if (kind) { fig.lastFl = kind; if (!this.reduced) this.push = Math.max(this.push || 0, 0.045); }
+      if (!kind && fig.fl && (fig.fl.kind === 'roll' || fig.fl.kind === 'vault') && (p.st === 'move' || p.st === 'idle')) kind = fig.fl.kind; // a roll or a vault plays through
+      fig.fl = kind ? (fig.fl && fig.fl.kind === kind && (kind === 'roll' || kind === 'vault') ? fig.fl : { kind, t: 0 }) : null; if (kind) { fig.lastFl = kind; if (!this.reduced) this.push = Math.max(this.push || 0, 0.045); }
     }
     fig.flStt = p.stt; if (p.st === 'move' || p.st === 'idle') fig.lvxStart = fig.lvx;
+    // a landing roll after a long fall at speed
+    if (p.y > 0) { fig.airVy = p.vy; fig.wasAir = true; } else if (fig.wasAir) { fig.wasAir = false; if ((fig.airVy || 0) < -330 && Math.abs(p.vx) > 110 && (p.st === 'move' || p.st === 'idle') && !fig.fl) { fig.fl = { kind: 'roll', t: 0 }; fig.lastFl = 'roll'; } }
+    if (fig.fl && fig.fl.kind === 'roll' && !(p.st === 'move' || p.st === 'idle')) fig.fl = null;
+    if (fig.fl && fig.fl.kind === 'roll') { fig.fl.t += dt; const u = clamp(fig.fl.t / 0.34, 0, 1), P2 = lerpPose(pose, TUCK, Math.min(1, Math.sin(Math.PI * u) * 2.2), {}); if (u >= 1) { fig.fl = null; return null; } return { pose: P2, rot: p.face * Math.PI * 2 * u * u * (3 - 2 * u), lift: 8 * Math.sin(Math.PI * u) }; }
     // a vault: running over a fallen foe (once per body)
     if (!fig.fl && p.st === 'move' && Math.abs(p.vx) > 150) { const c = (this.corpses || []).find((c) => c.landed && c !== fig.vaulted && (c.x - p.x) * p.face > 8 && (c.x - p.x) * p.face < 46); if (c) { fig.vaulted = c; fig.fl = { kind: 'vault', t: 0 }; fig.lastFl = 'vault'; } }
     if (fig.fl && fig.fl.kind === 'vault') { // a short hop over the body, knees tucked, the hakama lifting
@@ -274,8 +298,17 @@ export class Renderer {
       }
       case 'flip': { // a back flip off the foe in front
         const u = clamp((tt - 0.04) / 0.3, 0, 1);
-        if (u > 0 && u < 1) { P2.ff = [P2.ff[0] * 0.4, -12 * Math.sin(Math.PI * u)]; P2.fb = [P2.fb[0] * 0.4, -10 * Math.sin(Math.PI * u)]; }
-        return { pose: P2, rot: (p.dodgeDir && p.dodgeDir !== p.face ? -1 : 1) * p.face * Math.PI * 2 * E2(u), lift: 34 * Math.sin(Math.PI * u) }; // a somersault away, or a back flip when dodging backwards
+        if (u > 0 && u < 1) lerpPose(P2, TUCK, Math.min(1, Math.sin(Math.PI * u) * 2.2), P2); // knees to the chest, the body high and round
+        return { pose: P2, rot: (p.dodgeDir && p.dodgeDir !== p.face ? -1 : 1) * p.face * Math.PI * 2 * E2(u), lift: (fig.shieldKick ? 52 : 34) * Math.sin(Math.PI * u) }; // a somersault away (higher off a shield), or a back flip when dodging backwards
+      }
+      case 'overflip': { // a forward somersault clean over the foe, tucked, landing facing on
+        const u = clamp(p.stt / 0.4, 0, 1), P2 = lerpPose(pose, TUCK, Math.min(1, Math.sin(Math.PI * u) * 2.2), {});
+        return { pose: P2, rot: (p.dodgeDir || p.face) * Math.PI * 2 * E2(u), lift: 92 * Math.sin(Math.PI * u) };
+      }
+      case 'aircut': case 'divecut': case 'airspin': { // in the air: a rising cut tucked, a diving cut pitched forward, or a full spin with the blade flat
+        const W = A.wind + A.act, u = clamp(tt / (W + 0.08), 0, 1), P2 = lerpPose(pose, pose, 0, {}); P2.ff = [P2.ff[0] * 0.5 + 6, -12]; P2.fb = [P2.fb[0] * 0.5 - 6, -16];
+        if (F.kind === 'airspin') return { pose: P2, rot: p.face * Math.PI * 2 * E2(u), whirl: -p.face * 6 * Math.sin(Math.PI * u) };
+        return { pose: P2, rot: p.face * (F.kind === 'divecut' ? 0.55 : -0.3) * Math.sin(Math.PI * Math.min(1, u * 1.2)) };
       }
     }
     return null;
@@ -414,10 +447,12 @@ export class Renderer {
           this.splash(c.x, gy(c.x) - 60, c.dmg > 1 ? 26 : 14, acc, s.p.face); this.shake = Math.max(this.shake, c.dmg > 1 ? 0.6 : 0.3); break;
         case 'riposte': this.hitstop = 4; this.nudge.x += Math.sign(c.x - s.p.x) * 5; if (s.arena && s.arena.boss && !this.reduced) this.inkFrame = 2; this.splash(c.x, gy(c.x) - 62, 34, acc, s.p.face); this.shake = 0.8; this.flash = 0.6; break;
         case 'kill': { this.killT = this.time; this.killed(s, c); if (c.boss) this.fallLine = { t0: this.time, boss: c.boss }; if (c.boss && !this.reduced) this.inkFrame = 3; const fig = this.figs.get(c.id); if (fig) fig.dieT = this.time; this.dissolveAt(c.x, gy(c.x), acc, c.boss ? 70 : 34); if (c.boss) { this.flash = 1; this.shake = 1; } break; }
-        case 'parry': case 'reflect': this.expr = { k: 'wide', t: 0.7 }; this.hitstop = 3; { const fg = this.figs.get(c.id); if (fg) fg.kick = Math.sign(c.x - s.p.x) * 6; this.pfig.kick = -s.p.face * 4; this.clashes.push({ x: c.x, y: -groundH(this.ch, c.x) - 66, t: 0 }); } if (this.red > 0.5 && !this.reduced) this.inkFrame = 1; this.sparks(c.x, gy(c.x) - 66, 14); this.ring(c.x, gy(c.x) - 66); this.flash = Math.max(this.flash, 0.5); break;
+        case 'parry': case 'reflect': this.expr = { k: 'wide', t: 0.7 };
+          { const fo = s.foes.find((q) => q.id === c.id), atk = fo && fo.atk ? fo.atk : '', last = this.pfig.lastParry; let kind = atk === 'sweep' ? 'low' : atk === 'overhead' || atk === 'cut2' ? 'high' : last === 'turn' ? 'high' : 'turn'; if (kind === last && atk !== 'sweep' && atk !== 'overhead') kind = kind === 'high' ? 'turn' : 'high';
+            this.pfig.pfx = { t: 0, kind, big: c.k === 'parry' }; this.pfig.lastParry = kind; } this.hitstop = 3; { const fg = this.figs.get(c.id); if (fg) fg.kick = Math.sign(c.x - s.p.x) * 6; this.pfig.kick = -s.p.face * 4; this.clashes.push({ x: c.x, y: -groundH(this.ch, c.x) - 66, t: 0 }); } if (this.red > 0.5 && !this.reduced) this.inkFrame = 1; this.sparks(c.x, gy(c.x) - 66, 14); this.ring(c.x, gy(c.x) - 66); this.flash = Math.max(this.flash, 0.5); break;
         case 'deflect': case 'clash': this.sparks(c.x, gy(c.x) - 62, 7); this.shake = Math.max(this.shake, 0.25);
           // a plain block is felt: two frames of stop, the guard jolted back and up, a small clash mark
-          if (c.k === 'deflect') { this.hitstop = Math.max(this.hitstop, 2); this.pfig.kick = -s.p.face * 5; this.pfig.recoil = 0.24; this.clashes.push({ x: c.x, y: -groundH(this.ch, c.x) - 62, t: 0, small: 1 }); }
+          if (c.k === 'deflect') { this.pfig.pfx = { t: 0, kind: 'deflect', big: false }; this.hitstop = Math.max(this.hitstop, 2); this.pfig.kick = -s.p.face * 5; this.pfig.recoil = 0.24; this.clashes.push({ x: c.x, y: -groundH(this.ch, c.x) - 62, t: 0, small: 1 }); }
           // [combat cue] a foe blocked the ronin: sparks and a ring that grow as his guard meter fills, both recoil
           if (c.k === 'clash') { const k = c.max ? c.gm / c.max : 0.5, fg = this.figs.get(c.id); this.sparks(c.x, gy(c.x) - 62, 4 + Math.round(10 * k)); this.ring(c.x, gy(c.x) - 62, 0.6 + k); this.hitstop = Math.max(this.hitstop, 3); this.pfig.kick = -s.p.face * 6; this.pfig.recoil = 0.24; if (fg) fg.kick = s.p.face * 5; this.clashes.push({ x: c.x, y: -groundH(this.ch, c.x) - 62, t: 0 }); }
           break;
@@ -425,6 +460,7 @@ export class Renderer {
           { const fg = this.figs.get(c.id); if (fg) fg.kick = s.p.face * 9; this.ring(c.x, gy(c.x) - 60, 2); this.hitstop = Math.max(this.hitstop, 4); } break; // [combat cue] the guard shatters
         case 'guardup': { const fg = this.figs.get(c.id), G = fg && fg.lastGeo && fg.lastGeo.G; if (G) this.arcs.push({ ring: 1, x: G[0], y: G[1], r: 6, t: 0, life: 0.3, col: INK, w: 2 }); break; } // [combat cue] a small tick at the hands: his guard is up
         case 'surprise': this.hitstop = Math.max(this.hitstop, 4); break; // [combat cue] caught unready: a held beat on the cut
+        case 'drawtell': break; // [inkfx] the tell is drawn by InkFx.tell (tell.js): drop, drain, tendrils, splash and ring
         case 'hurt': this.pHitDmg = c.dmg || 1; this.hitstop = Math.max(this.hitstop, c.dmg > 1 ? 4 : 2); this.pfig.kick = (s.p.x >= c.x ? 1 : -1) * (c.dmg > 1 ? 10 : 6); this.nudge.x += (s.p.x >= c.x ? 1 : -1) * 3; this.pfig.sqv = -5; this.splash(c.x, gy(c.x) - 60, 18, acc, s.p.x < c.x ? 1 : -1); this.hurtT = 0.6; this.shake = 0.7; break;
         case 'tell': { const fig = this.figs.get(c.id); if (fig) fig.tell = { t0: this.time, red: c.red }; break; }
         case 'feint': { const fig = this.figs.get(c.id); if (fig) { fig.tell = null; const f = s.foes.find((q) => q.id === c.id); if (f && (f.type === 'duelist' || f.boss === 'shizu' || f.boss === 'sotetsu')) fig.spinT = 0.38; } break; }
@@ -602,7 +638,8 @@ export class Renderer {
     const ex = this.expr; ex.t -= dt; let expr = ex.t > 0 ? ex.k : 'calm'; if (p.st === 'hit' || p.st === 'dead') expr = 'hurt'; if (s.phase === 'ending' || p.st === 'iai') expr = 'win';
     const o = { groundY: -groundH(this.ch, px), face: p.face, alpha: 1, wind: wind + this.gustAt(px) * 1.4, vx: p.vx, roll, scarf: scarfCol, dt, boilN: this.boilN, reduced: this.reduced, expr, walkPh: fig.gaitU >= 0 ? fig.gaitU * 6.283 : null, running: Math.abs(p.vx) > 200 && p.st === 'move', noHat: !!this.hat };
     // scarf anchor follows the neck of the previous pose (close enough at 60 fps)
-    if (fx) { o.fx = fx; if (fx.whirl) o.wind += fx.whirl; }
+    if (fx) { o.fx = fx; if (fx.whirl) o.wind += fx.whirl; if (fx.rot || fx.lift) o.tuck = 1; }
+    if (p.y > 4) o.tuck = 1; // in the air the hakama wraps each leg
     // at full sprint, a few broken dry-brush streaks in the air behind him (ink, never cartoon lines)
     if (Math.abs(p.vx) > 230 && p.st === 'move' && !this.reduced) { const k = clamp((Math.abs(p.vx) - 230) / 30, 0, 1); for (let j = 0; j < 3; j++) { const yy = py - 34 - j * 22 + Math.sin(this.time * 7 + j * 2) * 3, x0 = px - p.face * (26 + j * 9), L2 = 46 + j * 14, pts = []; for (let q = 0; q <= 6; q++) pts.push([x0 - p.face * L2 * q / 6, yy + Math.sin(q + j) * 1.2]); this.windStroke(g, pts, 2.2, 0.16 * k, j * 1.7 + this.time); } }
     const geo = this.fig(g, px + (fig.kick || 0), py, 'ronin', pose, fig, o); fig.lastHd = geo.Hd;
@@ -694,7 +731,8 @@ export class Renderer {
     const gp = look === 'spear' ? POSE.thw : POSE.focus;
     const tgt = fig.target;
     if (pose === 'walk' || pose === 'next') { lerpPose(look === 'spear' ? POSE.thw : POSE.stand, POSE.stand, 0, tgt); }
-    else if (pose === 'feint') { lerpPose(gp, look === 'spear' ? POSE.tha : POSE.s1w, 0.28, tgt); }
+    else if (pose === 'feint') { lerpPose(gp, gp, 0, tgt); tgt.lean -= 0.07; tgt.head = (tgt.head || 0) - 0.06; tgt.grip = [tgt.grip[0] - 2, tgt.grip[1] - 3]; } // a feint: only a shoulder twitch
+    else if (pose === 'tell') { lerpPose(gp, gp, 0, tgt); tgt.hx = (tgt.hx || 0) + 4; tgt.hy -= 2.5; tgt.lean += 0.1; tgt.head = (tgt.head || 0) + 0.12; tgt.ff = [tgt.ff[0] + 2, 0]; tgt.grip = [tgt.grip[0] + 3, tgt.grip[1] + 2]; } // about to draw: weight onto the front leg, the head lowers, the hand closes on the hilt
     else if (pose === 'strike') lerpPose(gp, look === 'spear' ? POSE.tha : POSE.s1a, clamp(so.ts / 0.25, 0, 1) * 0.6, tgt);
     else if (pose === 'cut') { if (so.t < 0.6) lerpPose(POSE.s1a, POSE.stun, so.t / 0.6, tgt); else lerpPose(POSE.stun, POSE.dead, clamp((so.t - 0.6) / 0.4, 0, 1), tgt); }
     else if (pose === 'fail') lerpPose(POSE.s1w, POSE.s1a, clamp(so.t / 0.12, 0, 1), tgt);
@@ -708,6 +746,8 @@ export class Renderer {
     const o = { face, alpha: al, wind: s.wind.w, vx: 0, dt, boilN: this.boilN, reduced: this.reduced };
     const geo = this.fig(g, x, y, look, P, fig, o);
     if (pose === 'feint' && fig.flick && t - fig.flick < 0.3) { const age = t - fig.flick; ribbon(g, [geo.Hd[0] + 4, geo.Hd[1] - 22, geo.Hd[0] - 2, geo.Hd[1] - 30, geo.Hd[0] - 10, geo.Hd[1] - 34], (u) => 3.2 * (1 - u) + 0.3, INK, clamp(1 - age / 0.3, 0, 1) * 0.8, 0); }
+    // the left thumb pushes the guard out of the scabbard mouth: a sliver of bright blade
+    if (pose === 'tell' && look !== 'spear' && geo.H) { const sc2 = geo.sc || 1, m0 = [geo.H[0] + face * 6 * sc2, geo.H[1] - 6 * sc2], dx = face * Math.cos(0.45), dy = -Math.sin(0.45); g.globalAlpha = 0.95; g.strokeStyle = '#f4efe2'; g.lineWidth = 1.6 * sc2; g.lineCap = 'round'; g.beginPath(); g.moveTo(m0[0], m0[1]); g.lineTo(m0[0] + dx * 7 * sc2, m0[1] + dy * 7 * sc2); g.stroke(); g.globalAlpha = 1; }
     if (pose === 'strike' && fig.tell) this.drawTell(g, fig.tell, o._tip || geo.G, geo.Hd, face);
     // the cut: one long horizontal stroke across the frame
     if (this.cutFx) { const c = this.cutFx; c.t += dt; const k = clamp(c.t / 0.12, 0, 1), fade = clamp(1 - (c.t - 0.3) / 0.9, 0, 1); if (fade <= 0) this.cutFx = null; else { const yy = y - 64, x0 = x - 260, x1 = x0 + 520 * k; ribbon(g, [x0, yy + 6, (x0 + x1) / 2, yy - 2, x1, yy - 6], (u) => Math.sin(u * Math.PI) * 9 * fade + 0.5, INK, 0.9 * fade, 0.3); } }
