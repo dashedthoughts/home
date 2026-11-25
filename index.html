@@ -1684,7 +1684,7 @@ html.is-gaming, html.is-gaming body { overflow: hidden; overscroll-behavior: non
 .ito-title__menu { display: grid; gap: 10px; width: min(100%, 300px); }
 .ito-title .ito-btn--quiet { color: var(--paper2); border-color: rgba(244,236,216,.6); background: rgba(20,10,42,.6); }
 .ito-title .ito-btn--quiet:hover { background: rgba(20,10,42,.9); }
-.ito-title__fine { position: absolute; left: clamp(16px, 5vw, 64px); bottom: 12px; margin: 0; font: 400 .72rem / 1.3 var(--f-mono); color: #c8c0ea; background: rgba(20,10,42,.6); padding: 3px 6px; }
+.ito-title__fine { position: absolute; left: clamp(16px, 5vw, 64px); bottom: 12px; margin: 0; font: 400 .75rem / 1.3 var(--f-mono); color: #c8c0ea; background: rgba(20,10,42,.6); padding: 3px 6px; }
 
 /* ---------- runs ---------- */
 .ito-panel--runs { width: min(100%, 720px); }
@@ -1697,7 +1697,7 @@ html.is-gaming, html.is-gaming body { overflow: hidden; overscroll-behavior: non
 .ito-run__name { font: 700 1.05rem / 1 var(--f-display); letter-spacing: .08em; }
 .ito-run__line { font-size: .82rem; line-height: 1.35; color: #3a2a5c; min-height: 2.6em; }
 .ito-run__best { font: 400 .9rem / 1 var(--f-mono); display: flex; align-items: center; gap: 6px; margin-top: 4px; }
-.ito-run__targets { font: 400 .72rem / 1.3 var(--f-mono); color: #4a3a6a; }
+.ito-run__targets { font: 400 .82rem / 1.35 var(--f-mono); color: #4a3a6a; }
 .ito-medal { display: inline-grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; border: 2px solid var(--ink); font: 900 .78rem / 1 'Noto Sans JP', sans-serif; font-style: normal; }
 .ito-medal--gold { background: #ffd23a; } .ito-medal--silver { background: #d9dcef; } .ito-medal--bronze { background: #e39a5a; } .ito-medal--none { background: transparent; border-style: dashed; }
 .ito-medal--big { width: 64px; height: 64px; font-size: 2rem; border-width: 3px; box-shadow: 4px 4px 0 var(--ink); }
@@ -1709,13 +1709,13 @@ html.is-gaming, html.is-gaming body { overflow: hidden; overscroll-behavior: non
 .ito-hud__tl { left: 14px; }
 .ito-hud__tr { right: 64px; justify-items: end; }
 .ito-hud__run { font: 900 .95rem / 1 'Noto Sans JP', sans-serif; color: var(--yel); display: flex; gap: 8px; align-items: baseline; }
-.ito-hud__run span { font: 700 .72rem / 1 var(--f-display); letter-spacing: .14em; color: #d9d2ff; }
+.ito-hud__run span { font: 700 .75rem / 1 var(--f-display); letter-spacing: .14em; color: #d9d2ff; }
 .ito-hud__time { font: 400 1.9rem / 1 var(--f-mono); letter-spacing: .02em; font-variant-numeric: tabular-nums; }
 .ito-hud__rings, .ito-hud__cranes { font: 700 .78rem / 1 var(--f-display); letter-spacing: .14em; color: #d9d2ff; }
 .ito-hud__rings b, .ito-hud__cranes b { color: var(--paper2); font: 400 1rem / 1 var(--f-mono); margin-left: 4px; }
 .ito-hud__speed { display: flex; align-items: baseline; gap: 4px; }
 .ito-hud__speed b { font: 400 2rem / 1 var(--f-mono); min-width: 3ch; text-align: right; font-variant-numeric: tabular-nums; }
-.ito-hud__speed span { font: 700 .72rem / 1 var(--f-display); letter-spacing: .12em; color: #d9d2ff; }
+.ito-hud__speed span { font: 700 .75rem / 1 var(--f-display); letter-spacing: .12em; color: #d9d2ff; }
 .ito-hud__dash { display: flex; gap: 5px; }
 .ito-hud__dash i { --f: 1; width: 22px; height: 8px; border: 2px solid var(--paper2); background: linear-gradient(90deg, var(--cy) calc(var(--f) * 100%), transparent 0); transform: skewX(-20deg); }
 .ito-hud__chain { position: absolute; left: 16px; top: 128px; display: flex; align-items: baseline; gap: 6px; opacity: 0; transition: opacity var(--t-snap, 160ms); }
@@ -1723,14 +1723,32 @@ html.is-gaming, html.is-gaming body { overflow: hidden; overscroll-behavior: non
 .ito-hud__chain b { font: 400 2.2rem / 1 'Bangers', var(--f-display); letter-spacing: .04em; color: var(--yel); -webkit-text-stroke: 2px var(--ink); paint-order: stroke fill; text-shadow: 3px 3px 0 var(--mag); }
 .ito-hud__chain span { font: 700 .75rem / 1 var(--f-display); letter-spacing: .16em; background: var(--ink); padding: 3px 6px; }
 .ito-hud__mark { position: absolute; left: 0; top: 0; width: 0; height: 0; will-change: transform; }
-.ito-hud__mark i { position: absolute; left: -13px; top: -13px; width: 26px; height: 26px; border: 3px solid var(--ink); background: var(--yel); clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%); }
-.ito-hud__mark[data-off='1'] i { clip-path: polygon(0 15%, 100% 50%, 0 85%, 22% 50%); transform: rotate(var(--a)); border: 0; background: var(--yel); filter: drop-shadow(2px 2px 0 var(--ink)); }
+.ito-hud__mark i { position: absolute; left: -23px; top: -23px; width: 46px; height: 46px; border-radius: 50%; background: rgba(20,10,42,.88); border: 2px solid var(--yel); box-shadow: 0 0 0 2px var(--ink); }
+.ito-hud__mark i::after { content: ''; position: absolute; inset: 9px; background: var(--yel); clip-path: polygon(8% 18%, 100% 50%, 8% 82%, 30% 50%); transform: rotate(var(--a)); }
 .ito-hud__mark[data-off='0'] i { display: none; }
-.ito-hud__mark[data-off='0'] span { left: 0; transform: translateX(-50%); top: 0; }
-.ito-hud__mark span { position: absolute; left: 16px; top: -9px; font: 400 .8rem / 1 var(--f-mono); color: var(--paper2); background: rgba(20,10,42,.85); padding: 2px 5px; white-space: nowrap; }
-.ito-hud__hint { position: absolute; left: 50%; bottom: 16px; transform: translateX(-50%); font: 500 .8rem / 1.4 var(--f-body); color: var(--paper2); background: rgba(20,10,42,.8); padding: 6px 10px; white-space: nowrap; border: 2px solid var(--ink); }
+.ito-hud__mark span { position: absolute; top: -12px; font: 400 .95rem / 1 var(--f-mono); color: var(--paper2); background: rgba(20,10,42,.9); border: 1px solid rgba(252,238,10,.6); padding: 4px 7px; white-space: nowrap; }
+.ito-hud__mark[data-side='r'] span { left: 30px; }
+.ito-hud__mark[data-side='l'] span { right: 30px; }
+.ito-hud__mark[data-off='0'] span { left: 0; right: auto; transform: translateX(-50%); top: 0; }
+.ito-hud__noline { position: absolute; left: 50%; top: 62%; transform: translateX(-50%); display: flex; align-items: center; gap: 6px; font: 700 .78rem / 1 var(--f-display); letter-spacing: .14em; color: #d9d2ff; background: rgba(20,10,42,.7); padding: 5px 9px; opacity: 0; transition: opacity var(--t-snap, 160ms); }
+.ito-hud__noline i { width: 14px; height: 14px; border: 2px solid #d9d2ff; border-radius: 50%; position: relative; }
+.ito-hud__noline i::after { content: ''; position: absolute; left: 5px; top: -2px; width: 2px; height: 14px; background: #d9d2ff; transform: rotate(45deg); }
+.ito-hud__noline[data-on='1'] { opacity: .9; }
+.ito-hud__hint { position: absolute; left: 50%; bottom: 16px; transform: translateX(-50%); font: 500 .9rem / 1.4 var(--f-body); color: var(--paper2); background: rgba(20,10,42,.8); padding: 6px 10px; white-space: nowrap; border: 2px solid var(--ink); }
 .ito-pausebtn { pointer-events: auto; position: absolute; top: 14px; right: 14px; z-index: 8; width: 40px; height: 40px; border: 2px solid var(--ink); background: rgba(244,236,216,.92); color: var(--ink); font: 900 .95rem / 1 var(--f-display); cursor: pointer; letter-spacing: 1px; }
 .ito-toast { position: absolute; left: 50%; top: 64px; transform: translateX(-50%) rotate(-2deg); z-index: 9; background: var(--paper2); border: 3px solid var(--ink); box-shadow: 4px 4px 0 var(--mag); padding: 6px 12px; font: 900 1.1rem / 1 'Noto Sans JP', sans-serif; }
+
+/* ---------- dispatcher radio plate ---------- */
+.ito-radio { position: absolute; left: 50%; top: 14px; transform: translateX(-50%); z-index: 9; width: min(420px, calc(100% - 300px)); min-width: 250px; display: grid; grid-template-columns: 1fr auto; column-gap: 8px; row-gap: 3px;
+  background: rgba(20,10,42,.9); border: 2px solid var(--cy); box-shadow: 4px 4px 0 var(--ink); padding: 8px 10px; color: var(--paper2); animation: ito-radio .22s var(--ease-snap, ease-out); }
+.ito-radio b { font: 700 .75rem / 1 var(--f-display); letter-spacing: .14em; color: var(--cy); text-transform: uppercase; }
+.ito-radio span { grid-column: 1; font: 500 .92rem / 1.35 var(--f-body); }
+.ito-radio__x { grid-column: 2; grid-row: 1 / span 2; align-self: start; appearance: none; border: 1px solid rgba(244,236,216,.5); background: transparent; color: var(--paper2); width: 30px; height: 30px; cursor: pointer; font-size: .9rem; }
+.ito-radio__x:focus-visible { outline: 3px solid var(--cy); outline-offset: 2px; }
+@keyframes ito-radio { from { opacity: 0; transform: translate(-50%, -8px); } to { opacity: 1; transform: translate(-50%, 0); } }
+.ito-runs__intro { margin: -2px 0 4px; font-size: .95rem; line-height: 1.45; color: #2a1d4a; max-width: 62ch; }
+.ito-res__radio { margin: 0; padding: 8px 10px; border-left: 4px solid var(--cy); background: var(--paper2); font: 500 .92rem / 1.4 var(--f-body); display: grid; gap: 3px; }
+.ito-res__radio b { font: 700 .75rem / 1 var(--f-display); letter-spacing: .14em; text-transform: uppercase; color: #1a6b80; }
 
 /* ---------- tutorial ---------- */
 .ito-tut { position: absolute; left: 0; right: 0; top: 76px; display: grid; justify-items: center; gap: 10px; z-index: 9; pointer-events: none; }
@@ -1764,7 +1782,7 @@ html.is-gaming, html.is-gaming body { overflow: hidden; overscroll-behavior: non
 .ito-res__medal em { font-style: normal; background: var(--mag); color: #fff; padding: 4px 8px; border: 2px solid var(--ink); transform: rotate(-3deg); }
 .ito-res__stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 4px 0 6px; }
 .ito-res__stats div { border: 2px solid var(--ink); background: var(--paper2); padding: 8px; }
-.ito-res__stats dt { font: 700 .72rem / 1.2 var(--f-display); letter-spacing: .1em; color: #4a3a6a; }
+.ito-res__stats dt { font: 700 .78rem / 1.2 var(--f-display); letter-spacing: .1em; color: #4a3a6a; }
 .ito-res__stats dd { margin: 4px 0 0; font: 400 1.1rem / 1 var(--f-mono); }
 
 /* ---------- touch ---------- */
@@ -1776,7 +1794,7 @@ html.is-gaming, html.is-gaming body { overflow: hidden; overscroll-behavior: non
 .ito-touch__knob[data-on='0'] { opacity: .55; }
 .ito-tbtn { position: absolute; pointer-events: auto; touch-action: none; appearance: none; border: 3px solid var(--ink); background: rgba(244,236,216,.9); color: var(--ink); font: 700 .8rem / 1 var(--f-display); letter-spacing: .1em; border-radius: 50%; display: grid; place-content: center; justify-items: center; gap: 3px; box-shadow: 3px 3px 0 var(--ink); }
 .ito-tbtn[data-on='1'] { transform: translate(2px, 2px); box-shadow: 1px 1px 0 var(--ink); }
-.ito-tbtn small { font: 700 .68rem / 1 'Noto Sans JP', sans-serif; letter-spacing: 0; }
+.ito-tbtn small { font: 700 .75rem / 1 'Noto Sans JP', sans-serif; letter-spacing: 0; }
 .ito-tbtn--swing { right: 18px; bottom: 22px; width: 112px; height: 112px; background: var(--yel); font-size: 1rem; }
 .ito-tbtn--swing[data-on='1'] { background: #fff36a; }
 .ito-tbtn--dash { right: 138px; bottom: 30px; width: 66px; height: 66px; background: rgba(0,240,255,.92); }
@@ -1797,6 +1815,7 @@ html.is-gaming, html.is-gaming body { overflow: hidden; overscroll-behavior: non
   .ito-hud__time { font-size: 1.35rem; }
   .ito-hud__speed b { font-size: 1.35rem; }
   .ito-hud__chain { top: 104px; left: 12px; }
+  .ito-radio { top: 150px; width: calc(100% - 24px); min-width: 0; }
   .ito-hud__chain b { font-size: 1.7rem; }
   .ito-hud__hint { display: none; }
   .ito-pausebtn { top: 10px; right: 10px; }
@@ -1820,12 +1839,14 @@ html.is-gaming, html.is-gaming body { overflow: hidden; overscroll-behavior: non
   .ito-tbtn--zip { bottom: 116px; }
   .ito-tbtn--dive { bottom: 94px; }
   .ito-tut { top: 10px; }
+  .ito-radio { top: auto; bottom: 10px; width: min(300px, calc(100% - 420px)); min-width: 220px; }
+  .ito-radio span { font-size: .82rem; }
   .ito-tut__card { padding: 8px 14px 6px; }
   .ito-tut__jp { font-size: 1.4rem; }
   .ito-panel { max-height: calc(100% - 8px); }
 }
 @media (prefers-reduced-motion: reduce) {
-  .ito-tut__card { animation: none; }
+  .ito-tut__card, .ito-radio { animation: none; }
   .ito-btn, .ito-run, .ito-switch i, .ito-hud__chain { transition: none; }
 }
 
@@ -2325,5 +2346,5 @@ html.is-gaming, html.is-gaming body { overflow: hidden; overscroll-behavior: non
 </style>
 </head><body><div id="root"></div>
 <noscript><p style="padding:2rem;font-family:monospace;color:#f5f2ea;background:#0d0d0d">This page needs JavaScript. Contact: anur.dash@gmail.com</p></noscript>
-<script type="module" src="./assets/app-YOC4YMYS.js"></script>
+<script type="module" src="./assets/app-P2U6JM55.js"></script>
 </body></html>
