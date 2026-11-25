@@ -257,6 +257,8 @@ void main(){
     tr = uTrainCol * max(dot(n, normalize(dv)) * 0.7 + 0.3, 0.0) / (1.0 + d2 * 0.09);
   }
   vec3 light = (amb + blk + tr) * aoF + sun * mix(aoF, 1.0, 0.6);
+  // sakura keeps its pink: warm lantern and sunset light only brighten it, they do not turn it orange
+  if (pat == 8 && pal.r > pal.g * 1.25 && pal.b > pal.g) light = mix(light, vec3(dot(light, vec3(0.3, 0.5, 0.2))), 0.72);
   vec3 c = col * light;
   if (gloss > 0.0) {
     vec3 r = reflect(V, n);

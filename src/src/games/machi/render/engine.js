@@ -300,13 +300,16 @@ export class Renderer {
     if (this.pools) { this.scene.remove(this.pools); this.pools.geometry.dispose(); }
     this.pools = null;
     const L = (this.world.meta && this.world.meta.lamps) || []; if (!L.length) return;
-    const p = [], uv = [], idx = [];
-    L.forEach(([x, y, z, r], i) => { const yy = y + 0.03; p.push(x - r, yy, z - r, x - r, yy, z + r, x + r, yy, z + r, x + r, yy, z - r); uv.push(-1, -1, -1, 1, 1, 1, 1, -1); idx.push(i * 4, i * 4 + 1, i * 4 + 2, i * 4, i * 4 + 2, i * 4 + 3); });
-    const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(p, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); g.setIndex(idx);
+    const p = [], uv = [], idx = [], col = [];
+    L.forEach(([x, y, z, r, red], i) => {
+      const yy = y + 0.03; p.push(x - r, yy, z - r, x - r, yy, z + r, x + r, yy, z + r, x + r, yy, z - r); uv.push(-1, -1, -1, 1, 1, 1, 1, -1); idx.push(i * 4, i * 4 + 1, i * 4 + 2, i * 4, i * 4 + 2, i * 4 + 3);
+      const c = red ? [1.0, 0.36, 0.2] : [1.0, 0.72, 0.42]; for (let k = 0; k < 4; k++) col.push(...c);
+    });
+    const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(p, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); g.setAttribute('aCol', new THREE.Float32BufferAttribute(col, 3)); g.setIndex(idx);
     this.pools = new THREE.Mesh(g, this.poolMat || (this.poolMat = new THREE.ShaderMaterial({
       uniforms: { uNight: this.U.uNight },
-      vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
-      fragmentShader: 'uniform float uNight; varying vec2 vUv; void main(){ float d = length(vUv); float k = pow(max(0.0, 1.0 - d), 2.2) * 0.42 * uNight; gl_FragColor = vec4(vec3(1.0, 0.72, 0.42) * k, 1.0); }',
+      vertexShader: 'attribute vec3 aCol; varying vec2 vUv; varying vec3 vCol; void main(){ vUv = uv; vCol = aCol; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+      fragmentShader: 'uniform float uNight; varying vec2 vUv; varying vec3 vCol; void main(){ float d = length(vUv); float k = pow(max(0.0, 1.0 - d), 2.2) * 0.42 * uNight; gl_FragColor = vec4(vCol * k, 1.0); }',
       transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1,
     })));
     this.pools.renderOrder = 2; this.scene.add(this.pools);

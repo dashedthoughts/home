@@ -635,7 +635,11 @@ function lanternStrings(g) {
     const y = GY + 6;
     g.wire([x + 0.5, y + 1.25, 39.6], [x + 0.5, y + 1.25, 52.4], 0.9);
     const red = (x / 6) % 2 < 1;
-    for (const z of [42, 45, 48]) g.set(x, y, z, red ? (z === 45 ? 'paperlamp' : 'lantern') : (z === 45 ? 'lantern' : 'paperlamp'));
+    for (const z of [42, 45, 48]) {
+      const isRed = red ? z !== 45 : z === 45;
+      g.set(x, y, z, isRed ? 'lantern' : 'paperlamp');
+      g.meta.lamps.push([x + 0.5, GY, z + 0.5, 2.6, isRed ? 1 : 0]); // a small pool of light on the paving below
+    }
   }
   g.mark('lanterns', 3, GY + 6, 42, 77, GY + 6, 48);
 }

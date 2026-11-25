@@ -62,7 +62,7 @@ export default function Machi({ onExit }) {
   const g = gref.current;
   const ui = g ? g.ui : null;
   return (
-    <div className={`machi ${ui ? `is-${ui.mode}` : ''} ${ui && ui.photo ? 'is-photo' : ''} ${g && g.touch ? 'is-touch' : ''}`} ref={stage}>
+    <div className={`machi ${ui && ui.dragging ? 'is-dragging' : ''} ${ui ? `is-${ui.mode}` : ''} ${ui && ui.photo ? 'is-photo' : ''} ${g && g.touch ? 'is-touch' : ''}`} ref={stage}>
       <canvas className="machi__gl" ref={canvas} aria-label="MACHI voxel town. Build mode: click to place, right-click to remove, drag to orbit." tabIndex={0} />
       {err && <div className="m-error"><b>MACHI needs WebGL</b><p>{err}</p><button type="button" className="m-btn" onClick={onExit}>Back to the arcade</button></div>}
       {g && <Hud g={g} ui={ui} onExit={onExit} />}
@@ -94,7 +94,7 @@ function Hud({ g, ui, onExit }) {
       {walk && <WalkHud g={g} ui={ui} />}
       <Coach g={g} ui={ui} />
       {!ui.panel && (ui.coach | 0) >= 3 && <RequestCard g={g} ui={ui} />}
-      {ui.toast && <div className="m-toast" role="status">{ui.toast}</div>}
+      {ui.toast && <div className={`m-toast ${ui.toast.action ? 'm-toast--act' : ''}`} role="status">{ui.toast.msg}{ui.toast.action && <button type="button" className="m-toast__btn" onClick={() => (ui.toast.action === 'undo' ? g.undo() : g.redo())}>{ui.toast.action === 'undo' ? 'Undo' : 'Redo'}</button>}</div>}
       {ui.panel === 'palette' && <Palette g={g} ui={ui} />}
       {ui.panel === 'help' && <Help g={g} />}
       {ui.panel === 'menu' && <Menu g={g} ui={ui} onExit={onExit} />}
@@ -111,7 +111,7 @@ function ToolRail({ g, ui }) {
       <div className="m-tools__main">
         {TOOLS.map((t) => (
           <button key={t} type="button" className={`m-tool ${ui.tool === t ? 'on' : ''}`} aria-pressed={ui.tool === t} title={`${TOOL_META[t][0]} (${TOOL_META[t][1]})`} aria-label={TOOL_META[t][0]} onClick={() => g.setTool(t)}>
-            <Icon n={t} /><span className="m-tool__lbl">{TOOL_META[t][0]}</span>
+            <Icon n={t} /><span className="m-tool__lbl">{TOOL_META[t][0]} <kbd>{TOOL_META[t][1]}</kbd></span>
           </button>
         ))}
       </div>
@@ -227,7 +227,7 @@ function Hotbar({ g, ui }) {
           <img src={swatch(id)} alt="" draggable="false" /><i>{i + 1}</i>
         </button>
       ))}
-      <span className="m-hotbar__name">{BLOCKS[ui.hotbar[ui.slot]].name}</span>
+      <span className="m-hotbar__name">{ui.mode === 'build' ? <><em>{TOOL_META[ui.tool][0]}</em> · </> : null}{BLOCKS[ui.hotbar[ui.slot]].name}</span>
     </div>
   );
 }
@@ -270,6 +270,7 @@ function TimePanel({ g, ui }) {
       </div>
       <label className="m-check"><input type="checkbox" checked={ui.cycle} onChange={(e) => g.set({ cycle: e.target.checked, drift: false })} /> Day and night cycle</label>
       <label className="m-check"><input type="checkbox" checked={ui.rain} onChange={(e) => g.set({ rain: e.target.checked })} /> Rain</label>
+      <label className="m-check"><input type="checkbox" checked={!!g.settings.music} disabled={!g.settings.sound} onChange={(e) => g.saveSettings({ music: e.target.checked })} /> Lo-fi music</label>
     </section>
   );
 }
@@ -327,6 +328,7 @@ function Menu({ g, ui, onExit }) {
       </div>
       <label className="m-check"><input type="checkbox" checked={!g.req.off} onChange={(e) => g.requestAction(e.target.checked ? 'on' : 'off')} /> Neighbourhood requests ({g.req.done.length}/5 done)</label>
       <label className="m-check"><input type="checkbox" checked={s.sound} onChange={(e) => g.saveSettings({ sound: e.target.checked })} /> Sound</label>
+      <label className="m-check"><input type="checkbox" checked={!!s.music} disabled={!s.sound} onChange={(e) => g.saveSettings({ music: e.target.checked })} /> Lo-fi music</label>
       <label className="m-check"><input type="checkbox" checked={s.invertY} onChange={(e) => g.saveSettings({ invertY: e.target.checked })} /> Invert look</label>
       <label className="m-check"><input type="checkbox" checked={s.tilt} onChange={(e) => g.saveSettings({ tilt: e.target.checked })} /> Miniature focus in build view</label>
       <label className="m-row"><span>Look sensitivity</span><input type="range" min="0.3" max="2.5" step="0.05" value={s.sens} onChange={(e) => g.saveSettings({ sens: +e.target.value })} aria-label="Look sensitivity" /></label>

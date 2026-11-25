@@ -43,9 +43,9 @@ export class Game {
     this.listeners = new Set();
     this.reduced = typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     this.touch = isTouchDevice();
-    this.settings = { quality: 'auto', sound: true, invertY: false, sens: 1, tilt: true, ...(lsGet('settings') || {}) };
+    this.settings = { quality: 'auto', sound: true, music: false, invertY: false, sens: 1, tilt: true, ...(lsGet('settings') || {}) };
     this.renderer = new Renderer(canvas, { quality: this.resolveQuality(), reduced: this.reduced });
-    this.audio = new Audio(); this.audio.on = this.settings.sound;
+    this.audio = new Audio(); this.audio.on = this.settings.sound; this.audio.music = !!this.settings.music;
     this.allStamps = buildStamps();
     this.req = { done: [], off: false, open: true, ...(lsGet('req') || {}) };
     if (!Array.isArray(this.req.done)) this.req.done = [];
@@ -136,7 +136,7 @@ export class Game {
   subscribe(f) { this.listeners.add(f); return () => this.listeners.delete(f); }
   set(patch) { if ('panel' in patch && patch.panel !== this.ui.panel) this.keys.clear(); Object.assign(this.ui, patch); this.emit(); }
   closePanel() { this.set({ panel: null }); try { if (document.activeElement && document.activeElement.blur) document.activeElement.blur(); this.canvas.focus({ preventScroll: true }); } catch { /* fine */ } }
-  toast(msg, ms = 2200) { this.ui.toast = msg; this.emit(); clearTimeout(this._toastT); this._toastT = setTimeout(() => { this.ui.toast = null; this.emit(); }, ms); }
+  toast(msg, ms = 2200, action = null) { this.ui.toast = { msg, action }; this.emit(); clearTimeout(this._toastT); this._toastT = setTimeout(() => { this.ui.toast = null; this.emit(); }, ms); }
 
   // ---------------- simulation ----------------
   _initCat() {
@@ -420,7 +420,7 @@ export class Game {
     } else if (tool === 'stamp') {
       const s = this._stampFor(h); if (!s) return false;
       const [x, y, z] = this._placeCell(h);
-      if (ed.stamp(s.st, x, y, z, s.rot)) { this.audio.pop(now); this.puff(x, y, z, 18); this._catNotice(x, y, z); this._placed(); return true; }
+      if (ed.stamp(s.st, x, y, z, s.rot)) { this.audio.pop(now); this.puff(x, y, z, 18); this._catNotice(x, y, z); this._placed(); this.toast(`Stamped ${s.st.name}`, 2600, 'undo'); return true; }
     }
     return false;
   }
@@ -442,17 +442,17 @@ export class Game {
     if (tool === 'box') n = ed.box([box[0], box[1], box[2]], [box[3], box[4], box[5]], this.ui.boxMode === 'clear' ? 0 : this._selectedId());
     else if (tool === 'line') n = ed.line(a, b, this.ui.boxMode === 'clear' ? 0 : this._selectedId(), 1 + Math.max(0, this.ui.boxH));
     else if (tool === 'select') { this.ui.selection = box; this.emit(); return; }
-    if (n) { if (this.ui.boxMode === 'clear') this.audio.thud(); else { this.audio.pop(this.sim.t); this.puff(b[0], b[1], b[2], 16); this._catNotice(b[0], b[1], b[2]); this._placed(); } this.toast(`${n} ${n === 1 ? 'block' : 'blocks'}`, 1000); }
+    if (n) { if (this.ui.boxMode === 'clear') this.audio.thud(); else { this.audio.pop(this.sim.t); this.puff(b[0], b[1], b[2], 16); this._catNotice(b[0], b[1], b[2]); this._placed(); } this.toast(`${this.ui.boxMode === 'clear' ? 'Cleared' : 'Built'} ${n} ${n === 1 ? 'block' : 'blocks'}`, 3200, 'undo'); }
   }
   shapeAnchor(h, tool) { if (!h) return null; return (this.ui.boxMode === 'clear' && tool !== 'select') || (tool === 'select' && !h.ground) ? [h.x, Math.max(0, h.y), h.z] : this._placeCell(h); }
   copySelection() { const s = this.ui.selection; if (!s) return; const st = this.editor.copy([s[0], s[1], s[2]], [s[3], s[4], s[5]], 'Clipboard'); this.clipboard = st; this.set({ stamp: st, stampRot: 0, tool: 'stamp', selection: null }); this.renderer.setGhost(null); this.toast('Copied. Click to paste, R to rotate', 2600); }
-  clearSelection() { const s = this.ui.selection; if (!s) return; this.editor.box([s[0], s[1], s[2]], [s[3], s[4], s[5]], 0); this.audio.thud(); this.set({ selection: null }); this.renderer.setGhost(null); }
+  clearSelection() { const s = this.ui.selection; if (!s) return; this.editor.box([s[0], s[1], s[2]], [s[3], s[4], s[5]], 0); this.audio.thud(); this.toast('Selection cleared', 3200, 'undo'); this.set({ selection: null }); this.renderer.setGhost(null); }
   fillSelection() { const s = this.ui.selection; if (!s) return; this.editor.box([s[0], s[1], s[2]], [s[3], s[4], s[5]], this._selectedId()); this.audio.pop(this.sim.t); this.set({ selection: null }); this.renderer.setGhost(null); }
   setTool(t) { if (!TOOLS.includes(t)) return; if (t === 'stamp' && !this.ui.stamp) this.ui.stamp = this.stamps[0]; this.ui.tool = t; this.drag = null; if (t !== 'select') this.ui.selection = null; this.renderer.setGhost(null); this.renderer.setStampGhost(null); this.audio.click(); this.emit(); }
   setStamp(st) { this.ui.stamp = st; this.ui.stampRot = 0; this.ui.tool = 'stamp'; this.emit(); }
   letter(ch, neon) { const s = letterStamp(ch, neon, null); if (s) { s.letter = true; this.setStamp(s); } }
-  undo() { if (this.editor.undo()) { this.audio.click(); this.toast('Undo', 700); } }
-  redo() { if (this.editor.redo()) { this.audio.click(); this.toast('Redo', 700); } }
+  undo() { if (this.editor.undo()) { this.audio.click(); this.toast('Undone', 2600, 'redo'); } else this.toast('Nothing to undo', 1200); }
+  redo() { if (this.editor.redo()) { this.audio.click(); this.toast('Redone', 2600, 'undo'); } }
   _placed() { this._userActed = true; }
   _edited() { this.ui.canUndo = this.editor.canUndo; this.ui.canRedo = this.editor.canRedo; this._dirtySave = true; this._saveT = performance.now(); clearTimeout(this._autoT); this._autoT = setTimeout(() => { if (this._dirtySave && this.running) this.autosave(); }, 2000); this.emit(); }
 
@@ -495,6 +495,7 @@ export class Game {
   saveSettings(patch) {
     Object.assign(this.settings, patch); lsSet('settings', this.settings);
     if ('sound' in patch) this.audio.setOn(patch.sound);
+    if ('music' in patch) { this.audio.resume(); this.audio.setMusic(patch.music); }
     if ('quality' in patch) { this.renderer.setQuality(this.resolveQuality()); this.ui.quality = this.renderer.qualityName; this._initPetals(); }
     this.emit();
   }
@@ -634,7 +635,7 @@ export class Game {
     const tool = this.ui.tool;
     if (e.button === 0 && ['box', 'line', 'select'].includes(tool) && !e.altKey && !this.ui.photo) {
       const h = this.pick(x, y);
-      if (h) { const a = this.shapeAnchor(h, tool); this.drag = { kind: 'shape', a, b: a, x, y, id: e.pointerId }; return; }
+      if (h) { const a = this.shapeAnchor(h, tool); this.drag = { kind: 'shape', a, b: a, x, y, id: e.pointerId }; this.set({ dragging: true }); return; }
       this.drag = { kind: 'none', id: e.pointerId }; this.toast('Start the shape on the lot. Right-drag or Alt-drag to move the camera', 2200); return;
     }
     this.drag = { kind: e.button === 0 && !e.shiftKey ? 'orbit' : 'pan', x, y, sx: x, sy: y, moved: false, button: e.button, id: e.pointerId, t: performance.now() };
@@ -666,7 +667,7 @@ export class Game {
     const d = this.drag; this.drag = null;
     if (!d || cancel || this.ui.mode === 'walk') return;
     if (d.kind === 'none') return;
-    if (d.kind === 'shape') { if (d.a && d.b) this._commitShape(this.ui.tool, d.a, d.b); return; }
+    if (d.kind === 'shape') { this.set({ dragging: false }); if (d.a && d.b) this._commitShape(this.ui.tool, d.a, d.b); return; }
     if (!d.moved && !this.ui.photo) {
       const h = this.pick(x, y);
       if (d.button === 0) this.applyTool(this.ui.tool, h);
@@ -793,6 +794,7 @@ export class Game {
       catTo: (x, z) => { if (g.sim.cat) { g.sim.cat.x = x; g.sim.cat.z = z; g.sim.cat.y = g._standY(x, z, 40); } },
       quality: (q) => { if (q) g.saveSettings({ quality: q }); return g.renderer.qualityName; },
       stats: () => ({ ...g.renderer.stats }),
+      music: (on) => { if (on !== undefined) g.saveSettings({ music: !!on }); return { setting: g.settings.music, playing: !!(g.audio.music && g.audio.mBus) }; },
       screenshot: () => g.renderer.screenshot(),
       world: () => g.world,
       renderer: () => g.renderer,

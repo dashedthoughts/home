@@ -93,7 +93,7 @@ export function cleanMeta(m) {
   if (m.train && ['x', 'y'].every((k) => typeof m.train[k] === 'number' && Number.isFinite(m.train[k]))) out.train = { x: m.train.x, y: m.train.y, axis: 'z' };
   if (m.cat && typeof m.cat.x === 'number' && typeof m.cat.z === 'number' && Number.isFinite(m.cat.x + m.cat.z)) out.cat = { x: m.cat.x, z: m.cat.z };
   if (m.spawn && typeof m.spawn.x === 'number' && typeof m.spawn.z === 'number' && Number.isFinite(m.spawn.x + m.spawn.z)) out.spawn = { x: m.spawn.x, z: m.spawn.z, yaw: Number.isFinite(m.spawn.yaw) ? m.spawn.yaw : 0 };
-  if (Array.isArray(m.lamps)) out.lamps = m.lamps.filter((x) => nums(x, 4)).slice(0, 64);
+  if (Array.isArray(m.lamps)) out.lamps = m.lamps.filter((x) => nums(x, 4) || nums(x, 5)).slice(0, 128);
   if (Array.isArray(m.signs)) out.signs = m.signs.filter((q) => q && typeof q.t === 'string' && q.t.length <= 6 && /^#[0-9a-f]{6}$/i.test(q.col) && ['x', 'y', 'z', 'iw', 'ih'].every((k) => Number.isInteger(q[k]) && Math.abs(q[k]) < 512) && nums(q.n, 2) && nums(q.r, 2) && nums(q.box, 6)).slice(0, 64).map((q) => ({ t: q.t, col: q.col, x: q.x, y: q.y, z: q.z, iw: q.iw, ih: q.ih, n: q.n.map(Math.sign), r: q.r.map(Math.sign), box: q.box }));
   if (m.landmarks && typeof m.landmarks === 'object') for (const [k, v] of Object.entries(m.landmarks)) if (typeof k === 'string' && k.length < 20 && nums(v, 6)) out.landmarks[k] = v;
   return out;
