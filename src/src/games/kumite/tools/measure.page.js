@@ -74,6 +74,11 @@ window.measure = () => {
     const geo = METRICS(id); // widths of the drawn limb shapes and head/face geometry, in local units
     const r = {};
     r.heightU = H;
+    // stance: idle height against the same fighter standing straight, and the knee bend of both legs in idle
+    const tall = { hip: [0, (L.leg[0] + L.leg[1]) * 0.995 + 8], lean: 0, head: 0, hn: [6, 70], hf: [-6, 70], fn: [8, 0], ff: [-8, 0], handN: 0, handF: 0, toeN: 0, toeF: 0, rot: 0, sq: 1, str: 1 };
+    r.stanceRatio = H / heightU(mask(id, tall, stillChains(id, tall)));
+    const knee = (h, k, f) => { const a = [k[0] - h[0], k[1] - h[1]], b = [f[0] - k[0], f[1] - k[1]]; return Math.acos(Math.max(-1, Math.min(1, (a[0] * b[0] + a[1] * b[1]) / (Math.hypot(...a) * Math.hypot(...b))))) * 180 / Math.PI; };
+    r.kneeN = knee(J.hpN, J.knN, J.ftN); r.kneeF = knee(J.hpF, J.knF, J.ftF);
     r.screenDesk = (H * ch.scale * cam.desk) / 540;
     r.screenLand = (H * ch.scale * cam.land) / cam.landH;
     r.forearmMin = geo.forearmMin / H; r.shinMin = geo.shinMin / H; r.thighMin = geo.thighMin / H; r.upperArmMin = geo.upperArmMin / H;

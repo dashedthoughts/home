@@ -2,7 +2,7 @@
 // A game module default-exports a React component: ({ onExit }) => JSX, filling its parent (.gamehost__stage).
 // To take a cabinet off the floor without deleting it, set hidden: true.
 const ALL = [
-  { id: 'redline', route: '/play', title: 'REDLINE', jp: '首都高', genre: 'Night racing', meta: 'The real C1 loop · 13.8 km', tagline: 'One lap of Tokyo\'s inner ring at 3 a.m. A rival, the police, and the rain.', accent: '#fcee0a' },
+  { id: 'redline', route: '/play', title: 'REDLINE', jp: '首都高', genre: 'Night racing', meta: 'Race · Road Brawl · Zen · Free run', tagline: 'Midnight expressway, ten case files to open, a rival, the police, and the rain.', accent: '#fcee0a' },
   { id: 'ito', title: 'ITO', jp: '糸', genre: 'Swing traversal', meta: '3D · one player', tagline: 'A courier, two grapple lines, and the whole Shinjuku skyline to cross.', accent: '#ff2bd6', load: () => import('./ito/index.jsx') },
   { id: 'kumite', title: 'NEON KUMITE', jp: '組手', genre: 'Versus fighter', meta: '1P vs CPU · 2P on one keyboard', tagline: 'Four fighters, one alley under the expressway. First to two rounds.', accent: '#00f0ff', load: () => import('./kumite/index.jsx') },
   { id: 'kaze', title: 'KAZE', jp: '風', genre: 'Ink-wash duels', meta: 'Side-on · one player', tagline: 'Leave the neon behind. A ronin, the wind, and five duels on the road north.', accent: '#e9e4d8', load: () => import('./kaze/index.jsx') },

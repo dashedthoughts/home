@@ -86,8 +86,8 @@ export function botInput(s, m) {
 // competent: 180 ms, parries most telegraphs, dodges the red ones.
 export function makePersona(kind, seed = 1) {
   const P = { masher: { rt: 0.3, parry: 0, guard: 0, dodge: 0, heal: false, so: 'random', haiku: false, greed: 1 },
-    learner: { rt: 0.25, parry: 0.34, guard: 0.85, dodge: 0.45, heal: true, so: 'late', haiku: true, greed: 0.25 },
-    competent: { rt: 0.18, parry: 0.8, guard: 1, dodge: 0.85, heal: true, so: 'good', haiku: true, greed: 0.12 } }[kind];
+    learner: { rt: 0.25, jit: 0.3, miss: 0.15, parry: 0.34, guard: 0.85, dodge: 0.45, heal: true, so: 'late', haiku: true, greed: 0.25 },
+    competent: { rt: 0.18, jit: 0.12, miss: 0.05, parry: 0.8, guard: 1, dodge: 0.85, heal: true, so: 'good', haiku: true, greed: 0.12 } }[kind];
   return Object.assign({ kind, r: (seed * 2654435761) >>> 0 || 7, k: 0, plans: new Map(), guardUntil: 0, nextCut: 0, soRel: null }, P);
 }
 function pr(m) { m.r = (Math.imul(m.r, 1664525) + 1013904223) >>> 0; return m.r / 4294967296; }
@@ -114,10 +114,10 @@ export function personaInput(s, m) {
   // perceive new telegraphs and plan a response that lands after the reaction time
   for (const f of foes) if (f.st === 'wind' && f.stt < DT * 1.5) {
     const A = ATK[f.atk]; const roll = pr(m); let act = 'none';
-    if (pr(m) < m.greed) act = 'none'; // greed: keeps cutting through the telegraph
+    if (pr(m) < (m.miss || 0) || pr(m) < m.greed) act = 'none'; // missed it, or greed: keeps cutting through the telegraph
     else if (A.red || A.low) act = roll < m.dodge ? 'dodge' : 'none';
     else if (roll < m.parry) act = 'parry'; else if (roll < m.parry + (1 - m.parry) * m.guard) act = 'guard';
-    m.plans.set(f.id, { act, t0: s.t, windT: f.windT, jit: (pr(m) - 0.5) * 0.06 });
+    m.plans.set(f.id, { act, t0: s.t, windT: f.windT, jit: (pr(m) - 0.5) * 0.06 + pr(m) * pr(m) * (m.jit || 0) });
   }
   if (m.guardUntil > s.t) { I.parry = true; return I; }
   for (const f of foes) {

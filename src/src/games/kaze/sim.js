@@ -7,7 +7,7 @@ export const blankInput = () => { const o = { choose: 0 }; for (const k of KEYS)
 
 function rnd(s) { let a = (s.r = (s.r + 0x6D2B79F5) | 0); let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }
 const pick = (s, list) => { let tot = 0; for (const m of list) tot += m[1]; let r = rnd(s) * tot; for (const m of list) { r -= m[1]; if (r <= 0) return m[0]; } return list[0][0]; };
-const cue = (s, k, o) => { if (s.cues.length < 200) s.cues.push(Object.assign({ k }, o)); };
+const cue = (s, k, o) => { if (s.cues.length < 200) s.cues.push(Object.assign({ k, t: s.t }, o)); };
 
 // P = player tuning
 export const P = {
@@ -114,6 +114,7 @@ export function windTarget(s) {
 // ---------- play ----------
 function stepPlay(s, I) {
   const p = s.p, d = D(s);
+  if (p.gp > 0) p.gp = Math.max(0, p.gp - DT * 0.2); // guard pressure ebbs
   triggers(s);
   if (s.phase !== 'play') return;
   updatePlayer(s, I);
@@ -241,7 +242,7 @@ function updatePlayer(s, I) {
       break;
     }
     case 'hit': p.vx *= 0.9; if (p.stt >= P.hitT) setP(p, 'idle'); break;
-    case 'heal': p.vx *= 0.8; if (!p.hitDone && p.stt > 0.45) { p.hitDone = true; p.hp = Math.min(p.hpMax, p.hp + 2 + (s.charms.includes('fox2') ? 1 : 0)); cue(s, 'heal', { x: p.x }); } if (p.stt >= P.healT) setP(p, 'idle'); break;
+    case 'heal': p.vx *= 0.8; if (!p.hitDone && p.stt > 0.45) { p.hitDone = true; p.hp = Math.min(p.hpMax, p.hp + (D(s).heal ?? 2) + (s.charms.includes('fox2') ? 1 : 0)); cue(s, 'heal', { x: p.x }); } if (p.stt >= P.healT) setP(p, 'idle'); break;
     case 'bow': p.vx = 0; if (!p.hitDone && p.stt > 0.6) { p.hitDone = true; bowEffect(s); } if (p.stt >= P.bowT) setP(p, 'idle'); break;
     case 'take': p.vx = 0; if (p.stt >= 1.0) setP(p, 'idle'); break;
     case 'sit': p.vx = 0; break;
@@ -307,7 +308,7 @@ function hurtFoe(s, f, kind) {
     setF(s, f, 'block'); f.blockCD = f.boss ? 0.5 : 1.1; f.streak = 0; cue(s, 'clash', { x: (f.x + p.x) / 2 }); p.vx = -p.face * 110; return;
   }
   // against a boss a quick cut only grazes: the duel is won with parries, ripostes and heavy cuts
-  const dmg = (kind === 'slash' ? 1 : kind === 'arrow' ? 2 : kind === 'heavy' ? 2 : 3) * (f.boss && kind === 'slash' ? 0.5 : 1);
+  const dmg = (kind === 'slash' ? 1 : kind === 'arrow' ? 2 : kind === 'heavy' ? 2 : 3) * (f.boss && kind === 'slash' ? 0.42 : 1);
   f.hp -= dmg; s.stats.hits++; cue(s, 'cut', { x: f.x, id: f.id, kind, dmg });
   if (f.hp <= 0) return killFoe(s, f, kind);
   if (f.boss && f.phase === 1 && f.hp <= f.hpMax / 2) { setF(s, f, 'shift'); f.phase = 2; cue(s, 'phase2', { x: f.x, boss: f.boss }); if (BOSSES[f.boss].shieldP2) f.shield = 1; return; }
@@ -357,7 +358,8 @@ function updateFoe(s, f) {
       const inRange = keep ? dist < 640 : dist <= F.range + 6;
       if (f.readyT <= 0 && inRange && !s.token && s.tokenCD <= 0 && p.st !== 'dead' && s.phase === 'play') {
         const list = f.boss ? (f.phase === 2 ? F.p2 : F.p1) : F.moves;
-        f.atk = pick(s, list);
+        f.atk = pick(s, f.boss && (p.turtle || 0) >= 2 ? list.map((m) => [m[0], m[1] * (ATK[m[0]].red ? 4 : 1)]) : list);
+        if (f.boss && ATK[f.atk].red) p.turtle = 0;
         const fe = f.boss ? F.feint[f.phase - 1] : (F.feint || 0);
         f.feinting = rnd(s) < fe * d.feint; f.feintT = 0.18 + rnd(s) * 0.14;
         s.token = f.id; setF(s, f, 'wind'); f.windT = windupOf(s, f.atk);
@@ -390,15 +392,15 @@ function updateFoe(s, f) {
       break;
     }
     case 'rec': {
-      if (f.stt >= A.rec * (f.phase === 2 ? 0.85 : 1)) {
+      if (f.stt >= A.rec * (d.rec || 1) * (f.phase === 2 ? 0.85 : 1)) {
         if (A.next) { f.atk = A.next; s.token = f.id; setF(s, f, 'wind'); f.windT = windupOf(s, f.atk); cue(s, 'tell', { x: f.x, id: f.id, red: !!ATK[f.atk].red }); }
-        else { if (s.token === f.id) s.token = 0; setF(s, f, 'ready'); f.readyT = (0.4 + rnd(s) * 0.9) * (f.boss ? (f.phase === 2 ? 0.8 : 2.0) : 1); f.atk = null; }
+        else { if (s.token === f.id) s.token = 0; setF(s, f, 'ready'); f.readyT = (0.4 + rnd(s) * 0.9) * (f.boss ? (f.phase === 2 ? 0.6 : 1.2) : 1); f.atk = null; }
       }
       break;
     }
     case 'stun': case 'stagger': case 'block': {
       if (f.st !== 'block') mv = -f.face * 40 * (1 - f.stt * 2);
-      if (f.stt >= (f.st === 'block' ? 0.34 : f.stunT)) { const wasBlock = f.st === 'block'; setF(s, f, 'ready'); f.readyT = wasBlock ? (f.boss ? (f.phase === 2 ? 0.15 : 0.6) : 0.15) : 0.3 + rnd(s) * 0.4; }
+      if (f.stt >= (f.st === 'block' ? 0.34 : f.stunT)) { const wasBlock = f.st === 'block'; setF(s, f, 'ready'); f.readyT = wasBlock ? (f.boss ? (f.phase === 2 ? 0.12 : 0.25) : 0.15) : 0.3 + rnd(s) * 0.4; }
       break;
     }
     case 'opened': if (f.stt >= (f.boss ? 0.95 : 1.25)) { setF(s, f, 'ready'); f.readyT = 0.4; } break;
@@ -426,15 +428,18 @@ function strikePlayer(s, f, A, cont) {
   const guarding = p.st === 'guard' && (f.x - p.x) * p.face > -6;
   if (guarding && !A.red) {
     if (p.parryOk && p.parryT <= parryWin(s)) {
-      p.parryOk = false; s.stats.parries++; setF(s, f, 'opened'); cue(s, 'parry', { x: (p.x + f.x) / 2, id: f.id }); s.slow = 0.18;
+      p.parryOk = false; p.turtle = 0; s.stats.parries++; setF(s, f, 'opened'); cue(s, 'parry', { x: (p.x + f.x) / 2, id: f.id }); s.slow = 0.18;
       p.resF += 0.5; if (p.resF >= 1) { p.resF -= 1; p.res = Math.min(s.resMax, p.res + 1); }
       hint(s, 'riposte'); if (s.token === f.id) { s.token = 0; s.tokenCD = 0.6; }
       return;
     }
-    p.parryOk = false; cue(s, 'deflect', { x: (p.x + f.x) / 2 }); p.vx = -p.face * (A.dmg > 1 ? 260 : 150); p.stt = 0;
+    p.parryOk = false; p.gp = (p.gp || 0) + (f.boss ? 1.5 : 1); p.turtle = (p.turtle || 0) + 1;
+    if (p.gp >= (d.guard || 3)) { p.gp = 0; cue(s, 'guardbroken', { x: p.x }); hurtPlayer(s, A.dmg * d.dmg, f.x, A.push); return; }
+    cue(s, 'deflect', { x: (p.x + f.x) / 2 }); p.vx = -p.face * (A.dmg > 1 ? 260 : 150); p.stt = 0;
+    if (A.dmg > 1 && d.chip) { p.hp -= d.chip; cue(s, 'chip', { x: p.x }); if (p.hp <= 0) die(s); }
     return;
   }
-  hurtPlayer(s, A.dmg * d.dmg, f.x, A.push);
+  hurtPlayer(s, A.dmg * d.dmg * (f.boss && f.phase === 2 ? Math.min(d.boss2 || 1, BOSSES[f.boss].boss2 || 9) : 1), f.x, A.push);
 }
 function hurtPlayer(s, dmg, fromX, push) {
   const p = s.p; p.hp -= dmg; p.ifr = P.ifrHit; setP(p, 'hit'); p.vy = 0; const dir = p.x >= fromX ? 1 : -1; p.vx = dir * (push || 190);

@@ -8,6 +8,9 @@ import { createSim, step, DT, blankInput, standoffPose, digest } from './sim.js'
 import { makeBot, botInput, makePersona, personaInput } from './bot.js';
 import { DIFF, ATK, CHAPTERS, HAIKU } from './data.js';
 import { makeStore, DEFAULT_PROGRESS } from './save.js';
+import { makePlates, plateStep } from './plates.js';
+import { runClothCheck } from './clothcheck.mjs';
+import { SCORE, SCALES, STATE_SCALE, CH_KEYS, INSTR, TEMPO, loopBars, pitchClass, nextBar } from './score.js';
 
 let fails = 0, checks = 0;
 const ok = (c, msg) => { checks++; if (!c) { fails++; console.log('  FAIL ' + msg); } };
@@ -156,6 +159,64 @@ console.log('6. determinism');
   const a = run(), b = run(); ok(a === b, `same seed, same inputs, same state (${a} vs ${b})`);
 }
 
+// ---- 8. the score: complete stems, whole loops, notes in scale, bar-line transitions, headroom ----
+console.log('8. score');
+{
+  const states = ['calm', 'fight', 'standoff', 'boss', 'boss2', 'victory', 'ending'], perc = new Set(['taiko', 'heart', 'click']);
+  let notes = 0, worst = 0, worstAt = '';
+  for (const k of CH_KEYS) for (const st of states) {
+    const S = SCORE[k] && SCORE[k][st]; ok(!!S && Object.keys(S).length > 0, `${k} has a ${st} arrangement`); if (!S) continue;
+    const L = loopBars(st);
+    for (const [stem, bars] of Object.entries(S)) {
+      ok(bars.length === L, `${k}/${st}/${stem} has ${bars.length} bars (loop is ${L})`);
+      ok(INSTR[stem] != null, `${stem} is a known instrument`);
+      for (const bar of bars) for (const [t, n, d] of bar) { notes++; ok(t >= 0 && t < 4 && d > 0, `${k}/${st}/${stem} event inside its bar`); if (!perc.has(stem)) ok(SCALES[STATE_SCALE[st]].includes(pitchClass(n)), `${k}/${st}/${stem} note ${n} in the ${STATE_SCALE[st]} scale`); }
+    }
+    // headroom: sum the peak gains of everything sounding at each eighth of every bar (plucks and drums ring for 2 beats)
+    for (let b = 0; b < L; b++) for (let q = 0; q < 8; q++) { const tb = q / 2; let sum = 0;
+      for (const [stem, bars] of Object.entries(S)) for (const [t, n, d] of bars[b]) { const ring = stem === 'pluck' || stem === 'bass' || stem === 'taiko' || stem === 'heart' || stem === 'bell' ? Math.max(d, 2) : d; if (tb >= t && tb < t + ring) sum += INSTR[stem] * (stem === 'pad' || stem === 'glass' ? 1.5 : stem === 'bell' ? 1.6 : 1); }
+      if (sum > worst) { worst = sum; worstAt = `${k}/${st} bar ${b + 1}`; } }
+  }
+  ok(worst < 0.75, `(master 0.63 at default volume, then a compressor) peak summed gain ${worst.toFixed(2)} (at ${worstAt}) stays well under clipping before the master and compressor`);
+  // transitions: whatever the request time, the switch lands exactly on a bar line, and never in the past
+  for (const k of CH_KEYS) { const bar = 240 / TEMPO[k]; for (let i = 0; i < 50; i++) { const t = 0.37 + i * 0.913, nb = nextBar(t, 0.1, bar), n = (nb - 0.1) / bar; ok(nb >= t - 1e-9 && Math.abs(n - Math.round(n)) < 1e-9 && nb - t < bar + 1e-9, `${k}: request at ${t.toFixed(2)}s switches on bar line ${nb.toFixed(3)}s`); } }
+  console.log(`  ${CH_KEYS.length} chapters x ${states.length} states, ${notes} notes checked; loops of ${states.map((s2) => loopBars(s2)).join('/')} bars; peak summed gain ${worst.toFixed(2)} at ${worstAt}`);
+}
+
+// ---- 9. plates: one at a time, never left over a fight, gone by themselves ----
+console.log('9. plates');
+{
+  let checked = 0, maxAge = 0;
+  for (let ch = 0; ch < 5; ch++) for (const cp of [0, 1, 2]) {
+    // after a goto or a respawn, 5 s later no story plate may still be up (the shrine line was the bug)
+    const s = createSim({ seed: 3 + ch, difficulty: 'blade', chapter: ch, checkpoint: cp }), m = makeBot(), pm = makePlates();
+    let P = null; for (let i = 0; i < 60 * 5; i++) { step(s, botInput(s, m)); P = plateStep(pm, s, s.cues, false); s.cues.length = 0; }
+    ok(!P || P.kind === 'fight', `ch${ch + 1} cp${cp}: 5 s after the start the plate is ${P ? P.kind + ' "' + P.text + '"' : 'gone'}`);
+    checked++;
+  }
+  // a whole bot run of every chapter: a plate never outlives its time, and never sits over a fight unless it belongs there
+  for (let ch = 0; ch < 5; ch++) {
+    const s = createSim({ seed: 21 + ch, difficulty: 'blade', chapter: ch }), m = makeBot({ secrets: true }), pm = makePlates();
+    for (let i = 0; i < 60 * 60 * 4 && s.ch === ch && !s.done; i++) {
+      step(s, botInput(s, m)); const P = plateStep(pm, s, s.cues, i % 97 === 0); s.cues.length = 0; checked++;
+      if (!P) continue; maxAge = Math.max(maxAge, P.kind === 'death' ? 0 : P.age);
+      const fight = s.arena && s.foes.some((f) => f.st !== 'dead');
+      if (fight && !(P.kind === 'fight' || P.kind === 'boss' || P.kind === 'death')) { ok(false, `ch${ch + 1}: a ${P.kind} plate "${P.text}" over a fight`); break; }
+      if (P.kind !== 'death' && P.age > 4.05) { ok(false, `ch${ch + 1}: plate "${P.text}" still up after ${P.age.toFixed(1)}s`); break; }
+    }
+  }
+  ok(maxAge <= 4.05, `no plate stays longer than 4 s (longest ${maxAge.toFixed(2)}s); the selector only ever returns one plate`);
+  console.log(`  ${checked} frames checked across all chapters; longest plate ${maxAge.toFixed(2)}s`);
+}
+
+// ---- 10. cloth: every animation of every robed figure, frame by frame, through the real pose and figure code ----
+{
+  console.log('10. cloth');
+  const r = runClothCheck((m) => console.log('  ' + m));
+  ok(r.total > 8000 && r.anims > 100, 'cloth checker covered too little');
+  ok(r.fails.length === 0, `cloth rules broken on ${r.fails.length} frames`);
+}
+
 // ---- 7. personas: human-like players on the default difficulty (Blade), 8 seeds each ----
 console.log('7. personas (Blade, 8 seeds)');
 function persona(kind, seed, maxCh) {
@@ -176,13 +237,18 @@ function persona(kind, seed, maxCh) {
   const M = [], L = [], C = []; for (let seed = 1; seed <= 8; seed++) { M.push(persona('masher', seed, 1)); L.push(persona('learner', seed, 2)); C.push(persona('competent', seed, 5)); }
   const firstFight = M.filter((r) => r.firstFight).length, toBoss = M.filter((r) => r.boss1).length;
   const bt = M.flatMap((r) => r.bossDeathT).sort((a, b) => a - b), med = bt.length ? bt[bt.length >> 1] : 99;
+  const md = (a) => { const b = a.slice().sort((x, y) => x - y); return b[b.length >> 1]; };
   ok(firstFight >= 6 && toBoss >= 6, `masher clears the first fight (${firstFight}/8) and reaches the first boss (${toBoss}/8)`);
-  ok(!bt.length || (med >= 10 && bt[0] >= 8), `masher loses to the first boss only after a real fight (median ${med.toFixed(1)}s, shortest ${bt.length ? bt[0].toFixed(1) : '-'}s)`);
-  const l1 = L.filter((r) => r.chDone >= 1).length, l2 = L.filter((r) => r.chDone >= 2).length;
+  const lostTwice = M.filter((r) => r.bossDeathT.length >= 2).length, through = M.filter((r) => r.chDone >= 1).length;
+  ok(lostTwice >= 6, `masher loses the first boss more than once on ${lostTwice}/8 seeds`); ok(through >= 5, `masher still breaks through in the end on ${through}/8`);
+  ok(med >= 7, `masher's boss fights are real fights (median ${med.toFixed(1)}s before falling)`);
+  const l1 = L.filter((r) => r.chDone >= 1).length, l2 = L.filter((r) => r.chDone >= 2).length, lm = md(L.map((r) => r.deaths));
   ok(l1 >= 6, `learner finishes chapter 1 on ${l1}/8 (need 6)`); ok(l2 >= 6, `learner gets through chapter 2 on ${l2}/8`);
-  const cf = C.filter((r) => r.fin).length; ok(cf >= 7, `competent finishes the game on ${cf}/8`);
+  ok(lm >= 2 && lm <= 5, `learner dies a few times across chapters 1 and 2 (median ${lm}, band 2 to 5)`);
+  const cf = C.filter((r) => r.fin).length, cm = md(C.map((r) => r.deaths)); ok(cf >= 7, `competent finishes the game on ${cf}/8`);
+  ok(cm >= 3 && cm <= 8, `competent median deaths ${cm} (band 3 to 8)`);
   const deadMax = Math.max(...[...M, ...L, ...C].map((r) => r.deadMax)); ok(deadMax < 2, `death is cheap: back at the shrine after ${deadMax.toFixed(2)}s at most`);
-  console.log(`  masher: first fight ${firstFight}/8, reached boss ${toBoss}/8, boss deaths ${bt.length} (median ${med.toFixed(1)}s), beat boss ${M.filter((r) => r.chDone >= 1).length}/8`);
+  console.log(`  masher: first fight ${firstFight}/8, reached boss ${toBoss}/8, lost the boss twice or more ${lostTwice}/8, broke through ${through}/8, boss deaths ${bt.length} (median ${med.toFixed(1)}s)`);
   console.log(`  learner: ch1 ${l1}/8, ch2 ${l2}/8, deaths ${L.map((r) => r.deaths).join(',')}`);
   console.log(`  competent: finished ${cf}/8, deaths ${C.map((r) => r.deaths).join(',')}; respawn after death <= ${deadMax.toFixed(2)}s`);
 }

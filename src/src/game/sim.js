@@ -1,9 +1,7 @@
 // REDLINE simulation · pure logic, no rendering, no DOM. Units: metres, seconds.
-// Track space: z = distance travelled along the road since the start, x = lateral offset from the centre line.
-// The road is the real Shuto Expressway C1 inner loop (track/c1.js): loop position s = wrap(startS + z), looping forever.
+// Track space: z = distance travelled along the road, x = lateral offset from the centre line.
 
-import { CARS, DIFFICULTY, WEATHER } from './config.js';
-import * as C1 from './track/c1.js';
+import { CARS, DIFFICULTY, WEATHER, MODES } from './config.js';
 
 export const LANE_W = 3.6;
 export const LANES = [-LANE_W, 0, LANE_W];
@@ -16,16 +14,24 @@ const CAR_LEN = 4.4, CAR_W = 1.95;
 const GLITCH_TIME = 3.0;
 const SHARDS_PER_FILE = 5;
 const TOTAL_FILES = 10;
-// Lanes: the real C1 is mostly two lanes (C1.lanesAt). The game always plays three: an accepted concession.
-export const START_S = 80;         // the grid: just past Shiodome, heading for Ginza
-// Where runs aim to open their tenth file: Tanimachi to Iikura, Tokyo Tower ~0.8 km ahead-left. One lap (13.8 km) does not
-// fit a ~3 minute run at the speeds traffic allows (a bot laps an empty C1 flat out in ~3.2 min), so the run is ~3/4 of a lap.
-export const FINALE_S = 10000;
-const PACE_PRIOR = 0.35, PACE_MIN = 0.6, PACE_MAX = 2.5;
-const MERGE_TRAFFIC = 1.35;        // merge zones after each real JCT: denser traffic...
-const MERGE_NEARMISS = 2;          // ...and near misses pay double
+export const SECTOR = 1500;        // a junction every 1.5 km
+export const TUNNEL = 260;         // the tunnel right after each junction
+export const ROUTES = {
+  expressway: { name: 'EXPRESSWAY', traffic: 1.0, speed: 1.0, density: 1.0, shard: 1.0 },
+  backstreets: { name: 'BACKSTREETS', traffic: 1.25, speed: 0.78, density: 1.0, shard: 1.5 },
+};
+// fairness (kept from the v3 playtest): a gentle start, and traffic that checks its mirrors
+export const WARMUP = 2 * SECTOR;  // the warm-up: half the traffic on the grid, rising to the full count by the second junction
+export const CALM = 600;           // nobody is put in your lane until you have rolled this far
+const CUT_IN_GAP = 1.8;            // seconds of closing time traffic leaves you before it changes into your lane
+const INVULN = 3.4;                // seconds safe after a crash: long enough to get clear of the car you hit (at 2.6 a slow reaction re-hit it as it wore off)
+// the bend sign: the road's own curve function decides what is a turn (as before: ahead bends past 0.3 and differs from
+// here by 0.3), but it now looks ahead by time, not a fixed 170 m, and holds once lit so it never flickers
+const BEND_LOOK = 2.6;             // seconds of travel the sign looks ahead (at least 120 m)
+const BEND_HOLD = 1.5;             // and stays up at least this long
 
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
+const smooth = (t) => t * t * (3 - 2 * t);
 
 export function mulberry(seed) {
   let s = seed >>> 0;
@@ -47,42 +53,74 @@ export function createSim(opts = {}) {
   let prnd = Math.random;
   let rnd = Math.random;
 
-  // ---------- track: the real C1 loop. Everything in the sim works in z; trackS maps z to the loop ----------
-  let s0 = START_S;
-  const trackS = (z) => C1.wrap(s0 + z);
-  const curveAt = (z) => C1.curveAt(s0 + z);
-  const hillAt = (z) => C1.hillAt(s0 + z);
-  // z of the next time the car reaches loop position s (strictly ahead of z)
-  const zOf = (s, z) => z + (C1.ahead(s0 + z, s) || C1.LENGTH);
-  // the tunnel containing z, or the next one ahead, as z0/z1 (one shared object: copy if you keep it)
-  const tun = { z0: 0, z1: 0, index: -1, name: '', jp: '' };
-  function tunnelNear(z) {
-    const w = trackS(z);
-    let best = null, bestD = Infinity;
-    for (let k = 0; k < C1.tunnelSpans.length; k++) {
-      const t = C1.tunnelSpans[k];
-      const inside = w >= t.from && w < t.to;
-      const d = inside ? -(w - t.from) : C1.ahead(w, t.from);
-      if (inside || d < bestD) { best = t; bestD = d; tun.index = k; if (inside) break; }
+  // ---------- track: curvature & hills as smooth sections, generated lazily ----------
+  let sections = [];
+  function extendTrack(toZ) {
+    while (!sections.length || sections[sections.length - 1].end < toZ) {
+      const prev = sections[sections.length - 1];
+      const start = prev ? prev.end : 0;
+      const len = 180 + rnd() * 320;
+      const straight = !prev || rnd() < 0.28;
+      const c = straight ? 0 : (rnd() < 0.5 ? -1 : 1) * (0.35 + rnd() * 0.65);
+      const h = rnd() < 0.45 ? 0 : (rnd() * 2 - 1);
+      sections.push({ start, end: start + len, c, h, c0: prev ? prev.c : 0, h0: prev ? prev.h : 0 });
     }
-    tun.z0 = z + bestD; tun.z1 = tun.z0 + best.length; tun.name = best.name; tun.jp = best.jp;
-    return tun;
+    // drop sections far behind
+    while (sections.length > 4 && sections[1].end < S.z - 400) sections.shift();
   }
-  function armJunction() { // the next real JCT ahead
-    const e = C1.nextJctEvent(trackS(S.z) + 1);
-    S.jct = e; S.nextJunction = zOf(e.s, S.z); S.jctCalled = false;
+  function sectionAt(z) {
+    for (let i = sections.length - 1; i >= 0; i--) if (sections[i].start <= z) return sections[i];
+    return sections[0];
   }
+  function curveAt(z) {
+    const s = sectionAt(z);
+    const t = smooth(clamp((z - s.start) / Math.min(140, (s.end - s.start) * 0.45), 0, 1));
+    return s.c0 + (s.c - s.c0) * t;
+  }
+  function hillAt(z) {
+    const s = sectionAt(z);
+    const t = smooth(clamp((z - s.start) / ((s.end - s.start) * 0.6), 0, 1));
+    return s.h0 + (s.h - s.h0) * t;
+  }
+
+  function routeAt(z) {
+    const rs = S.routes || [];
+    for (let i = rs.length - 1; i >= 0; i--) if (rs[i].z0 <= z) return rs[i].route;
+    return 'expressway';
+  }
+
+  // the bend sign. S.bend = { dir, level 1..3 (3 = HARD), until }: the tightest turn coming up in the next BEND_LOOK seconds
+  function updateBend() {
+    const B = S.bend;
+    let lvl = 0, dir = 0;
+    if (!S.finale) {
+      const now = curveAt(S.z), reach = Math.max(120, S.speed * BEND_LOOK);
+      for (let d = 60; d <= reach; d += 10) {
+        const c = curveAt(S.z + d);
+        if (Math.abs(c) > 0.3 && Math.abs(c - now) > 0.3) {
+          const l = Math.min(3, Math.ceil(Math.abs(c) * 3));
+          if (l > lvl) { lvl = l; dir = Math.sign(c); }
+        }
+      }
+    }
+    if (lvl && (B.dir === 0 || B.dir === dir || S.time >= B.until)) {
+      if (B.dir !== dir) { B.level = 0; B.until = S.time + BEND_HOLD; }
+      B.dir = dir; B.level = Math.max(B.level, lvl);
+    } else if (!lvl && S.time >= B.until) { B.dir = 0; B.level = 0; }
+  }
+
+  const playerLane = () => (S.x < -LANE_W / 2 ? 0 : S.x > LANE_W / 2 ? 2 : 1);
+  // the warm-up: half the traffic on the grid, rising to the full count over the first two sectors (then esc takes over)
+  const trafficRamp = () => (mode === 'play' ? 0.5 + 0.5 * clamp(S.dist / WARMUP, 0, 1) : 1);
 
   // ---------- spawning ----------
   function spawnShards() {
     while (S.nextShardZ < S.z + 520) {
       if (S.finale) return;
       const z0 = S.nextShardZ;
-      const s = s0 + z0;
-      // keep the JCT signs and the tunnel mouths clean
-      if (C1.nearJct(s, 120, 20) || (!C1.tunnelAt(s) && C1.tunnelAt(s + 60))) { S.nextShardZ += 60; continue; }
-      const inTunnel = C1.tunnelAt(s) || C1.tunnelAt(s + 45);
-      const p = inTunnel ? 0 : rnd(); // inside a tunnel: straight lines only (solid lane lines)
+      const inSector = ((z0 % SECTOR) + SECTOR) % SECTOR;
+      if (inSector > SECTOR - 120 || inSector < TUNNEL + 40) { S.nextShardZ += 60; continue; } // keep junctions & tunnels clean
+      const p = rnd();
       const lane = (rnd() * 3) | 0;
       const n = 6;
       for (let k = 0; k < n; k++) {
@@ -91,32 +129,15 @@ export function createSim(opts = {}) {
         else if (p > 0.38) x = LANES[lane] + (k / (n - 1)) * (lane === 2 ? -1 : 1) * LANE_W; // lane change
         S.shardList.push({ z: z0 + k * 9, x, taken: false, missed: false, id: S.uid++ });
       }
-      S.spawned += n;
-      S.nextShardZ += shardGap();
+      S.nextShardZ += 170 + rnd() * 170;
     }
   }
-  // Pacing: the gap to the next shard line stretches or shrinks so that the tenth file opens near FINALE_S on the first
-  // lap, whoever is driving: it estimates the share of shards this driver actually collects and spaces the rest to fit.
-  // Within limits (never a desert, never a carpet). On a second lap, the normal rhythm.
-  const GAP_BASE = 255; // mean gap between shard lines (m) before pacing
-  function shardGap() {
-    const base = 170 + rnd() * 170;
-    if (mode !== 'play') return base;
-    const left = (FINALE_S - s0) - S.nextShardZ;
-    let pending = 0;
-    for (const q of S.shardList) if (!q.taken && !q.missed) pending++;
-    const passed = S.spawned - pending;
-    const eff = clamp((S.shards + PACE_PRIOR * 24) / (passed + 24), 0.2, 0.95); // a prior worth four lines, then the evidence
-    const need = TOTAL_FILES * SHARDS_PER_FILE - S.shards - pending * eff;
-    if (left < 400 || need <= 0) return base;
-    const gap = left / (need / (6 * eff)) - 45;
-    return base * clamp(gap / GAP_BASE, PACE_MIN, PACE_MAX);
-  }
 
-  // the real tunnels (merged spans): dry road, no rain, no lane changes
+  // the tunnel that follows every junction: dry road, no rain, no lane changes
   function tunnelAt(z) {
     if (S.finale) return false;
-    return C1.tunnelAt(s0 + z);
+    const j = Math.floor(z / SECTOR) * SECTOR;
+    return j > 0 && z - j < TUNNEL;
   }
 
   function laneFree(lane, z, gap) {
@@ -137,21 +158,22 @@ export function createSim(opts = {}) {
   function spawnTraffic() {
     const diff = DIFFICULTY[cfg.difficulty] || DIFFICULTY.street;
     if (S.finale) return;
-    const mergeAhead = C1.mergeAt(s0 + S.z + 300) || C1.mergeAt(s0 + S.z + 120);
+    const R = ROUTES[routeAt(S.z + 300)] || ROUTES.expressway;
     const esc = mode === 'play' ? 1 + Math.min(0.3, (S.sector - 1) * 0.06) : 1; // each sector is busier than the last
-    const want = Math.round((mode === 'attract' ? 9 : 13) * diff.density * (mergeAhead ? MERGE_TRAFFIC : 1) * esc);
+    const light = mode !== 'play' ? 1 : cfg.race === false ? MODES.free.traffic : cfg.zen ? MODES.zen.traffic : 1; // Free Run and Zen are lighter
+    const want = Math.round((mode === 'attract' ? 9 : 13) * diff.density * R.traffic * light * esc * trafficRamp());
+    const calm = mode === 'play' && S.dist <= CALM, pl = playerLane();
     let guard = 0;
     while (S.cars.length < want && guard++ < 20) {
       const z = S.z + 220 + rnd() * 260 + (S.cars.length === 0 ? -140 : 0);
-      // traffic joining at a JCT comes in slower on an outer lane and looks for a gap sooner
-      const merger = C1.mergeAt(s0 + z) && rnd() < 0.5;
-      const lane = merger ? (rnd() < 0.5 ? 0 : 2) : (rnd() * 3) | 0;
+      const lane = (rnd() * 3) | 0;
+      if (calm && lane === pl) continue; // the launch: your lane stays clear
       if (!laneFree(lane, z, 28) || wouldWall(lane, z, null)) continue;
       const kind = rnd() < 0.16 ? 'hauler' : rnd() < 0.5 ? 'sedan' : 'hatch';
-      const speed = (24 + rnd() * 18) * diff.trafficSpeed * (merger ? 0.85 : 1) * (kind === 'hauler' ? 0.85 : 1) * (1 + (esc - 1) * 0.3);
+      const speed = (24 + rnd() * 18) * diff.trafficSpeed * R.speed * (kind === 'hauler' ? 0.85 : 1) * (1 + (esc - 1) * 0.3);
       S.cars.push({
         id: S.uid++, z, lane, target: lane, x: LANES[lane], speed, cruise: speed, kind,
-        paint: (rnd() * 8) | 0, blink: 0, brake: false, prevDz: z - S.z, hit: 0, think: merger ? 0.4 + rnd() : rnd() * 2,
+        paint: (rnd() * 8) | 0, blink: 0, brake: false, prevDz: z - S.z, hit: 0, think: rnd() * 2,
       });
     }
   }
@@ -162,7 +184,6 @@ export function createSim(opts = {}) {
     prnd = seed != null ? mulberry(seed * 7 + 3) : Math.random; // pickups have their own stream, so traffic stays the same
     const car = CARS[cfg.car] || CARS.wedge;
     const diff = DIFFICULTY[cfg.difficulty] || DIFFICULTY.street;
-    s0 = C1.wrap(cfg.startS != null ? cfg.startS : START_S);
     Object.assign(S, {
       z: 0, x: 0, vx: 0, steer: 0, speed: mode === 'attract' ? MAX * 0.8 : 0,
       heat: 0, glitch: 0, slip: 0, draft: 0, invuln: 0, hitstop: 0,
@@ -172,12 +193,13 @@ export function createSim(opts = {}) {
       overclock: false, onKerb: false, scrape: 0, shake: 0, flash: 0,
       cars: [], shardList: [], nextShardZ: mode === 'play' ? 140 : 60, uid: 1,
       car, ai: { target: 0, think: 0 },
-      s: s0, startS: s0, lap: 1, district: C1.districtAt(s0), merge: false, jct: null, nextJunction: 0, jctCalled: false, sector: 1, spawned: 0,
-      finale: false, finaleT: 0, done: false,
+      route: 'expressway', routes: [{ z0: -1e9, route: 'expressway' }], nextJunction: SECTOR, sector: 1,
+      finale: false, finaleT: 0, done: false, bend: { dir: 0, level: 0, until: 0 }, bendTick: 0, tunnelN: 0, wasTunnel: false, calledJ: 0,
       rival: { z: -9, x: LANES[2], lane: 2, target: 2, speed: mode === 'attract' ? MAX * 0.8 : 0, swapT: -9, think: 0, stun: 0, cd: 0.8, hits: 0, fight: false, fightT: 0, fightCd: 6, surge: 0, guard: 0, block: 0 }, pos: 1, raceWon: null, strikeCd: 0, swing: 0, wheelie: 0, wanted: 0, cop: null, cops: [], bust: 0, lost: 0, busts: 0, chaseT: 0, swarmT: 0,
       inTunnel: false, wet: false, aqua: 0, crash: null, nmChain: 0, nmT: 0, sprint: false, raceT: 0, graceT: 0, powers: [], nextPowerZ: 520, ghost: 0,
     });
-    armJunction();
+    sections = [];
+    extendTrack(1200);
     spawnTraffic();
     spawnShards();
   }
@@ -235,6 +257,8 @@ export function createSim(opts = {}) {
       if (S.count <= 0) { emit({ type: 'go' }); if (S.car.bike) S.wheelie = 1.5; } // pop one off the line
     }
     const racing = S.count <= 0 && !S.over && !S.done;
+    // Free Run is a drive, not a fight: no damage, no police (and no rival: cfg.race is false). Zen keeps the race, without damage.
+    const free = cfg.race === false, noDamage = !!cfg.zen || free, noPolice = cfg.police === false || noDamage;
     if (racing) S.raceT += dt;
     if (S.graceT > 0) S.graceT -= dt; // after any setback, nothing else may pile on for a moment
 
@@ -257,13 +281,11 @@ export function createSim(opts = {}) {
     else if (S.speed < top) S.speed += 21 * car.accel * (overclock ? 1.25 : 1) * Math.max(0.12, 1 - (S.speed / top) ** 2) * dt;
     else S.speed = Math.max(top, S.speed - 9 * dt);
     S.onKerb = Math.abs(S.x) > ROAD_HALF - 0.95;
-    if (S.onKerb && S.speed > MAX * 0.45) S.speed -= 7 * dt;
+    if (S.onKerb && S.speed > MAX * 0.45 && !S.finale) S.speed -= 7 * dt;
 
     const prevZ = S.z;
     S.z += S.speed * dt;
     S.dist += S.speed * dt;
-    S.s = trackS(S.z);
-    S.merge = C1.mergeAt(S.s);
     S.topSpeed = Math.max(S.topSpeed, S.speed);
     const sp = S.speed / MAX;
 
@@ -272,7 +294,8 @@ export function createSim(opts = {}) {
     S.vx += S.steer * steerPow * dt;
     const curve = curveAt(S.z);
     S.vx -= curve * sp * sp * 15 * dt;
-    if (cfg.assist && Math.abs(target) < 0.15 && racing) {
+    if ((S.bendTick = (S.bendTick + 1) % 4) === 0) updateBend();
+    if ((cfg.assist || S.finale) && Math.abs(target) < 0.15 && racing) { // (the roll-out to the lookout settles into a lane by itself)
       const lane = LANES.reduce((a, b) => (Math.abs(b - S.x) < Math.abs(a - S.x) ? b : a));
       S.vx += (lane - S.x) * 5 * dt;
     }
@@ -315,16 +338,23 @@ export function createSim(opts = {}) {
     S.overclock = overclock;
     if (S.slip > 0) S.slip -= dt;
 
-    // ---- the real road: junctions (named, with merge zones after them), districts, laps ----
-    if (!S.jctCalled && S.nextJunction - S.z < 320) {
-      S.jctCalled = true;
-      if (mode === 'play' && !S.finale) emit({ type: 'junction', name: S.jct.name, jp: S.jct.jp, dist: Math.round(S.nextJunction - S.z), sector: S.sector + 1 });
+    // ---- junctions: the lane you're in under the sign picks the next route ----
+    if (S.calledJ !== S.nextJunction && S.nextJunction - S.z < 620 && !S.finale) { // a heads-up ~8 s out (a story beat)
+      S.calledJ = S.nextJunction;
+      if (mode === 'play' && racing) emit({ type: 'junction-ahead', sector: S.sector, dist: Math.round(S.nextJunction - S.z) });
     }
-    if (S.z >= S.nextJunction) { S.sector += 1; armJunction(); } // sectors are the stretches between real JCTs
-    const district = C1.districtAt(S.s);
-    if (district !== S.district) { S.district = district; if (mode === 'play' && racing) emit({ type: 'district', id: district.id, name: district.name, jp: district.jp }); }
-    const lap = 1 + Math.floor((s0 + S.z) / C1.LENGTH);
-    if (lap !== S.lap) { S.lap = lap; if (mode === 'play' && racing) emit({ type: 'lap', lap }); }
+    if (S.z >= S.nextJunction && !S.finale) {
+      const route = S.x > LANE_W * 0.5 ? 'backstreets' : 'expressway';
+      S.routes.push({ z0: S.nextJunction, route });
+      if (S.routes.length > 6) S.routes.shift();
+      S.route = route;
+      S.sector += 1;
+      S.nextJunction += SECTOR;
+      if (mode === 'play') emit({ type: 'junction', route, sector: S.sector });
+    }
+    // the tunnel after each junction (a story beat: the route just chosen is built behind its walls)
+    if (S.inTunnel && !S.wasTunnel && mode === 'play' && racing) { S.tunnelN += 1; emit({ type: 'tunnel', n: S.tunnelN, route: S.route, sector: S.sector }); }
+    S.wasTunnel = S.inTunnel;
 
     // ---- finale: traffic clears, the car rolls to a stop at the lookout ----
     if (S.finale) {
@@ -334,11 +364,12 @@ export function createSim(opts = {}) {
       if (S.finaleT > 1.2) S.speed = Math.max(0, S.speed - 14 * dt);
       if (S.speed <= 0.5 && !S.done && S.finaleT > 2) {
         S.done = true;
-        emit({ type: 'complete', won: S.raceWon, score: Math.round(S.score), files: S.files, dist: S.dist, top: S.topSpeed, nearMisses: S.nearMisses, shards: S.shards, sectors: S.sector, laps: S.lap, district: S.district.name });
+        emit({ type: 'complete', won: S.raceWon, score: Math.round(S.score), files: S.files, dist: S.dist, top: S.topSpeed, nearMisses: S.nearMisses, shards: S.shards, sectors: S.sector, free });
       }
     }
 
     // ---- traffic ----
+    extendTrack(S.z + 1300);
     if (S.invuln > 0) S.invuln -= dt;
     const diff = DIFFICULTY[cfg.difficulty] || DIFFICULTY.street;
     let draftCar = null;
@@ -374,7 +405,11 @@ export function createSim(opts = {}) {
         c.think = 1.5 + rnd() * 3;
         if (!tunnelAt(c.z) && c.hit <= 0 && (lead || rnd() < 0.18 * diff.density)) { // solid lines in the tunnel
           const opts = [c.lane - 1, c.lane + 1].filter((l) => l >= 0 && l <= 2 && laneFree(l, c.z, 20) && !wouldWall(l, c.z, c));
-          const pick = opts.filter((l) => !(Math.abs(LANES[l] - S.x) < 2.2 && Math.abs(c.z - S.z) < 16));
+          // ...and never across your bows: a car ahead does not pull into your lane if you would be on it within ~1.8 s
+          // (drivers check their mirrors), and off the line nobody moves into your lane at all
+          const ahead = c.z - S.z, closing = S.speed - c.speed;
+          const cutsIn = (l) => l === playerLane() && ahead > 0 && ((mode === 'play' && S.dist <= CALM) || ahead < 14 + Math.max(0, closing) * CUT_IN_GAP);
+          const pick = opts.filter((l) => !(Math.abs(LANES[l] - S.x) < 2.2 && Math.abs(c.z - S.z) < 16) && !cutsIn(l));
           if (pick.length) { c.target = pick[(rnd() * pick.length) | 0]; c.blink = 1.1; }
         }
       }
@@ -411,8 +446,8 @@ export function createSim(opts = {}) {
           const swipe = Math.abs(dx) > hitW * 0.6 && Math.abs(dz) < hitL * 0.8;
           const sev = clamp((swipe ? 0.3 : 0.25) + closing / 55, 0.25, 1) * (swipe ? 0.7 : 1);
           const mass = c.kind === 'hauler' ? 3.2 : c.kind === 'hatch' ? 0.85 : 1; // a truck barely notices you
-          if (!cfg.zen) S.lives -= 1;
-          S.invuln = 2.6; S.graceT = 4.5;
+          if (!noDamage) S.lives -= 1;
+          S.invuln = INVULN; S.graceT = 4.5;
           S.hitstop = 0.05 + 0.07 * sev;
           c.hit = 2.2;
           const side = dx > 0 ? -1 : 1;
@@ -428,7 +463,7 @@ export function createSim(opts = {}) {
           if (dead) S.speed = Math.max(S.speed, 30); // the last hit carries its momentum into the slide
           S.crash = { t: 0, dur: dead ? 1.7 : 0.55 + 0.45 * sev, dir: -side, sev, final: dead };
           emit({ type: 'hit', lives: S.lives, sev, swipe, x: S.x + dx * 0.5, z: dz * 0.5, kind: c.kind });
-          if (cfg.police !== false && !cfg.zen && S.raceT > 25) S.wanted = Math.min(3, S.wanted + 0.5); // crashes draw the police (not in the opening half-minute)
+          if (!noPolice && S.raceT > 25) S.wanted = Math.min(3, S.wanted + 0.5); // crashes draw the police (not in the opening half-minute)
           if (dead) {
             S.over = true;
             emit({
@@ -440,11 +475,11 @@ export function createSim(opts = {}) {
       } else if (racing && c.prevDz > 0 && dz <= 0 && Math.abs(dx) < 3.2 && !c.hit && mode === 'play') {
         S.nmChain = S.nmT > 0 ? Math.min(8, S.nmChain + 1) : 1; // thread several cars in a row and it multiplies
         S.nmT = 4;
-        const pts = 250 * (overclock ? 2 : 1) * S.nmChain * (S.merge ? MERGE_NEARMISS : 1);
+        const pts = 250 * (overclock ? 2 : 1) * S.nmChain;
         S.score += pts;
         S.nearMisses += 1;
         S.heat = Math.max(0, S.heat - 8);
-        emit({ type: 'nearmiss', pts, chain: S.nmChain, merge: S.merge });
+        emit({ type: 'nearmiss', pts, chain: S.nmChain });
       }
       if (dz > 5 && dz < 38 && Math.abs(dx) < 1.3) draftCar = c;
       c.prevDz = dz;
@@ -482,7 +517,8 @@ export function createSim(opts = {}) {
       // the launch: KUROGANE starts a length behind and blasts past you off the line
       const launching = S.dist < 450 && gap < 45;
       if (launching) want = Math.max(want, S.speed * 1.4 + 10);
-      if (S.finale || S.over) want = Math.max(0, R.speed - 14 * dt);
+      if (S.over) want = Math.max(0, R.speed - 14 * dt);
+      else if (S.finale) want = Math.max(0, Math.min(R.speed, S.speed)); // he rolls out with you: never parked in your way
 
       // what is in his way: traffic, or you
       const reachAhead = 42 + Math.max(0, R.speed - 40) * 1.2;
@@ -556,7 +592,7 @@ export function createSim(opts = {}) {
             R.target = clamp(R.lane + side, 0, 2);
             S.score += 400; S.shake = 0.2;
             emit({ type: 'strike', x: (R.x + S.x) / 2 });
-            if (cfg.police !== false && !cfg.zen) S.wanted = Math.min(3, S.wanted + 0.3);
+            if (!noPolice) S.wanted = Math.min(3, S.wanted + 0.3);
           } else if (reach(R)) emit({ type: 'parried' }); // he saw that one coming
           else if (K) {
             K.speed *= 0.5; K.z -= 8; K.stun = 1.5; S.bust = Math.max(0, (S.bust || 0) - 0.6); S.score += 300;
@@ -575,8 +611,9 @@ export function createSim(opts = {}) {
         if (Math.abs(dz) < CAR_LEN && Math.abs(R.x - S.x) < CAR_W) {
           if (dz > 0 && racing && pass === 0) { // you ran into the back of him: he is shunted forward, you lose the tow
             R.z = S.z + CAR_LEN + 0.1; R.speed = Math.max(R.speed, S.speed * 0.98);
-            if (S.speed > R.speed) S.speed = Math.max(R.speed - 1, S.speed - 8);
-            if (S.time - (R.bumpT || -9) > 1.5) { R.bumpT = S.time; if (cfg.effects !== 'reduced') S.shake = Math.max(S.shake, 0.15); emit({ type: 'bump', x: (R.x + S.x) / 2 }); }
+            if (S.finale) { /* rolling out together: he just stays ahead of your nose */ }
+            else if (S.speed > R.speed) S.speed = Math.max(R.speed - 1, S.speed - 8);
+            if (!S.finale && S.time - (R.bumpT || -9) > 1.5) { R.bumpT = S.time; if (cfg.effects !== 'reduced') S.shake = Math.max(S.shake, 0.15); emit({ type: 'bump', x: (R.x + S.x) / 2 }); }
           } else { R.z = S.z - CAR_LEN - 0.1; R.speed = Math.min(R.speed, S.speed); }
           moved = true;
         }
@@ -587,7 +624,8 @@ export function createSim(opts = {}) {
       if (racing && R.z - S.z > 5 && R.z - S.z < 38 && Math.abs(R.x - S.x) < 1.3 && S.speed > MAX * 0.45) S.draft = Math.min(1.05, S.draft + dt * 1.5);
       const pos = R.z > S.z ? 2 : 1;
       if (pos !== S.pos && !S.finale) {
-        if (S.time - R.swapT > 1.2 && S.dist > 300) emit({ type: pos === 1 ? 'overtake' : 'overtaken' }); // no call-outs off the line
+        if (pos === 2 && !R.launched && S.dist < 450) { R.launched = true; emit({ type: 'launched' }); } // his pass off the line
+        else if (S.time - R.swapT > 1.2 && S.dist > 300) emit({ type: pos === 1 ? 'overtake' : 'overtaken' }); // no call-outs off the line
         R.swapT = S.time;
         S.pos = pos;
       }
@@ -601,7 +639,7 @@ export function createSim(opts = {}) {
       for (const K of S.cops) { K.z = S.z + K.off; K.x = clamp(S.x + K.side * 3.6, -RAIL, RAIL); K.speed = S.speed; }
       S.speed = Math.max(0, S.speed - 30 * dt);
       if (S.swarmT <= 0) { S.cops = []; S.cop = null; }
-    } else if (mode === 'play' && cfg.police !== false && !cfg.zen && racing && !S.finale) {
+    } else if (mode === 'play' && !noPolice && racing && !S.finale) {
       S.cops = S.cops || [];
       if (S.speed > MAX * 0.95 && S.raceT > 30) S.wanted = Math.min(3, S.wanted + dt * 0.03 * (S.speed / MAX));
       else if (!S.cops.length) S.wanted = Math.max(0, S.wanted - dt * 0.03); // ease off and the heat fades
@@ -656,12 +694,13 @@ export function createSim(opts = {}) {
         if (S.lost > 2.5 || outlasted) { const pts = 1000 * live; S.score += pts; S.cops = []; S.wanted = 0; S.lost = 0; S.chaseT = 0; emit({ type: 'escaped', pts, outlasted }); }
       } else { S.lost = 0; S.chaseT = 0; }
       S.cop = S.cops[0] || null;
-    } else if (S.cops && S.cops.length && (S.finale || cfg.zen || cfg.police === false)) { S.cops = []; S.cop = null; S.wanted = 0; }
+    } else if (S.cops && S.cops.length && (S.finale || noPolice)) { S.cops = []; S.cop = null; S.wanted = 0; }
 
     // ---- power-ups: GHOST (5 s invulnerable, ride through traffic) and NITRO (instant slipstream, engine cooled) ----
     if (mode === 'play' && !S.finale) {
       while (S.nextPowerZ < S.z + 420) {
-        if (C1.nearJct(s0 + S.nextPowerZ, 130, 30)) S.nextPowerZ += 170; // never under the junction signs
+        const inS = ((S.nextPowerZ % SECTOR) + SECTOR) % SECTOR;
+        if (inS > SECTOR - 130 || inS < 30) S.nextPowerZ += 170; // never under the junction signs
         S.powers.push({ id: S.uid++, z: S.nextPowerZ, x: LANES[(prnd() * 3) | 0], kind: prnd() < 0.5 ? 'ghost' : 'nitro', taken: false });
         S.nextPowerZ += 650 + prnd() * 550;
       }
@@ -690,16 +729,16 @@ export function createSim(opts = {}) {
         S.chain += 1;
         S.shards += 1;
         const mult = (1 + Math.min(4, Math.floor(S.chain / 6))) * (overclock ? 2 : 1);
-        S.score += Math.round(100 * mult);
+        S.score += Math.round(100 * mult * (ROUTES[S.route] || ROUTES.expressway).shard);
         if (mode === 'play') {
           emit({ type: 'shard', mult, chain: S.chain, x: s.x });
           if (S.shards % SHARDS_PER_FILE === 0 && S.files < TOTAL_FILES) {
             S.files += 1;
-            const repaired = S.lives < S.maxLives && !cfg.zen; // every file you open patches the car up by one
+            const repaired = S.lives < S.maxLives && !noDamage; // every file you open patches the car up by one
             if (repaired) S.lives += 1;
             emit({ type: 'casefile', n: S.files, repaired, lives: S.lives });
             if (S.files === TOTAL_FILES - 2 && cfg.race !== false) emit({ type: 'sprint' });
-            if (S.files === TOTAL_FILES && !S.finale) { S.finale = true; S.finaleT = 0; S.raceWon = cfg.race === false ? null : S.pos === 1; emit({ type: 'finale', won: S.raceWon }); }
+            if (S.files === TOTAL_FILES && !S.finale) { S.finale = true; S.finaleT = 0; S.raceWon = cfg.race === false ? null : S.pos === 1; emit({ type: 'finale', won: S.raceWon, free }); }
           }
         }
       } else if (s.z < S.z - 3) {
@@ -723,10 +762,8 @@ export function createSim(opts = {}) {
     reset,
     curveAt,
     hillAt,
+    routeAt,
     tunnelAt,
-    tunnelNear,
-    trackS,
-    track: C1,
     get mode() { return mode; },
     setMode(m) { mode = m; },
     configure(c) {

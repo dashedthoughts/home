@@ -11,7 +11,7 @@ const ONO = { heavy: ['ドン', 'バキッ', 'ズドン', 'ドカッ'], block: [
 
 // Camera zoom (CSS px per world unit). Fighters stand about half the screen tall on desktop; in touch landscape they fit
 // between the HUD and the thumb band. Exported so tools/measure.cjs checks the real formula.
-export const CAM_TALL = 172;
+export const CAM_TALL = 182;
 export function cameraScale(W, H, portrait, touchL, sep = 260) {
   const baseGy = portrait ? H * 0.6 : H * (touchL ? 0.6 : 0.86);
   const vw = portrait ? Math.max(400, Math.min(740, sep + 190)) : Math.max(500, Math.min(880, sep + 250));

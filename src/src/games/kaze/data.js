@@ -1,9 +1,9 @@
 // KAZE data: chapters, foes, attacks, difficulty, haiku and narration. Shared by sim and renderer. No DOM.
 export const DIFF = {
   // react: the minimum telegraph (seconds from glint to the hit frame) any attack may have on this difficulty.
-  story: { id: 'story', name: 'Story', hp: 6, parry: 0.26, react: 0.55, wind: 1.3, standoff: 0.62, feint: 0.6, aggr: 0.7, dmg: 1 },
-  blade: { id: 'blade', name: 'Blade', hp: 5, parry: 0.17, react: 0.4, wind: 1, standoff: 0.42, feint: 1, aggr: 1, dmg: 1 },
-  lethal: { id: 'lethal', name: 'Lethal', hp: 3, parry: 0.13, react: 0.3, wind: 0.82, standoff: 0.3, feint: 1.4, aggr: 1.3, dmg: 2 },
+  story: { id: 'story', name: 'Story', hp: 6, parry: 0.26, react: 0.55, wind: 1.3, standoff: 0.62, feint: 0.6, aggr: 0.7, dmg: 1, rec: 1.15, guard: 5, chip: 0 },
+  blade: { id: 'blade', name: 'Blade', boss2: 2, heal: 1, rec: 0.85, guard: 3, chip: 1, hp: 4, parry: 0.17, react: 0.4, wind: 1, standoff: 0.42, feint: 1, aggr: 1.35, dmg: 1 },
+  lethal: { id: 'lethal', name: 'Lethal', hp: 3, parry: 0.13, react: 0.3, wind: 0.82, standoff: 0.3, feint: 1.4, aggr: 1.3, dmg: 2, rec: 0.75, guard: 2, chip: 1, heal: 1 },
 };
 
 // wind: telegraph seconds (glint to hit), act: hit frames, rec: recovery, reach in px, red: unblockable (dodge or jump),
@@ -27,23 +27,23 @@ export const ATK = {
 
 // Foe archetypes. moves: weighted picks. block: chance to guard a quick slash. shield: front guard only a heavy breaks.
 export const FOES = {
-  bandit: { hp: 3, w: 30, speed: 105, range: 88, block: 0.22, moves: [['cut', 3], ['combo', 2]] },
-  spear: { hp: 3, w: 30, speed: 85, range: 150, block: 0.1, moves: [['thrust', 3], ['lunge', 1]] },
+  bandit: { hp: 4, w: 30, speed: 105, range: 88, block: 0.22, moves: [['cut', 3], ['combo', 2]] },
+  spear: { hp: 4, w: 30, speed: 85, range: 150, block: 0.1, moves: [['thrust', 3], ['lunge', 1]] },
   archer: { hp: 2, w: 28, speed: 95, range: 420, keep: [280, 470], block: 0, moves: [['shoot', 1]] },
-  brute: { hp: 4, w: 42, speed: 64, range: 96, block: 0, shield: 1, armor: 1, moves: [['overhead', 3], ['bash', 2]] },
-  duelist: { hp: 4, w: 30, speed: 125, range: 92, block: 0.4, feint: 0.3, moves: [['cut', 2], ['flurry', 2], ['rthrust', 1]] },
+  brute: { hp: 5, w: 42, speed: 64, range: 96, block: 0, shield: 1, armor: 1, moves: [['overhead', 3], ['bash', 2]] },
+  duelist: { hp: 5, w: 30, speed: 125, range: 92, block: 0.4, feint: 0.3, moves: [['cut', 2], ['flurry', 2], ['rthrust', 1]] },
 };
 
 export const BOSSES = {
-  gonroku: { jp: '竹割りの権六', name: 'Gonroku the Bamboo-Splitter', look: 'bandit', hp: 12, w: 32, speed: 120, range: 92, block: 0.28,
+  gonroku: { jp: '竹割りの権六', name: 'Gonroku the Bamboo-Splitter', look: 'bandit', hp: 9, boss2: 1.5, w: 32, speed: 120, range: 92, block: 0.28,
     p1: [['cut', 5], ['combo', 1]], p2: [['combo', 2], ['flurry', 2], ['lunge', 2]], feint: [0, 0.12] },
-  ono: { jp: '案山子の大野', name: 'Ōno the Scarecrow', look: 'spear', hp: 10, w: 32, speed: 95, range: 150, block: 0.15,
+  ono: { jp: '案山子の大野', name: 'Ōno the Scarecrow', look: 'spear', hp: 13, w: 32, speed: 95, range: 150, block: 0.15,
     p1: [['thrust', 3], ['sweep', 2]], p2: [['dthrust', 2], ['lunge', 2], ['sweep', 2], ['thrust', 1]], feint: [0.08, 0.2] },
-  shizu: { jp: '門番の静', name: 'Shizu the Gatekeeper', look: 'duelist', hp: 11, w: 30, speed: 140, range: 92, block: 0.4,
+  shizu: { jp: '門番の静', name: 'Shizu the Gatekeeper', look: 'duelist', hp: 14, w: 30, speed: 140, range: 92, block: 0.4,
     p1: [['cut', 2], ['flurry', 2], ['combo', 1]], p2: [['flurry', 2], ['rthrust', 2], ['combo', 2]], feint: [0.3, 0.5] },
-  hyoe: { jp: '灯籠の兵衛', name: 'Hyōe of the Lanterns', look: 'brute', hp: 12, w: 44, speed: 70, range: 100, block: 0, armor: 1,
+  hyoe: { jp: '灯籠の兵衛', name: 'Hyōe of the Lanterns', look: 'brute', hp: 15, w: 44, speed: 70, range: 100, block: 0, armor: 1,
     p1: [['overhead', 3], ['bash', 1], ['sweep', 1]], p2: [['overhead', 2], ['bash', 2], ['combo', 2]], shieldP2: 1, feint: [0, 0.1] },
-  sotetsu: { jp: '早瀬宗鉄', name: 'Hayase Sōtetsu', look: 'master', hp: 14, w: 30, speed: 135, range: 94, block: 0.42,
+  sotetsu: { jp: '早瀬宗鉄', name: 'Hayase Sōtetsu', look: 'master', hp: 18, w: 30, speed: 135, range: 94, block: 0.42,
     p1: [['cut', 2], ['combo', 2], ['rthrust', 1], ['thrust', 1]], p2: [['flurry', 3], ['lunge', 2], ['sweep', 1], ['overhead', 1]], feint: [0.3, 0.55] },
 };
 
@@ -110,52 +110,65 @@ export function groundH(ch, x) {
   return P[P.length - 1][1];
 }
 
-// The through-line: a ronin who left his teacher's school with the teacher's sword walks north to return it. Every
-// duelist on the road was once of that school and has been sent to stop him. At the castle the teacher does not want
-// the sword back: he wants to see whether his student can put it down.
-export const NARRATION = [
-  'You left your teacher\'s school with his sword, and the city swallowed you. Now the wind turns north. Take it home.',
-  'Gonroku cut the practice bamboo in the old yard. Your teacher sent him to stop you.',
-  'Ōno kept the fields the school was built on. He kept your name, too.',
-  'Shizu kept the gate you ran through once. She will not hold it open again.',
-  'Hyōe lit the lanterns the night you left. Beyond the pass, the castle. Your teacher waits.',
+// The through-line: years ago you took the old master's sword and left. Tonight the wind turned and you walk home.
+// The people on the road are old friends he asked to stand in your way; none of them wants to stop you. At the end the
+// master never mentions the sword. He asks whether you have eaten.
+export const PROLOGUE = [
+  'You took the old man\'s sword the autumn the persimmons fell early.',
+  'The wind has been at your back ever since.',
+  'Tonight it turned. Go home.',
 ];
+export const OPENINGS = [
+  'The bamboo is taller than when you left. It did not wait for you.',
+  'Someone has kept the paddies full. The frogs are louder than your footsteps.',
+  'A thousand gates, and somebody sweeps every one. You used to help.',
+  'Snow keeps every footprint until morning. Yours only go one way.',
+  'The cherry by the well has flowered. Nobody told it to.',
+];
+// kept for the narration screen: prologue first, then the opening of the chapter you are walking into
+export const NARRATION = [PROLOGUE.join(' '), ...OPENINGS.slice(1)];
 export const ENDING = [
-  'He did not take the sword back.',
-  'He only wanted to see you set it down.',
-  'The wind goes on ahead. This time, you let it.',
+  'He never asked for the sword.',
+  'He asked whether you had eaten.',
+  'Outside, the wind went on north without you. You let it.',
 ];
-// What each boss says as the duel begins, and as they fall.
+export const DEATH_LINES = [
+  'The grass is soft here. Get up when you\'re ready.',
+  'The wind waited. It will wait again.',
+  'Breathe. The road has not gone anywhere.',
+];
+export const SHRINE_LINE = 'Someone left rice here. Rest.';
+// What each of them says before the duel, and as they fall.
 export const BOSS_LINES = {
-  gonroku: ['The old man says you stole from him.', 'Then carry it back yourself.'],
-  ono: ['Scarecrows keep birds off what is not theirs.', 'Cross, then. The field is quiet.'],
-  shizu: ['I opened this gate for you once.', 'Go on. It is open.'],
-  hyoe: ['I lit your way out. I will not light your way back.', 'Take the light. It was going out anyway.'],
-  sotetsu: ['You took my sword to become someone. Show me who.', 'Keep it. You never needed it.'],
+  gonroku: { before: ['You\'ve gone thin. Did no one in the city feed you?', 'The master asked me to stand in the road. So I am standing in it.'], fall: ['Ha. Still quick. Eat something before the pass.'] },
+  ono: { before: ['Mind the seedlings. I only finished this row today.', 'Walk around me, boy. Or walk through.'], fall: ['Go on. I\'ll tell them the crows took the scarecrow.'] },
+  shizu: { before: ['You left your sandals at this gate. I kept them out of the rain.', 'They won\'t fit you now.'], fall: ['Then go barefoot. The stones remember you.'] },
+  hyoe: { before: ['I lit this lantern the night you ran.', 'I have trimmed the wick forty times since.'], fall: ['Take it. The dark up there is the honest kind.'] },
+  sotetsu: { before: ['You\'re late. The tea went cold years ago.', 'Show me what the sword taught you. Then show me what it didn\'t.'], fall: ['There. Now your hands are empty.', 'Hold them out. It\'s starting to rain.'] },
 };
 
 // Haiku spots: three lines, three choices each (5, 7, 5 syllables). Title in Japanese.
 export const HAIKU = [
   { jp: '竹の声', en: 'Voice of the bamboo', lines: [
-    ['Green light through the stalks', 'Morning in the grove', 'A thin wind arrives'],
-    ['the bamboo knocks like soft rain', 'my sandals learn the old path', 'a sparrow shakes off the dew'],
-    ['nothing here is mine', 'I forget the blade', 'and still it bends back'] ] },
+    ['Bamboo creaks at dawn', 'Dew on my sandals', 'A broom somewhere near'],
+    ['someone is sweeping the path', 'the old fence I mended once', 'a sparrow eats from my hand'],
+    ['I know this place still', 'my feet remember', 'it did not wait up'] ] },
   { jp: '稲穂', en: 'Ears of rice', lines: [
-    ['Terraced fields of gold', 'Dusk pours down the hill', 'The heron stands still'],
-    ['each pool keeps a piece of sun', 'the rice bows low to no lord', 'my shadow walks far ahead'],
-    ['soon it will be dark', 'frogs begin to sing', 'my blade stays at rest'] ] },
+    ['A frog on the dike', 'Wet sandals, cold feet', 'Rice up to my knees'],
+    ['smoke from a kitchen downhill', 'the water keeps the last light', 'an old man calls in his ox'],
+    ['someone\'s making soup', 'nobody looks up', 'I walk a bit slow'] ] },
   { jp: '霧', en: 'Mist', lines: [
-    ['A thousand red gates', 'Mist upon the steps', 'Climbing into cloud'],
-    ['each one opens to the next', 'the mountain breathes out slowly', 'a crow calls and no one comes'],
-    ['the top is not there', 'I climb anyway', 'the gods keep their peace'] ] },
+    ['The sound of a broom', 'Red gates in the mist', 'Stone steps, worn in two'],
+    ['a girl sweeps leaves off the stairs', 'an offering of two plums', 'my breath and the mist are one'],
+    ['I used to do that', 'the fox statue grins', 'the gods are asleep'] ] },
   { jp: '雪明かり', en: 'Snow light', lines: [
-    ['Snow on the lanterns', 'The pass, white and still', 'Cold stars over pines'],
-    ['each flame a small warm promise', 'my breath goes up like incense', 'no footprints but my own now'],
-    ['the road sleeps in white', 'how loud the quiet', 'spring is far from here'] ] },
+    ['Snow on the lantern', 'Cold rice in my hands', 'A crow on the post'],
+    ['someone trimmed the wick for me', 'my footprints fill as I go', 'a dog barks once and gives up'],
+    ['the pass is quiet', 'my ears hurt with cold', 'I eat the rice cold'] ] },
   { jp: '朝焼け', en: 'Morning glow', lines: [
-    ['Dawn on the castle', 'Petals on the moat', 'The long night is done'],
-    ['the bridge is longer than years', 'I set the sword on the stone', 'the wind turns and goes back home'],
-    ['pink as a first breath', 'I am going home', 'nothing left to cut'] ] },
+    ['Petals in the well', 'Rain on the old roof', 'Tea steam at sunrise'],
+    ['two cups set out on the step', 'my hands smell of oil and rain', 'someone has swept the doorway'],
+    ['I am home, I think', 'nothing in my hands', 'the wind goes on north'] ] },
 ];
 
 export const CHARMS = {

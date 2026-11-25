@@ -27,10 +27,12 @@ const { buildSync } = require(path.join(__dirname, '../../../../node_modules/esb
   console.log('fighter  screen(desk) screen(land) forearm  shin   thigh  uparm  shoulder head   brow  eye  mouth  outline inner  lum   faces');
   for (const [id, r] of Object.entries(res.fighters)) {
     const sh = id === 'ganji' ? 0.32 : 0.24;
-    const checks = { ...Object.fromEntries(Object.entries(T).map(([k, t]) => [k, chk(r[k], t)])), shoulders: r.shoulders >= sh, faces: r.faces.length >= 5 };
+    const stMin = id === 'sayo' ? 0.88 : 0.92, kMax = id === 'sayo' ? 32 : 25;
+    const checks = { ...Object.fromEntries(Object.entries(T).map(([k, t]) => [k, chk(r[k], t)])), shoulders: r.shoulders >= sh, faces: r.faces.length >= 5, stance: r.stanceRatio >= stMin, knees: Math.max(r.kneeN, r.kneeF) <= kMax && Math.min(r.kneeN, r.kneeF) >= 8 };
     const bad = Object.entries(checks).filter(([, v]) => !v).map(([k]) => k);
     fails += bad.length;
     console.log(`${id.padEnd(8)} ${pct(r.screenDesk).padStart(8)}     ${pct(r.screenLand).padStart(8)}   ${pct(r.forearmMin).padStart(6)} ${pct(r.shinMin).padStart(6)} ${pct(r.thighMin).padStart(6)} ${pct(r.upperArmMin).padStart(6)} ${pct(r.shoulders).padStart(7)} ${pct(r.head).padStart(6)} ${r.browPx.toFixed(1).padStart(5)} ${r.eyePx.toFixed(1).padStart(4)} ${r.mouthPx.toFixed(1).padStart(5)}  ${r.outlinePx.toFixed(2).padStart(5)}  ${r.innerPx.toFixed(2).padStart(4)}  ${r.lum.toFixed(3)} ${r.faces.length}`);
+    console.log(`         stance ${pct(r.stanceRatio)} of full height, knees ${r.kneeN.toFixed(0)} / ${r.kneeF.toFixed(0)} deg (near / far)`);
     if (bad.length) console.log('         FAIL ' + bad.join(', '));
     // poses
     for (const [k, d] of Object.entries(r.moves)) {

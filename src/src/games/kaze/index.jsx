@@ -3,10 +3,11 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { createSim, step, DT, blankInput } from './sim.js';
 import { botInput, makeBot } from './bot.js';
 import { Renderer, JP } from './render.js';
+import { checkGarment } from './cloth.js';
 import { Input, keyName, ACTIONS } from './input.js';
 import { makeStore, DEFAULT_KEYS } from './save.js';
 import { Audio } from './audio.js';
-import { CHAPTERS, NARRATION, ENDING, HAIKU, DIFF, CHARMS } from './data.js';
+import { CHAPTERS, NARRATION, ENDING, HAIKU, DIFF, CHARMS, PROLOGUE, OPENINGS } from './data.js';
 
 const ACTION_LABEL = { left: 'Move left', right: 'Move right', up: 'Jump', down: 'Crouch', run: 'Run', dodge: 'Dodge roll', slash: 'Quick cut', heavy: 'Heavy cut', parry: 'Parry / guard', focus: 'Focus (standoff)', interact: 'Bow, sit, take', wind: 'Call the wind', heal: 'Heal (uses resolve)' };
 
@@ -56,7 +57,8 @@ class Engine {
       this.s = this.titleSim; this.draw(dt, 'title'); return;
     }
     if (this.screen === 'play' && !this.manual) {
-      this.acc += dt * (s.slow > 0 && !this.reduced() ? 0.4 : 1); let n = 0;
+      const slow = this.slowF > 0 && !this.reduced(); if (this.slowF > 0) this.slowF--;
+      this.acc += dt * (slow ? 0.25 : 1); let n = 0;
       while (this.acc >= DT && n < 6) { this.stepOnce(); this.acc -= DT; n++; }
       if (n === 6) this.acc = 0;
     }
@@ -65,6 +67,8 @@ class Engine {
   stepOnce() {
     const s = this.s; const I = this.botOn ? botInput(s, this.bot) : this.input.snapshot(this.I);
     if (!this.botOn && this.input.mode === 'touch' && this.touchCtx) this.applyTouchContext(I);
+    // any fresh press may dismiss a story plate once it has been readable
+    if (!this.botOn) { const pv = s.prev; for (const k in I) if (I[k] && !pv[k] && k !== 'choose') { this.r.plateInput = true; break; } }
     step(s, I);
     this.handleCues(s);
   }
@@ -75,13 +79,15 @@ class Engine {
   handleCues(s) {
     for (const c of s.cues) {
       this.audio.cue(c, s);
+      if (c.k === 'parry' || c.k === 'reflect') this.slowF = 5;
+      if (c.k === 'kill' && !s.foes.some((f) => f.st !== 'dead')) this.slowF = 5;
       if (c.k === 'haiku') { this.haiku.push({ ch: c.ch, jp: HAIKU[c.ch].jp, lines: c.lines, when: Date.now() }); this.store.saveHaiku(this.haiku); }
       if (c.k === 'checkpoint' || c.k === 'chapter' || c.k === 'secret' || c.k === 'charm') this.saveProgress();
     }
     if (s.phase === 'fin' && !this.finSaved) { this.finSaved = true; Object.assign(this.progress, { finished: true, lethal: true, chapter: 0, checkpoint: 0 }); this.store.saveProgress(this.progress); }
   }
   draw(dt, mode) {
-    const s = this.s; this.audio.update(s, dt, this.screen);
+    const s = this.s; this.audio.extGust = this.r.gustLevel || 0; this.audio.update(s, dt, this.screen);
     this.r.frame(s, this.manual ? 1 : Math.min(1, this.acc / DT), dt, { mode, reduced: this.reduced(), labels: this.input.labels() });
     this.emit();
   }
@@ -121,6 +127,9 @@ export default function Game({ onExit }) {
       bot: (on) => { E.botOn = !!on; E.bot = makeBot({ secrets: true }); },
       start: (o) => E.newRun(o || {}), pause: () => { if (E.screen === 'play') E.togglePause(); }, resume: () => { E.manual = false; if (E.screen === 'pause') E.togglePause(); },
       screen: () => E.screen, go: (sc) => E.go(sc), render: () => E.draw(0.016, E.screen === 'play' ? 'play' : 'title'),
+      // the cloth rules, asserted on every figure the renderer last drew
+      clothCheck: () => { const out = [], r = E.r; const figs = [['ronin', r.pfig], ...[...(r.figs || new Map())].map(([id, f]) => ['foe' + id, f])];
+        for (const [n, f] of figs) if (f && f.garment && f.garment.legs) for (const b of checkGarment(f.garment)) out.push(n + '(' + f.garment.look + ') ' + b); return out; },
     };
     return () => { cancelAnimationFrame(raf); ro && ro.disconnect(); window.removeEventListener('resize', fit); document.removeEventListener('visibilitychange', vis); window.removeEventListener('touchstart', onTouch); E.input.detach(); E.audio.dispose(); if (window.__game && window.__game.engine === E) delete window.__game; };
   }, []);
@@ -212,14 +221,14 @@ function PlayLayer({ E, ui, act, onExit }) {
   return (<>
     <button type="button" className="kz-pausebtn" onClick={act((e) => e.togglePause())} aria-label="Pause">II</button>
     {ui.phase === 'haiku' && ui.hk && <HaikuPanel E={E} hk={ui.hk} act={act} />}
-    {ui.phase === 'narr' && <Narration text={NARRATION[s.prologue ? 0 : Math.min(NARRATION.length - 1, s.ch + 1)]} key={s.ch + (s.prologue ? 'p' : '')} />}
+    {ui.phase === 'narr' && <Narration lines={s.prologue ? PROLOGUE : [OPENINGS[Math.min(OPENINGS.length - 1, s.ch + 1)]]} key={s.ch + (s.prologue ? 'p' : '')} />}
     {ui.phase === 'ending' && <div className="kz-narr kz-narr--end">{ENDING.map((l, i) => <p key={i} style={{ animationDelay: `${1.2 + i * 2.6}s` }}>{l}</p>)}</div>}
     {ui.phase === 'credits' && <Credits E={E} />}
     {ui.phase === 'fin' && <Fin E={E} act={act} onExit={onExit} />}
     {ui.mode === 'touch' && ['play', 'standoff', 'dead'].includes(ui.phase) && <Touch E={E} ui={ui} />}
   </>);
 }
-function Narration({ text }) { return <div className="kz-narr"><p>{text}</p><small>Press Enter to go on</small></div>; }
+function Narration({ lines }) { return <div className="kz-narr">{lines.map((l, i) => <p key={i} style={{ animationDelay: `${0.4 + i * 1.1}s` }}>{l}</p>)}<small>Press Enter to go on</small></div>; }
 function HaikuPanel({ E, hk, act }) {
   const H = HAIKU[hk.ch];
   const choose = (i) => act((e) => { e.input.script.choose = i + 1; setTimeout(() => { e.input.script.choose = 0; }, 120); });

@@ -74,3 +74,13 @@ claude/vibrant-curie-0x7eb2 @ 1ad129b (main was published from it). Tag pushes a
   independent playtest (a clumsy first-timer finishes 6 of 8 runs, was 0 of 8; sim suite green).
 - REDLINE playtest report saved: scratchpad/crit-redline.txt (10 ranked issues + a story script). Next steps are in src/RESUME-NOTES.md.
 - No agents running. Waiting for the next reset (about 11:40 UTC) or the owner's word.
+
+## Owner said "Go wild, let's noodle" (after the 07:27 pause)
+- Running (3): REDLINE story + playability (the original track engineer a05a8cbc0dc4644d4, resumed with context; owns sim/engine/config/Play/play.css),
+  REDLINE look tells (a6d9e860ad1086c51; render/* only), KUMITE round 4 stances + per-move poses (ad57f81de1bb8825d).
+- Queue: KAZE item 3 of the notes, MACHI polish, final report.
+
+## 12:15 UTC — owner: REDLINE old render was better; KAZE vibe target; more KAZE moves
+- REDLINE: the owner prefers the pre-v3 map and graphics (tunnel wall blips, turns not turns, drab, not sharp, barriers too tall). DEPLOYED 12:12 an interim build with src/src/game + Play.jsx + play.css from tag checkpoint-pre-v3 (registry meta and Arcade note de-C1'd in scratchpad/rel only; README REDLINE section restored). HEAD still holds the v3 REDLINE + the story/playability WIP (247ffe8).
+- Running: REDLINE restore + port (fresh Opus agent ac2ee5840cd1d811e): restore render/map to the checkpoint exactly, port gameplay/UI/story fixes onto it, retune difficulty with the driver study. Integrator then: remove the arcade__note and C1 registry meta in HEAD too.
+- KAZE (a96e8e6fec773fc6e): cloth round in progress; queued after it: flamboyant move set (leaps, spins, iai, vaults, chain cuts, chiburi), and the vibe of the owner's reference (scratchpad/ref-sumiro/sheet.jpg; vibe only, no licence on that repo).

@@ -151,7 +151,7 @@ export default function Home() {
       <section id="arcade" className="section">
         <HudHeader index={2} title="THE ARCADE" meta={`${GAMES.length} GAMES · PLAYS IN YOUR BROWSER`} />
         <p className="lede reveal">
-          Games built for this site: a night race on the real Shuto Expressway loop, and a few smaller ones in
+          Games built for this site: a night race on a Tokyo expressway, and a few smaller ones in
           other genres. They run in the browser, on a laptop or a phone, with nothing to install.
         </p>
         <Cabinets />

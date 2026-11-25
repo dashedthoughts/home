@@ -1,9 +1,9 @@
 // Headless REDLINE simulation checks. Run: node test/sim.test.mjs
 import assert from 'node:assert/strict';
-import { createSim, LANES, RAIL, MAX, START_S, FINALE_S } from '../src/game/sim.js';
-import * as C1 from '../src/game/track/c1.js';
-import { readFileSync } from 'node:fs';
-const c1json = JSON.parse(readFileSync(new URL('../src/game/track/c1.json', import.meta.url)));
+import { createSim, LANES, RAIL, MAX, SECTOR, TUNNEL, WARMUP, CALM } from '../src/game/sim.js';
+import { DIFFICULTY, MODES } from '../src/game/config.js';
+import { STORY, SPEAKERS, fileLine } from '../src/game/story.js';
+const clamp = (v) => Math.max(-1, Math.min(1, v));
 
 function run({ seconds, bot, seed = 1, config = {}, mode = 'play' }) {
   const ev = {};
@@ -29,7 +29,7 @@ function run({ seconds, bot, seed = 1, config = {}, mode = 'play' }) {
 const fmt = (r) => `${JSON.stringify(r.ev)} t=${r.t.toFixed(0)}s score=${Math.round(r.S.score)} top=${(r.S.topSpeed * 3.6).toFixed(0)}kmh kerb=${r.kerb.toFixed(1)}s`;
 
 // A decent human-ish driver: looks ~2s ahead, commits to lane changes, won't cut across a car beside it.
-function driver({ heatCap = 70, look = 150 } = {}) {
+function driver({ heatCap = 70, look = 150, route = 'expressway' } = {}) {
   let target = 0, think = 0;
   const danger = (S, lx) => {
     let d = 0;
@@ -47,8 +47,10 @@ function driver({ heatCap = 70, look = 150 } = {}) {
     if (think <= 0 && (settled || danger(S, target) > 150)) {
       think = 0.15;
       let best = target, bs = -1e9;
+      const nearJ = S.nextJunction - S.z < 220;
       for (const lx of LANES) {
         let sc = -Math.abs(lx - S.x) * 0.4 - danger(S, lx);
+        if (nearJ) sc += (route === 'backstreets' ? lx > 1.8 : lx < 1.8) ? 120 : -120;
         for (const s of S.shardList) { const dz = s.z - S.z; if (!s.taken && dz > 0 && dz < 60 && Math.abs(s.x - lx) < 1.6) sc += (60 - dz) * 0.1; }
         if (sc > bs) { bs = sc; best = lx; }
       }
@@ -108,121 +110,14 @@ for (const r of [...runs, lazy, wet]) assert.equal(r.ev.casefile || 0, Math.min(
 const demo = run({ seconds: 120, bot: () => {}, mode: 'attract', seed: 9 });
 console.log('attract  :', fmt(demo));
 assert.ok(!demo.over && demo.S.dist > 4000, 'autopilot drives indefinitely');
-const clamp = (v) => Math.max(-1, Math.min(1, v));
-// 9) the real road: C1 inner loop geometry, tunnels, districts, junctions, merge zones, laps
-{
-  const L = C1.LENGTH, p = { x: 0, y: 0 }, q = { x: 0, y: 0 };
-  // the loop closes and wraps
-  C1.posAt(0, p); C1.posAt(L - 0.001, q);
-  assert.ok(Math.hypot(p.x - q.x, p.y - q.y) < 1, 'position is continuous across s = 0');
-  C1.posAt(L - 10, p); C1.posAt(-10, q);
-  assert.ok(Math.hypot(p.x - q.x, p.y - q.y) < 1e-6 && C1.wrap(L + 5) === 5 && C1.wrap(-5) === L - 5, 'wrap() maps any s onto the loop');
-  let maxStep = 0, maxDc = 0;
-  for (let s = 0; s <= L + 10; s += 5) { C1.posAt(s, p); C1.posAt(s + 5, q); maxStep = Math.max(maxStep, Math.hypot(p.x - q.x, p.y - q.y)); maxDc = Math.max(maxDc, Math.abs(C1.curveAt(s + 5) - C1.curveAt(s))); }
-  assert.ok(maxStep < 8 && maxDc < 0.15, `no jumps anywhere on the loop (step ${maxStep.toFixed(2)} m, curve change ${maxDc.toFixed(3)} per 5 m)`);
-  // heading: the inner loop runs counter-clockwise, so one lap turns -360 degrees
-  let turn = 0, hTurn = 0;
-  for (let s = 0; s < L; s += 1) turn += C1.realCurvAt(s);
-  for (let s = 0; s < L; s += 10) { let d = C1.headingAt(s + 10) - C1.headingAt(s); d -= Math.round(d / (2 * Math.PI)) * 2 * Math.PI; hTurn += d; }
-  const deg = (r) => (r * 180) / Math.PI;
-  console.log(`C1: ${L} m, heading over a lap ${deg(hTurn).toFixed(1)} deg (curvature integral ${deg(turn).toFixed(1)} deg), max |curve| ${Math.max(...Array.from({ length: L / 10 }, (_, i) => Math.abs(C1.curveAt(i * 10)))).toFixed(2)}`);
-  assert.ok(Math.abs(deg(hTurn) + 360) < 0.5 && Math.abs(deg(C1.TOTAL_TURN) + 360) < 0.5, 'heading integrates to -360 deg per lap');
-  assert.ok(Math.abs(deg(turn) + 360) < 25, 'the curvature integrates to roughly -360 deg too');
-  // tunnels are the real ones: every tagged sample is inside a span, spans are ordered, real total 2.76 km
-  const raw = c1json.tunnel;
-  for (let i = 0; i < raw.length; i++) if (raw[i] === '1') assert.ok(C1.tunnelAt(i * 10 + 1), `tunnel flag at s=${i * 10}`);
-  let tunLen = 0;
-  C1.tunnelSpans.forEach((t, k) => { tunLen += t.to - t.from; assert.ok(t.from < t.to && (k === 0 || t.from > C1.tunnelSpans[k - 1].to + 50), 'tunnel spans ordered and merged'); });
-  assert.ok(tunLen >= raw.split('1').length - 1 && tunLen < 2900 && C1.tunnelSpans.some((t) => t.name === 'Chiyoda Tunnel' && t.to - t.from > 1000), 'tunnels match the data');
-  assert.ok(!C1.tunnelAt(3500) && C1.tunnelAt(7000) && C1.tunnelAt(8500), 'Edobashi in the open, Chiyoda and Kasumigaseki tunnels underground');
-  // districts cover the loop with no gaps and no overlaps
-  let cover = 0;
-  C1.DISTRICTS.forEach((d, k) => { const nx = C1.DISTRICTS[(k + 1) % C1.DISTRICTS.length]; assert.equal(d.to, nx.from, `${d.id} ends where ${nx.id} starts`); cover += C1.wrap(d.to - d.from); assert.ok(d.name && d.jp && d.style); });
-  assert.equal(cover, L, 'districts cover the whole loop');
-  for (const id of ['shiodome', 'ginza', 'kyobashi', 'nihonbashi', 'otemachi', 'takebashi', 'kitanomaru', 'miyakezaka', 'kasumigaseki', 'tanimachi', 'iikura', 'shibakoen', 'hamazakibashi']) assert.ok(C1.DISTRICTS.some((d) => d.id === id), id);
-  assert.equal(C1.districtAt(0).id, 'shiodome'); assert.equal(C1.districtAt(3200).id, 'nihonbashi'); assert.equal(C1.districtAt(12000).id, 'shibakoen');
-  // junctions: real names, in loop order, English filled in
-  assert.deepEqual(C1.JCT_EVENTS.map((e) => e.name), ['Edobashi JCT', 'Takebashi JCT', 'Miyakezaka JCT', 'Tanimachi JCT', 'Ichinohashi JCT', 'Hamazakibashi JCT']);
-  assert.ok(C1.JUNCTIONS.every((j) => j.name && j.jp && (j.kind === 'jct' || j.kind === 'exit')), 'every junction is named');
-  assert.ok(C1.JUNCTIONS.some((j) => j.jp === '霞が関' && j.name === 'Kasumigaseki'));
-  // landmarks: the palace is inside the loop; Tokyo Tower stands ~400 m off the road at Shibakoen
-  const pts = []; for (let s = 0; s < L; s += 10) { C1.posAt(s, p); pts.push([p.x, p.y]); }
-  const inside = (x, y) => { let c = false; for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) { const [xi, yi] = pts[i], [xj, yj] = pts[j]; if ((yi > y) !== (yj > y) && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) c = !c; } return c; };
-  const lm = (id) => C1.LANDMARKS.find((l) => l.id === id);
-  assert.ok(inside(lm('imperial-palace').x, lm('imperial-palace').y), 'Imperial Palace inside the loop');
-  // the real C1 runs along the Furukawa, south of Shiba Park, so Tokyo Tower is inside the loop; Roppongi Hills and the Budokan are not
-  assert.ok(inside(lm('tokyo-tower').x, lm('tokyo-tower').y) && !inside(lm('roppongi-hills').x, lm('roppongi-hills').y) && !inside(lm('budokan').x, lm('budokan').y), 'landmarks on the right side of the loop');
-  assert.ok(C1.distanceTo(11550, lm('tokyo-tower')) < 600 && Math.abs(C1.bearingTo(11550, lm('tokyo-tower'))) > 1, 'Tokyo Tower beside the road at Shibakoen');
-  // the loop runs counter-clockwise, so what is inside it is on the driver's left (negative bearing)
-  assert.ok(Math.abs(C1.bearingTo(7000, lm('imperial-palace')) + Math.PI / 2) < 0.2, 'the palace is on the left in the Chiyoda tunnel');
-  assert.ok(C1.bearingTo(11550, lm('tokyo-tower')) < -1.2, 'Tokyo Tower is off the left shoulder at Shibakoen');
-
-  // the sim: wraps, counts laps, calls the real JCTs in order, and merge zones pay double
-  const names = [], ev = {};
-  const sim = createSim({ mode: 'play', seed: 8, config: { police: false, race: false, zen: true }, onEvent: (e) => { ev[e.type] = (ev[e.type] || 0) + 1; if (e.type === 'junction') names.push(e.name); } });
-  assert.equal(sim.S.s, START_S, 'the run starts just past Shiodome');
-  assert.equal(sim.S.district.id, 'shiodome');
-  for (let t = 0; t < 4; t += 1 / 60) sim.step(1 / 60);
-  let nmMerge = 0, nmPlain = 0, carsMerge = 0, carsPlain = 0, fMerge = 0, fPlain = 0;
-  while (sim.S.z < L + 600) {
-    const S = sim.S;
-    S.files = 0; S.shards = 0; S.heat = 0; // never reach the finale in this lap
-    // lane-keeping on a hand-placed line, dodging traffic just by sitting in the gaps
-    const near = S.cars.filter((c) => c.z - S.z > -6 && c.z - S.z < 60);
-    const free = LANES.find((lx) => !near.some((c) => Math.abs(c.x - lx) < 2.4)) ?? 0;
-    sim.input.axis = clamp((free - S.x - S.vx * 0.3) * 0.8);
-    sim.input.boost = Math.abs(sim.curveAt(S.z + 40)) < 0.6;
-    sim.step(1 / 60);
-    if (S.merge) { carsMerge += S.cars.filter((c) => c.z > S.z && c.z < S.z + 300).length; fMerge++; } else { carsPlain += S.cars.filter((c) => c.z > S.z && c.z < S.z + 300).length; fPlain++; }
-  }
-  console.log(`one lap: ${names.join(' > ')}; laps ${sim.S.lap}, s ${sim.S.s.toFixed(0)}; cars within 300 m: merge ${(carsMerge / fMerge).toFixed(1)} vs ${(carsPlain / fPlain).toFixed(1)}`);
-  assert.equal(sim.S.lap, 2, 'a lap counts');
-  assert.ok(Math.abs(sim.S.s - C1.wrap(START_S + sim.S.z)) < 1e-6 && sim.S.s < 1000, 'position wraps around the loop');
-  assert.deepEqual(names.slice(0, 6), C1.JCT_EVENTS.map((e) => e.name), 'the real JCTs are called in order');
-  assert.ok(sim.S.sector >= 7, 'sectors run JCT to JCT');
-  assert.ok(carsMerge / fMerge > (carsPlain / fPlain) * 1.1, 'merge zones carry more traffic');
-  // near miss in a merge zone vs on an open stretch
-  const nm = (s) => { let pts = 0; const m = createSim({ mode: 'play', seed: 2, config: { police: false, race: false, startS: s }, onEvent: (e) => { if (e.type === 'nearmiss') pts = e.pts; } });
-    for (let t = 0; t < 4; t += 1 / 60) m.step(1 / 60);
-    const S = m.S; S.cars.length = 0; S.speed = 50; S.x = 0;
-    S.cars.push({ id: 900, z: S.z + 1, lane: 2, target: 2, x: 2.9, speed: 30, cruise: 30, kind: 'sedan', paint: 0, blink: 0, brake: false, prevDz: 1, hit: 0, think: 99 });
-    for (let t = 0; t < 0.5 && !pts; t += 1 / 60) m.step(1 / 60);
-    return [pts, S.merge]; };
-  const [pm, inM] = nm(C1.JCT_EVENTS[0].s + 40), [pp, inP] = nm(4300);
-  assert.ok(inM && !inP && pm === pp * 2 && pp > 0, `near misses pay double in a merge zone (${pm} vs ${pp})`);
-}
-
-// 9b) a bot drives a whole lap at racing speed without touching the rail, on every difficulty (the real hairpins included)
-for (const difficulty of ['chill', 'street', 'redline']) for (const weather of ['clear', 'rain']) {
-  const sim = createSim({ mode: 'play', seed: 5, config: { difficulty, weather, police: false, race: false, zen: true }, onEvent: (e) => { if (e.type === 'scrape' || e.type === 'slam') rail++; } });
-  let rail = 0, maxX = 0, t = 0, vSum = 0, n = 0;
-  const bot = driver({ heatCap: 70 });
-  for (; sim.S.z < C1.LENGTH && t < 400; t += 1 / 60) {
-    sim.S.files = 0; sim.S.shards = 0; sim.S.lives = sim.S.maxLives;
-    bot(sim.input, sim.S, sim); sim.step(1 / 60);
-    if (sim.S.count <= 0) { maxX = Math.max(maxX, Math.abs(sim.S.x)); vSum += sim.S.speed; n++; }
-  }
-  const avg = (vSum / n) * 3.6;
-  console.log(`full lap ${difficulty.padEnd(7)} ${weather.padEnd(5)}: ${t.toFixed(0)} s, avg ${avg.toFixed(0)} km/h, top ${(sim.S.topSpeed * 3.6).toFixed(0)}, max |x| ${maxX.toFixed(2)}, rail contacts ${rail}`);
-  assert.ok(sim.S.z >= C1.LENGTH, 'completes the lap');
-  assert.ok(rail === 0 && maxX < RAIL, `${difficulty}/${weather}: never leaves the road`);
-  assert.ok(avg > (weather === 'rain' ? 150 : 160), `${difficulty}/${weather}: at racing speed`);
-}
-// 9c) the road alone, flat out: an empty C1, overclocking whenever the engine is cool, never lifting for a bend
-for (const [car, weather] of [['wedge', 'clear'], ['bike', 'clear'], ['wedge', 'rain']]) {
-  const sim = createSim({ mode: 'play', seed: 1, config: { car, weather, police: false, race: false, zen: true }, onEvent: (e) => { if (e.type === 'scrape' || e.type === 'slam') rail++; } });
-  let rail = 0, maxX = 0, t = 0, vSum = 0, n = 0;
-  for (; sim.S.z < C1.LENGTH && t < 400; t += 1 / 60) {
-    const S = sim.S; S.cars.length = 0; S.files = 0; S.shards = 0;
-    sim.input.boost = S.heat < 80 && S.glitch <= 0;
-    sim.input.axis = clamp((0 - S.x - S.vx * 0.3) * 0.8);
-    sim.step(1 / 60);
-    if (S.count <= 0) { maxX = Math.max(maxX, Math.abs(S.x)); vSum += S.speed; n++; }
-  }
-  const avg = (vSum / n) * 3.6;
-  console.log(`empty lap flat out ${car.padEnd(5)} ${weather.padEnd(5)}: ${t.toFixed(0)} s, avg ${avg.toFixed(0)} km/h, max |x| ${maxX.toFixed(2)}, rail contacts ${rail}`);
-  assert.ok(rail === 0 && maxX < 3.6, `${car}/${weather}: the real hairpins hold at full speed with a lane to spare`);
-}
+// 9) junctions: the lane under the sign picks the route; backstreets pay 1.5x per shard
+const back = run({ seconds: 120, bot: driver({ route: 'backstreets' }), seed: 3, config: { police: false, race: false } });
+console.log('backstreet:', fmt(back), back.S.route);
+assert.ok(back.ev.junction >= 1, 'passes at least one junction');
+assert.ok(back.S.routes.slice(1).some((r) => r.route === 'backstreets'), 'right lane at the sign → backstreets');
+const expr = run({ seconds: 120, bot: driver({ route: 'expressway' }), seed: 3, config: { police: false, race: false } });
+const exprN = expr.S.routes.slice(1).filter((r) => r.route === 'expressway').length;
+assert.ok(exprN >= Math.ceil((expr.S.routes.length - 1) / 2), 'left lanes at the sign → expressway');
 
 // 10) finale: the tenth file ends the run at the lookout (no crash, car stops, 'complete' fires once)
 {
@@ -238,19 +133,6 @@ for (const [car, weather] of [['wedge', 'clear'], ['bike', 'clear'], ['wedge', '
   console.log('finale    :', `files=${sim.S.files} done=${sim.S.done} speed=${sim.S.speed.toFixed(1)} t=${t.toFixed(0)}s`);
   assert.ok(ev.includes('finale') && ev.filter((x) => x === 'complete').length === 1, 'finale then exactly one complete');
   assert.ok(sim.S.done && sim.S.speed <= 0.5 && !sim.S.over, 'car comes to rest at the lookout, not a game over');
-}
-// 10b) pacing: whoever drives, the tenth file opens on the first lap somewhere around FINALE_S (Tanimachi to Shibakoen)
-{
-  const at = [];
-  for (const seed of [1, 2, 3]) {
-    let fin = null;
-    const sim = createSim({ mode: 'play', seed, config: { zen: true, police: false }, onEvent: (e) => { if (e.type === 'finale') fin = sim.S.s; } });
-    const bot = driver();
-    for (let t = 0; t < 400 && fin == null; t += 1 / 60) { bot(sim.input, sim.S, sim); sim.step(1 / 60); }
-    at.push(fin);
-  }
-  console.log(`pacing: finale at s = ${at.map((s) => Math.round(s)).join(', ')} (${at.map((s) => C1.districtAt(s).name).join(', ')})`);
-  assert.ok(at.every((s) => s != null && s > FINALE_S - 2200 && s < FINALE_S + 1800), 'the finale lands near Tokyo Tower on the first lap');
 }
 // 11) nothing ever overlaps: attract mode and the invulnerability window after a hit
 for (const [mode, seed] of [['attract', 4], ['play', 6]]) {
@@ -291,11 +173,11 @@ for (const [mode, seed] of [['attract', 4], ['play', 6]]) {
 // police: sustained top speed builds heat; a cruiser that boxes you in busts you; outrunning them all works
 {
   const ev = {};
-  const sim = createSim({ mode: 'play', seed: 2, config: { race: false }, onEvent: (e) => { ev[e.type] = (ev[e.type] || 0) + 1; } });
+  const sim = createSim({ mode: 'play', seed: 2, config: {}, onEvent: (e) => { ev[e.type] = (ev[e.type] || 0) + 1; } });
   for (let t = 0; t < 4; t += 1 / 60) sim.step(1 / 60);
-  for (let t = 0; t < 120 && !ev.police; t += 1 / 60) { sim.S.cars.length = 0; sim.S.heat = 0; sim.input.boost = true; sim.input.axis = -sim.S.x * 0.3; sim.step(1 / 60); }
+  for (let t = 0; t < 120 && !ev.police; t += 1 / 60) { sim.S.cars.length = 0; sim.S.heat = 0; sim.S.rival.z = sim.S.z + 200; sim.input.boost = true; sim.input.axis = -sim.S.x * 0.3; sim.step(1 / 60); }
   assert.ok(ev.police, 'flat-out driving draws the police');
-  for (let t = 0; t < 30 && !ev.busted; t += 1 / 60) { sim.S.cars.length = 0; sim.input.boost = false; sim.input.brake = true; sim.step(1 / 60); }
+  for (let t = 0; t < 30 && !ev.busted; t += 1 / 60) { sim.S.cars.length = 0; sim.S.rival.z = sim.S.z + 200; sim.input.boost = false; sim.input.brake = true; sim.step(1 / 60); }
   assert.ok(ev.busted, 'slowing down with police on you gets you busted');
   console.log('police: drawn, then busted');
 }
@@ -304,23 +186,20 @@ for (const [mode, seed] of [['attract', 4], ['play', 6]]) {
 {
   const mk = (weather) => { const sim = createSim({ mode: 'play', seed: 4, config: { weather, race: false, police: false } }); for (let t = 0; t < 4; t += 1 / 60) sim.step(1 / 60); return sim; };
   const stopDist = (weather, z0) => { const sim = mk(weather); const S = sim.S; S.z = z0; S.cars.length = 0; S.speed = 60; const a = S.z; sim.input.brake = true; while (S.speed > 0.1) { S.cars.length = 0; sim.step(1 / 60); } return S.z - a; };
-  const zOpen = 3300 - START_S, zTun = 6700 - START_S; // Edobashi viaduct; the Chiyoda tunnel
-  const dry = stopDist('clear', zOpen), wet = stopDist('rain', zOpen), tun = stopDist('rain', zTun);
+  const dry = stopDist('clear', 400), wet = stopDist('rain', 400), tun = stopDist('rain', SECTOR + 20);
   console.log(`braking from 216 km/h: dry ${dry.toFixed(0)} m, rain ${wet.toFixed(0)} m, rain inside a tunnel ${tun.toFixed(0)} m`);
   assert.ok(wet > dry * 1.15, 'rain lengthens braking');
   assert.ok(Math.abs(tun - dry) < 3, 'a tunnel is dry even when it rains');
-  const sim = mk('rain'); sim.S.z = zOpen; sim.S.speed = MAX * 1.3; sim.S.cars.length = 0; sim.step(1 / 60);
+  const sim = mk('rain'); sim.S.z = 500; sim.S.speed = MAX * 1.3; sim.S.cars.length = 0; sim.step(1 / 60);
   assert.ok(sim.S.wet && sim.S.aqua > 0.5, 'flat out in the rain aquaplanes');
-  sim.S.z = zTun + 50; sim.S.cars.length = 0; sim.step(1 / 60);
+  sim.S.z = SECTOR + 50; sim.S.cars.length = 0; sim.step(1 / 60);
   assert.ok(sim.S.inTunnel && !sim.S.wet && sim.S.aqua === 0, 'no aquaplaning in the tunnel');
-  for (const t of C1.tunnelSpans) assert.ok(sim.tunnelAt(t.from + 5 - START_S) && !sim.tunnelAt(t.from - 15 - START_S), `the ${t.from} m tunnel is where the data says`);
-  const tn = sim.tunnelNear(6000 - START_S);
-  assert.ok(Math.abs(tn.z0 - (6060 - START_S)) < 1e-6 && tn.z1 - tn.z0 === 80, 'tunnelNear finds the next tunnel ahead');
+  assert.ok(sim.tunnelAt(SECTOR + 10) && !sim.tunnelAt(SECTOR - 10) && !sim.tunnelAt(100), 'tunnels follow junctions only');
 }
 
 // crashes: harder hits are more severe, a truck barely moves, zen costs no life, the last hit spins you out
 {
-  const hit = (cfg, kind, v, cv) => { let ev = null; const sim = createSim({ mode: 'play', seed: 2, config: { police: false, race: false, ...cfg }, onEvent: (e) => { if (e.type === 'hit') ev = e; } });
+  const hit = (cfg, kind, v, cv) => { let ev = null; const sim = createSim({ mode: 'play', seed: 2, config: { police: false, ...cfg }, onEvent: (e) => { if (e.type === 'hit') ev = e; } });
     for (let t = 0; t < 4; t += 1 / 60) sim.step(1 / 60);
     const S = sim.S; S.cars.length = 0; S.speed = v; S.x = 0; S.vx = 0;
     const c = { id: 999, z: S.z + 3, lane: 1, target: 1, x: 0, speed: cv, cruise: cv, kind, paint: 0, blink: 0, brake: false, prevDz: 3, hit: 0, think: 99 };
@@ -340,7 +219,7 @@ for (const [mode, seed] of [['attract', 4], ['play', 6]]) {
 
 // police: nothing below one full star; free run has no race result
 {
-  const sim = createSim({ mode: 'play', seed: 3, config: { race: false } });
+  const sim = createSim({ mode: 'play', seed: 3, config: {} });
   for (let t = 0; t < 4; t += 1 / 60) sim.step(1 / 60);
   sim.S.wanted = 0.9; sim.S.cars.length = 0; sim.S.speed = 30; sim.step(1 / 60);
   assert.equal(sim.S.cops.length, 0, 'no cruiser before a full star');
@@ -350,6 +229,122 @@ for (const [mode, seed] of [['attract', 4], ['play', 6]]) {
   for (let t = 0; t < 4; t += 1 / 60) free.step(1 / 60);
   free.S.files = 9; free.S.shards = 49; free.S.cars.length = 0; free.S.shardList.length = 0; free.S.shardList.push({ z: free.S.z + 2, x: free.S.x, taken: false, missed: false, id: 5000 });
   for (let t = 0; t < 1 && !fin; t += 1 / 60) { free.S.cars.length = 0; free.step(1 / 60); }
-  assert.ok(fin && fin.won === null, 'free run: no winner is announced');
+  assert.ok(fin && fin.won === null && fin.free, 'free run: no winner is announced');
+}
+
+// the warm-up: half the traffic on the grid, nobody in your lane for the first 600 m, full traffic after two sectors;
+// and nobody ahead ever changes into your lane across your bows
+{
+  const want = (ramp) => Math.round(13 * DIFFICULTY.street.density * ramp);
+  let early = 0, earlyN = 0, late = 0, lateN = 0, inLane = 0, cutIn = 0;
+  for (const seed of [1, 2, 3, 4, 5, 6]) {
+    const sim = createSim({ mode: 'play', seed, config: { police: false, zen: true, race: true } });
+    const S = sim.S;
+    assert.ok(S.cars.length <= want(0.5) && S.cars.every((c) => c.lane !== 1), 'the grid: half the traffic, centre lane clear');
+    for (let t = 0; t < 400 && S.z < 6000; t += 1 / 60) {
+      S.files = 0; S.shards = 0;
+      sim.input.axis = clamp((0 - S.x - S.vx * 0.3) * 0.8); // holds the centre lane; zen, so a hit only costs speed
+      sim.step(1 / 60);
+      if (S.count > 0) continue;
+      if (S.dist <= CALM) { if (S.cars.some((c) => c.z > S.z && (c.lane === 1 || c.target === 1))) inLane++; }
+      if (S.dist < 1000) { early += S.cars.length; earlyN++; } else if (S.dist > WARMUP + 600) { late += S.cars.length; lateN++; }
+      for (const c of S.cars) if (c.blink > 1.05 && c.target === 1 && c.lane !== 1 && c.z > S.z && c.z - S.z < 14 + Math.max(0, S.speed - c.speed) * 1.7) cutIn++;
+    }
+  }
+  console.log(`warm-up: ${(early / earlyN).toFixed(1)} cars on the road in the first kilometre, ${(late / lateN).toFixed(1)} after ${WARMUP} m (zen); frames with a car in your lane before ${CALM} m: ${inLane}; cut-ins: ${cutIn}`);
+  assert.equal(inLane, 0, "no car in the player's lane until the car has rolled 600 m");
+  assert.equal(cutIn, 0, 'traffic ahead never changes into your lane across your bows');
+  assert.ok(early / earlyN < (late / lateN) * 0.75, 'traffic ramps up from the grid');
+}
+
+// the old road: real turns. Curve sections of 0.35..1.0 (most of the road), a junction every SECTOR, its tunnel right after
+{
+  const sim = createSim({ mode: 'play', seed: 7, config: { police: false, zen: true } });
+  const S = sim.S; let hard = 0, any = 0, n = 0, maxC = 0;
+  for (let t = 0; t < 200 && S.z < 9000; t += 1 / 60) { S.cars.length = 0; S.files = 0; S.shards = 0; sim.input.axis = clamp((0 - S.x - S.vx * 0.3) * 0.8); sim.input.boost = S.heat < 60; sim.step(1 / 60);
+    if (S.count > 0) continue; const c = Math.abs(sim.curveAt(S.z)); n++; if (c > 0.3) any++; if (c > 0.7) hard++; maxC = Math.max(maxC, c); }
+  console.log(`turns: ${(100 * any / n).toFixed(0)}% of the road bends past 0.3, ${(100 * hard / n).toFixed(0)}% past 0.7 (max ${maxC.toFixed(2)})`);
+  assert.ok(any / n > 0.4 && hard / n > 0.1 && maxC > 0.85, 'the road really turns');
+  assert.ok(sim.tunnelAt(SECTOR + 5) && sim.tunnelAt(SECTOR + TUNNEL - 5) && !sim.tunnelAt(SECTOR + TUNNEL + 5), 'a tunnel of TUNNEL m after each junction');
+}
+
+// the bend sign: lights before a turn (look-ahead grows with speed), and once lit stays up at least 1.5 s
+{
+  const sim = createSim({ mode: 'play', seed: 4, config: { police: false, zen: true } });
+  const S = sim.S; let lit = 0, shortest = 1e9, on = null, warned = 0, turns = 0, prev = 0;
+  for (let t = 0; t < 180 && S.z < 9000; t += 1 / 60) {
+    S.cars.length = 0; sim.input.axis = clamp((0 - S.x - S.vx * 0.3) * 0.8); sim.input.boost = S.heat < 60; sim.step(1 / 60);
+    if (S.count > 0) continue;
+    const b = S.bend.dir * S.bend.level;
+    if (b && !on) { on = S.time; lit++; }
+    if (!b && on != null) { shortest = Math.min(shortest, S.time - on); on = null; }
+    // a turn starts here (|curve| crosses 0.6 into a new direction): was it warned in the 0.5 s before?
+    const c = sim.curveAt(S.z);
+    if (Math.abs(c) > 0.6 && Math.abs(prev) <= 0.6) { turns++; if (S.bend.dir === Math.sign(c) || S.bend.wasDir === Math.sign(c)) warned++; }
+    if (S.bend.dir) S.bend.wasDir = S.bend.dir;
+    prev = c;
+  }
+  console.log(`bend sign: lit ${lit} times, shortest ${shortest.toFixed(2)} s; ${warned} of ${turns} turns (past 0.6) warned`);
+  assert.ok(lit >= 5 && shortest >= 1.5 - 1 / 30, 'the sign lights, and holds at least 1.5 s');
+  assert.ok(warned >= turns * 0.8, 'turns are announced');
+}
+
+// story events: the launch pass, the junction heads-up, the tunnel after it
+{
+  const ev = [];
+  const sim = createSim({ mode: 'play', seed: 1, config: { police: false, zen: true }, onEvent: (e) => ev.push(e) });
+  const S = sim.S;
+  for (let t = 0; t < 120 && S.z < SECTOR * 2 + 400; t += 1 / 60) { sim.input.axis = clamp((0 - S.x - S.vx * 0.3) * 0.8); sim.step(1 / 60); }
+  const ty = ev.map((e) => e.type);
+  assert.ok(ty.includes('launched'), "KUROGANE's pass off the line is an event");
+  assert.equal(ty.filter((x) => x === 'junction-ahead').length, 2, 'one heads-up per junction');
+  assert.ok(ty.indexOf('junction-ahead') < ty.indexOf('junction') && ty.indexOf('junction') <= ty.indexOf('tunnel'), 'heads-up, junction, then the tunnel');
+  assert.ok(ev.find((e) => e.type === 'tunnel').route, 'the tunnel knows the route just picked');
+}
+
+// modes. FREE RUN: a drive. No rival, no damage, no police, light traffic; ends when the tenth file opens, nobody wins.
+// ZEN: the race without damage or police, on lighter traffic.
+{
+  const ev = [];
+  const free = createSim({ mode: 'play', seed: 3, config: { race: false }, onEvent: (e) => { ev.push(e); } });
+  const S = free.S, bot = driver();
+  let t = 0;
+  for (; t < 600 && !S.done; t += 1 / 60) {
+    bot(free.input, S, free);
+    if (S.count <= 0 && Math.round(t * 60) % 600 === 0) { S.wanted = 2.5; S.speed = Math.max(S.speed, MAX); } // police bait: ignored
+    free.step(1 / 60);
+    assert.equal(S.cops.length, 0, 'free run: no police');
+    assert.equal(S.lives, S.maxLives, 'free run: no damage');
+  }
+  const types = ev.map((e) => e.type), fin = ev.find((e) => e.type === 'finale'), done = ev.find((e) => e.type === 'complete');
+  console.log(`free run  : ${(S.dist / 1000).toFixed(2)} km in ${S.raceT.toFixed(0)} s, files ${S.files}, hits ${types.filter((x) => x === 'hit').length}`);
+  assert.ok(fin && fin.won === null && fin.free && done && done.free && !types.includes('over'), 'free run: ends at the tenth file, nobody wins');
+  assert.ok(!types.includes('struck') && !types.includes('overtaken') && !types.includes('launched') && !types.includes('police') && !types.includes('busted'), 'free run: no rival, no police');
+  const load = (config) => { const sim = createSim({ mode: 'play', seed: 5, config: { police: false, ...config } }); let c = 0, k = 0; const b = driver();
+    for (let u = 0; u < 200 && sim.S.z < 9000; u += 1 / 60) { sim.S.files = 0; sim.S.shards = 0; sim.S.lives = sim.S.maxLives; b(sim.input, sim.S, sim); sim.step(1 / 60); if (sim.S.dist > WARMUP + 600) { c += sim.S.cars.length; k++; } } return c / k; };
+  const race = load({}), zen = load({ zen: true }), fr = load({ race: false });
+  console.log(`traffic by mode: race ${race.toFixed(1)}, zen ${zen.toFixed(1)} (x${MODES.zen.traffic}), free run ${fr.toFixed(1)} (x${MODES.free.traffic}) cars on the road`);
+  assert.ok(zen < race * 0.9 && fr < race * 0.85, 'zen and free run carry lighter traffic than the race');
+}
+
+// the script: every line the HUD can ask for exists, reads plainly, and makes no real-place claim the road cannot back up
+{
+  const lines = [];
+  const walk = (v, k) => { if (typeof v === 'string') lines.push([k, v]); else if (Array.isArray(v)) v.forEach((x, i) => walk(x, `${k}[${i}]`)); else if (v && typeof v === 'object') for (const j in v) walk(v[j], `${k}.${j}`); };
+  walk(STORY, 'STORY');
+  for (const key of ['title', 'countdown', 'start', 'junctionAhead', 'tunnel', 'routes', 'fileOpen', 'fileLast', 'hit', 'police', 'busted', 'rivalLaunch', 'rivalLean', 'rivalPassed', 'rivalPasses', 'rivalSprint', 'finaleWon', 'finaleLost', 'finaleFree', 'outOfIntegrity', 'bustedOut'])
+    assert.ok(STORY[key], `STORY.${key} is there`);
+  assert.ok(STORY.routes.expressway.length && STORY.routes.backstreets.length, 'a line for each route');
+  for (const k of ['finaleWon', 'finaleLost', 'finaleFree']) assert.ok(STORY[k].line && STORY[k].sub, `${k}: line and sub`);
+  const places = /ginza|shibakoen|tokyo tower|c1\b|shuto|edobashi|takebashi|miyakezaka|tanimachi|hamazakibashi|iikura|kasumigaseki|otemachi|nihonbashi|kitanomaru|palace|roppongi|loop/i;
+  for (const [k, v] of lines) {
+    assert.ok(v.trim().length > 0, `${k} is not empty`);
+    assert.ok(!/[\u2014\u2013]/.test(v), `${k}: no em-dashes`);
+    assert.ok(!places.test(v), `${k}: no real-place claims ("${v}")`);
+  }
+  assert.equal(fileLine(3), 'Recovered. Seven to go.');
+  assert.equal(fileLine(10), STORY.fileLast);
+  assert.ok(SPEAKERS.dispatch && SPEAKERS.rival, 'two speakers');
+  console.log(`story: ${lines.length} lines, all present, no real places`);
 }
 console.log('ALL SIM CHECKS PASSED');

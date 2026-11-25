@@ -8,25 +8,25 @@ const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 export const LOOKS = {
   // RIN: compact and springy. Courier cap with an amber clip visor, cropped hi-vis jacket, messenger bag, chunky sneakers.
   rin: {
-    arm: [29, 28], leg: [42, 41], torso: 56, neck: 6, head: 11.2, chest: 34, waist: 19, hips: 24, hand: 1.24, foot: 28, armW: 1.0, legW: 1.0,
+    arm: [29, 28], leg: [42, 41], torso: 56, neck: 6, head: 11.8, chest: 34, waist: 19, hips: 24, hand: 1.24, foot: 28, armW: 1.0, legW: 1.0,
     skin: '#e6ad84', hair: '#16141c', main: '#c6ff24', mainD: '#6e9a10', dark: '#1c1d27', darkD: '#0e0f16', leg2: '#2c2f40', shoe: '#f3f1ea', shoeD: '#a8a6b6',
     accent: '#c6ff24', cap: '#22232d', visor: '#ffb21f', bag: '#2b2d38', glove: '#1b1c24', ink: '#0b0b10',
   },
   // GANJI: a broad wedge. Huge shoulders and chest, heavy forearms (one a hydraulic prosthetic), long canvas work coat, boots.
   ganji: {
-    arm: [33, 33], leg: [41, 39], torso: 64, neck: 5, head: 11.8, chest: 56, waist: 30, hips: 32, hand: 1.5, foot: 31, armW: 1.5, legW: 1.4,
-    skin: '#c78659', hair: '#221713', main: '#66543c', mainD: '#30261b', dark: '#3d3f4b', darkD: '#1c1d24', shoe: '#17171b', shoeD: '#0a0a0c',
+    arm: [33, 33], leg: [41, 39], torso: 64, neck: 5, head: 12.4, chest: 56, waist: 30, hips: 32, hand: 1.5, foot: 31, armW: 1.5, legW: 1.4,
+    skin: '#c78659', hair: '#221713', main: '#6e5b42', mainD: '#33291d', dark: '#3d3f4b', darkD: '#1c1d24', shoe: '#17171b', shoeD: '#0a0a0c',
     accent: '#ff5a1f', metal: '#9aa3b3', metalD: '#4f5666', shirt: '#e8e0cf', beard: '#2a1b14', ink: '#0b0b10',
   },
   // SUZU: long coat, long legs, sharp triangles. Triangular visor, high pointed collar, coat tails cut to points, drone.
   suzu: {
-    arm: [30, 29], leg: [48, 47], torso: 56, neck: 6, head: 11.6, chest: 46, waist: 18, hips: 22, hand: 1.12, foot: 27, armW: 1.02, legW: 0.98,
+    arm: [30, 29], leg: [48, 47], torso: 56, neck: 6, head: 12.4, chest: 50, waist: 18, hips: 22, hand: 1.12, foot: 27, armW: 1.08, legW: 1.05,
     skin: '#f0c7a6', hair: '#26324f', main: '#2f5880', mainD: '#142c45', dark: '#56698a', darkD: '#222b38', shoe: '#0d1219', shoeD: '#05080c',
     accent: '#00f0ff', light: '#e4ecf2', lightD: '#93a4b3', ink: '#05080c',
   },
   // SAYO: narrow and flowing. Wide drop sleeves and a long scarf that trail the teleports, flared hakama trousers, high ponytail.
   sayo: {
-    arm: [29, 28], leg: [46, 45], torso: 54, neck: 6, head: 11.3, chest: 30, waist: 16, hips: 21, hand: 1.15, foot: 26, armW: 0.96, legW: 1.0,
+    arm: [29, 28], leg: [46, 45], torso: 54, neck: 6, head: 11.9, chest: 30, waist: 16, hips: 21, hand: 1.15, foot: 26, armW: 1.03, legW: 1.0,
     skin: '#e9bb98', hair: '#110b15', main: '#5c1651', mainD: '#2c0928', dark: '#1a1020', darkD: '#0b060f', shoe: '#ece7f2', shoeD: '#a59cb5',
     accent: '#ff2bd6', wrap: '#e3dde6', sleeve: '#241630', sleeveD: '#110a18', ink: '#0b070d',
   },
@@ -144,7 +144,8 @@ function paintPart(ctx, P) {
     }
   }
   if (P.detail) P.detail(ctx);
-  if (!FLAT && P.rim && RIMA > 0) { ctx.save(); ctx.translate(-RIMDIR * 2.4, -0.4); ctx.strokeStyle = RIM; ctx.globalAlpha *= RIMA * 0.45; ctx.lineWidth = 1.8; ctx.stroke(path); ctx.restore(); }
+  // rim: a thin broken highlight on the edge facing the stage's key light, upper body and head only
+  if (!FLAT && P.rim && RIMA > 0) { ctx.save(); ctx.translate(-LIGHT[0] * 2.2, -LIGHT[1] * 2.2); ctx.setLineDash([7, 5]); ctx.strokeStyle = RIM; ctx.globalAlpha *= RIMA * 0.6; ctx.lineWidth = 1.5; ctx.stroke(path); ctx.restore(); }
   ctx.restore();
 }
 function drawParts(ctx, parts) {
@@ -212,7 +213,7 @@ function footPath(kn, an, L, toe, style) {
 
 // ---------------------------------------------------------------- faces
 // expression: { brow (-1 worried .. +1 angry), eye (0 shut .. 1.3 wide), mouth (0 shut .. 1 open), curve (-1 frown .. +1 grin), teeth }
-const BROW_T = 0.43, BROW_K = 1.5, EYE_H = 0.31, MOUTH_H = 0.58;
+const BROW_T = 0.48, BROW_K = 1.5, EYE_H = 0.31, MOUTH_H = 0.58;
 const HEAD_TOP = { rin: 1.2, ganji: 1.08, suzu: 1.22, sayo: 1.22 };
 export const FACES = {
   idle: { brow: 0.35, eye: 1, mouth: 0, curve: -0.15, teeth: 0 },
@@ -282,7 +283,7 @@ function head(ctx, L, id, J, F, opts) {
   if (id === 'suzu') back.push({ path: blob([[-1.08, 0.55], [-1.12, -0.35], [-0.85, -0.85], [-0.55, -0.55], [-0.35, 0.2], [0.1, 0.9]].map(([u, v]) => [u * r, v * r])), col: L.hair, shd: shadeOf(L.hair, 0.6) });
   if (id === 'sayo') back.push({ path: blob([[-1.04, 0.6], [-1.12, -0.25], [-0.95, -0.75], [-0.55, -0.45], [-0.45, 0.4]].map(([u, v]) => [u * r, v * r])), col: L.hair, shd: '#000' });
   parts.push(...back);
-  parts.push({ path: sk, col: skin, shd: skinD, sh: 3.5, detail: (c) => {
+  parts.push({ path: sk, rim: 1, col: skin, shd: skinD, sh: 3.5, detail: (c) => {
     // stubble / beard and cheek shadow
     if (id === 'ganji') { c.fillStyle = L.beard; c.fill(blob([[-0.45, -0.25], [0.15, -0.05], [0.7, -0.38], [1.0, -0.4], [0.98, -0.62], [0.6, -1.05], [0.0, -1.02], [-0.5, -0.65]].map(([u, v]) => [u * r, v * r]))); c.fillStyle = 'rgba(30,18,14,0.35)'; c.fill(blob([[-1, 0.2], [-0.8, 0.82], [-0.2, 1.1], [0.4, 1.04], [0.2, 0.7], [-0.4, 0.5]].map(([u, v]) => [u * r, v * r]))); }
     face(c, L, id, r, F);
@@ -430,17 +431,17 @@ function pushLeg(parts, id, L, hp, kn, ft, toe, far, fs) {
   const k = L.legW;
   if (id === 'sayo') {
     const path = limb(hp, kn, ft, HAKAMA, 1, 1);
-    parts.push({ path, rim: 1, col: f(L.main), shd: L.mainD, hl: far ? null : '#8b2c7e', detail: (c) => { const m = along(kn, ft, 0.4); line(c, [along(hp, kn, 0.3), m], 1.4, 'rgba(0,0,0,0.4)'); } });
+    parts.push({ path, col: f(L.main), shd: L.mainD, hl: far ? null : '#8b2c7e', detail: (c) => { const m = along(kn, ft, 0.4); line(c, [along(hp, kn, 0.3), m], 1.4, 'rgba(0,0,0,0.4)'); } });
   } else if (id === 'ganji') {
     parts.push({ path: limb(hp, kn, ft, LEG_BAGGY, 1.05, 1), rim: 1, col: f(L.dark), shd: L.darkD, detail: (c) => { crease(c, hp, kn, ft, 1, -7); line(c, [along(hp, kn, 0.4), along(hp, kn, 0.62)], 1.2, 'rgba(255,255,255,0.12)'); } });
   } else if (id === 'rin') {
     const path = limb(hp, kn, ft, LEG, k, fs);
     const S = along(hp, kn, 0.62), dir = unit(hp, kn);
-    parts.push({ path, rim: 1, paint: splitPaint(path, S, dir, f(L.dark), L.darkD, f(L.leg2), shadeOf(L.leg2, 0.55)), detail: (c) => crease(c, hp, kn, ft, 1, -6) });
+    parts.push({ path, paint: splitPaint(path, S, dir, f(L.dark), L.darkD, f(L.leg2), shadeOf(L.leg2, 0.55)), detail: (c) => crease(c, hp, kn, ft, 1, -6) });
   } else { // suzu: slim trousers into tall pointed boots
     const path = limb(hp, kn, ft, LEG, k, fs);
     const S = along(kn, ft, 0.15), dir = unit(kn, ft);
-    parts.push({ path, rim: 1, paint: splitPaint(path, S, dir, f(L.dark), L.darkD, f(L.shoe), L.shoeD), detail: (c) => line(c, [along(kn, ft, 0.2), along(kn, ft, 0.85)], 1.4, L.accent, 0.8) });
+    parts.push({ path, paint: splitPaint(path, S, dir, f(L.dark), L.darkD, f(L.shoe), L.shoeD), detail: (c) => line(c, [along(kn, ft, 0.2), along(kn, ft, 0.85)], 1.4, L.accent, 0.8) });
   }
   const style = { rin: 'sneaker', ganji: 'boot', suzu: 'point', sayo: 'tabi' }[id];
   const sz = fs > 1 ? 1.22 : 1;

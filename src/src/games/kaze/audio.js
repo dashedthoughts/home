@@ -2,17 +2,18 @@
 // breath noise with pitch bends) playing sparse phrases on the in scale, Karplus-Strong koto plucks, taiko,
 // inharmonic sword rings, footsteps per ground. Quiet by design; near silence in standoffs.
 import { CHAPTERS } from './data.js';
+import { SCORE, TEMPO, INSTR, freq, loopBars } from './score.js';
 const SCALE = [293.66, 311.13, 392.0, 440.0, 466.16, 587.33, 622.25, 783.99]; // D Eb G A Bb D Eb G (in scale)
 export class Audio {
   constructor() { this.ctx = null; this.on = false; this.vol = { volume: 0.7, music: 0.8, sfx: 0.9, muted: false }; this.nextPhrase = 4; this.drumT = 0; this.ks = new Map(); this.duck = 1; this.t = 0; }
-  start() {
+  start(given) {
     if (this.ctx) { if (this.ctx.state === 'suspended' && !this.paused) this.ctx.resume().catch(() => {}); return; }
-    const AC = typeof window !== 'undefined' && (window.AudioContext || window.webkitAudioContext); if (!AC) return;
-    try { this.ctx = new AC(); } catch (e) { return; }
+    const AC = typeof window !== 'undefined' && (window.AudioContext || window.webkitAudioContext); if (!AC && !given) return;
+    try { this.ctx = given || new AC(); } catch (e) { return; }
     const c = this.ctx;
     this.master = c.createGain(); this.comp = c.createDynamicsCompressor(); this.comp.threshold.value = -18; this.comp.ratio.value = 3;
     this.master.connect(this.comp); this.comp.connect(c.destination);
-    this.music = c.createGain(); this.sfx = c.createGain(); this.amb = c.createGain(); this.music.connect(this.master); this.sfx.connect(this.master); this.amb.connect(this.master);
+    this.music = c.createGain(); this.sfx = c.createGain(); this.amb = c.createGain(); this.mlp = c.createBiquadFilter(); this.mlp.type = 'lowpass'; this.mlp.frequency.value = 9000; this.duckG = c.createGain(); this.music.connect(this.mlp); this.mlp.connect(this.duckG); this.duckG.connect(this.master); this.sfx.connect(this.master); this.amb.connect(this.master);
     // a little room: a feedback delay with damping stands in for reverb
     this.verb = c.createDelay(1); this.verb.delayTime.value = 0.23; const fb = c.createGain(); fb.gain.value = 0.38; const damp = c.createBiquadFilter(); damp.type = 'lowpass'; damp.frequency.value = 1800;
     this.verb.connect(damp); damp.connect(fb); fb.connect(this.verb); this.verbOut = c.createGain(); this.verbOut.gain.value = 0.5; damp.connect(this.verbOut); this.verbOut.connect(this.master);
@@ -27,6 +28,63 @@ export class Audio {
   resume() { this.paused = false; if (this.ctx && this.ctx.state === 'suspended') this.ctx.resume().catch(() => {}); }
   dispose() { if (this.ctx) { try { this.ctx.close(); } catch (e) { /* ignore */ } } this.ctx = null; this.on = false; }
   env(g, t, a, peak, dur, rel) { g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(peak, t + a); g.gain.setValueAtTime(peak, t + Math.max(a, dur - rel)); g.gain.exponentialRampToValueAtTime(0.0001, t + dur); }
+  // ---------- the score: stems on one bar clock ----------
+  swell(f, when, dur, amp, type = 'sine', det = 0) {
+    const c = this.ctx, o = c.createOscillator(), g = c.createGain(); o.type = type; o.frequency.value = f; if (det) o.detune.value = det;
+    g.gain.setValueAtTime(0.0001, when); g.gain.linearRampToValueAtTime(amp, when + Math.min(0.5, dur * 0.3)); g.gain.setValueAtTime(amp, when + dur * 0.7); g.gain.linearRampToValueAtTime(0.0001, when + dur);
+    o.connect(g); g.connect(this.music); o.start(when); o.stop(when + dur + 0.05);
+  }
+  playEvent(stem, n, when, dur) {
+    const f = freq(n), A = INSTR[stem];
+    switch (stem) {
+      case 'flute': this.flute(f, when, Math.max(0.3, dur), A); break;
+      case 'pluck': this.pluck(f, when, A); break;
+      case 'bass': this.pluck(f, when, A); break;
+      case 'drone': this.swell(f, when, dur, A, 'triangle'); break;
+      case 'pad': this.swell(f, when, dur, A, 'sine', 5); this.swell(f * 1.5, when, dur, A * 0.5, 'sine', -6); break;
+      case 'glass': this.swell(f, when, dur, A, 'sine', 3); this.swell(f * 2.01, when, dur, A * 0.4, 'sine'); break;
+      case 'taiko': this.taikoM(when, A); break;
+      case 'heart': this.taikoM(when, A, 0.55); break;
+      case 'click': this.noiseHit(when, 3200, 0.03, A, 'bandpass', 4); break;
+      case 'bell': this.ringM(when, f, A); break;
+    }
+  }
+  taikoM(when, amp, low = 1) { const c = this.ctx, o = c.createOscillator(); o.frequency.setValueAtTime(95 * low, when); o.frequency.exponentialRampToValueAtTime(46 * low, when + 0.35); const g = c.createGain(); this.env(g, when, 0.006, amp, 0.6, 0.5); o.connect(g); g.connect(this.music); o.start(when); o.stop(when + 0.65); }
+  ringM(when, f, amp) { const c = this.ctx; for (const [r, d, a] of [[1, 2.6, 1], [2.76, 1.4, 0.4], [5.4, 0.7, 0.2]]) { const o = c.createOscillator(); o.frequency.value = f * r; const g = c.createGain(); g.gain.setValueAtTime(amp * a, when); g.gain.exponentialRampToValueAtTime(0.0001, when + d); o.connect(g); g.connect(this.music); o.start(when); o.stop(when + d + 0.02); } }
+  // schedule whole bars ahead of the audio clock; a state change waits for the next bar line
+  scoreTick(key, want, horizon) {
+    const c = this.ctx; if (!SCORE[key]) return;
+    if (key !== this.mKey) { this.mKey = key; this.pending = want; this.mlp.frequency.setTargetAtTime(key === 'snow' ? 1500 : 9000, c.currentTime, 0.5); }
+    const beat = 60 / TEMPO[key], bar = beat * 4;
+    if (this.barT == null || this.barT < c.currentTime - bar) { this.barT = c.currentTime + 0.1; this.barIdx = 0; this.mState = want; this.pending = null; }
+    if (want !== this.mState && want !== this.pending) this.pending = want;
+    while (this.barT < c.currentTime + horizon) {
+      if (this.pending) { this.mState = this.pending; this.pending = null; this.barIdx = 0; this.lastSwitch = this.barT; }
+      const st = SCORE[key][this.mState], L = loopBars(this.mState), b = this.barIdx % L;
+      for (const stem in st) for (const [t, n, d] of st[stem][b]) this.playEvent(stem, n, this.barT + t * beat, d * beat);
+      this.barT += bar; this.barIdx++;
+      // victory resolves its phrase once, then the calm arrangement returns
+      if (this.mState === 'victory' && this.barIdx >= L) this.pending = 'calm';
+      if (this.mState === 'ending' && this.barIdx >= L) this.pending = 'calm';
+    }
+  }
+  musicState(s) {
+    if (s.phase === 'ending' || s.phase === 'credits' || s.phase === 'fin') return 'ending';
+    if (s.phase === 'standoff' && s.so && s.so.st !== 'walk') return 'standoff';
+    if (s.arena && s.arena.boss) { const b = s.foes.find((f) => f.boss); if (!b || b.st === 'dead') return 'victory'; return b.phase === 2 ? 'boss2' : 'boss'; }
+    if (s.arena) return s.foes.some((f) => f.st !== 'dead') ? 'fight' : 'victory';
+    return this.mState === 'victory' ? 'victory' : 'calm';
+  }
+  // render a stretch of one chapter's score offline (for the headless checks): returns peak, rms and melody-band share
+  async renderCheck(key, state, sec = 8) {
+    const OAC = window.OfflineAudioContext || window.webkitOfflineAudioContext, sr = 22050, ctx = new OAC(1, sr * sec, sr);
+    const a = new Audio(); a.start(ctx); a.setVolume({ volume: 1, music: 1, sfx: 0, muted: false }); a.w1.gn.gain.value = 0; a.w2.gn.gain.value = 0;
+    a.mState = state; a.mKey = key; a.barT = 0.05; a.barIdx = 0; a.scoreTick(key, state, sec);
+    const buf = await ctx.startRendering(), d = buf.getChannelData(0);
+    let peak = 0, sum = 0, lo = 0, hi = 0, band = 0; const a1 = Math.exp(-2 * Math.PI * 1400 / sr), a2 = Math.exp(-2 * Math.PI * 280 / sr);
+    for (let i = 0; i < d.length; i++) { const x = d[i]; peak = Math.max(peak, Math.abs(x)); sum += x * x; lo = a1 * lo + (1 - a1) * x; hi = a2 * hi + (1 - a2) * x; const bp = lo - hi; band += bp * bp; }
+    return { peak, rms: Math.sqrt(sum / d.length), melodyShare: band / Math.max(1e-12, sum) };
+  }
   // breathy end-blown flute
   flute(freq, when, dur, amp = 0.05) {
     const c = this.ctx, t = when;
@@ -85,8 +143,8 @@ export class Audio {
     switch (c.k) {
       case 'swing': this.noiseHit(t, c.kind === 'slash' ? 900 : 600, c.kind === 'slash' ? 0.16 : 0.26, 0.09, 'bandpass', 1.2, c.kind === 'slash' ? 3000 : 2400); break;
       case 'cut': this.noiseHit(t, 1100, 0.12, 0.14, 'bandpass', 0.8, 300); this.taiko(t, 0.12, 1.4); break;
-      case 'riposte': this.ring(t, 1500, 0.06, 1.2); this.noiseHit(t + 0.02, 900, 0.2, 0.2, 'bandpass', 0.7, 200); this.taiko(t, 0.35); break;
-      case 'parry': case 'reflect': this.ring(t, 1240 + Math.random() * 120, 0.09, 1.6); break;
+      case 'riposte': this.duckT = 0.4; this.ring(t, 1500, 0.06, 1.2); this.noiseHit(t + 0.02, 900, 0.2, 0.2, 'bandpass', 0.7, 200); this.taiko(t, 0.35); break;
+      case 'parry': case 'reflect': this.duckT = 0.4; this.ring(t, 1240 + Math.random() * 120, 0.09, 1.6); break;
       case 'deflect': case 'clash': this.ring(t, 900 + Math.random() * 200, 0.05, 0.6); break;
       case 'guardbreak': this.taiko(t, 0.4, 0.8); this.noiseHit(t, 300, 0.25, 0.2, 'lowpass'); break;
       case 'hurt': this.taiko(t, 0.3, 0.7); this.noiseHit(t, 600, 0.15, 0.12, 'bandpass', 1, 200); break;
@@ -106,11 +164,11 @@ export class Audio {
       case 'phase2': this.taiko(t, 0.6, 0.75); this.ring(t + 0.1, 700, 0.05, 1.5); break;
       case 'standoff': this.taiko(t, 0.3, 0.8); break;
       case 'sodraw': this.ring(t, 1800, 0.06, 0.8); break;
-      case 'socut': this.ring(t, 1350, 0.12, 2.2); this.noiseHit(t, 2000, 0.3, 0.12, 'bandpass', 0.6, 300); break;
+      case 'socut': this.duckT = 0.6; this.ring(t, 1350, 0.12, 2.2); this.noiseHit(t, 2000, 0.3, 0.12, 'bandpass', 0.6, 300); break;
       case 'sofail': this.taiko(t, 0.35, 0.7); break;
       case 'sowon': this.pluck(SCALE[0], t + 0.4, 0.12); this.pluck(SCALE[2], t + 0.6, 0.1); break;
       case 'death': this.taiko(t, 0.5, 0.6); this.pluck(SCALE[1], t + 0.3, 0.12); this.pluck(SCALE[0] / 2, t + 0.5, 0.12); break;
-      case 'chapter': this.nextPhrase = 2.5; break;
+      case 'chapter': this.pending = 'calm'; this.mState = 'restart'; break;
       case 'shoot': this.noiseHit(t, 2400, 0.08, 0.05, 'bandpass', 2, 800); break;
       case 'heal': this.pluck(SCALE[3], t, 0.09); this.pluck(SCALE[5], t + 0.15, 0.08); break;
       case 'counter': this.ring(t, 1700, 0.07, 1.0); break;
@@ -122,20 +180,13 @@ export class Audio {
     const standoff = s.phase === 'standoff' && s.so && s.so.st !== 'walk';
     const quiet = standoff ? 0.08 : s.phase === 'haiku' ? 0.6 : s.phase === 'dead' ? 0.3 : 1;
     this.duck += (quiet - this.duck) * Math.min(1, dt * (standoff ? 3 : 1));
-    const w = Math.abs(s.wind.w), gust = s.wind.gust || 0;
+    const w = Math.abs(s.wind.w), gust = Math.max(s.wind.gust || 0, (this.extGust || 0) * 0.8); // the wind sound swells with each visible gust
     this.w1.gn.gain.setTargetAtTime((0.025 + w * 0.06 + gust * 0.05) * this.duck, t, 0.3); this.w1.b.frequency.setTargetAtTime(320 + w * 500 + gust * 400, t, 0.4);
     this.w2.gn.gain.setTargetAtTime((0.004 + gust * 0.018 + Math.max(0, w - 0.6) * 0.012) * this.duck, t, 0.3); this.w2.b.frequency.setTargetAtTime(1500 + w * 900 + Math.sin(this.t * 0.7) * 200, t, 0.5);
-    this.music.gain.setTargetAtTime(this.vol.music * 0.8 * (standoff ? 0.05 : 1), t, standoff ? 0.15 : 0.8);
-    // sparse flute phrases on the in scale
-    this.nextPhrase -= dt;
-    if (this.nextPhrase <= 0 && !standoff && s.phase !== 'dead') {
-      const n = 2 + ((Math.random() * 3) | 0); let when = t + 0.1, k = 2 + ((Math.random() * 3) | 0);
-      for (let i = 0; i < n; i++) { const dur = 0.7 + Math.random() * 1.6; this.flute(SCALE[k], when, dur, 0.04); when += dur + 0.1 + Math.random() * 0.4; k = Math.max(0, Math.min(SCALE.length - 1, k + [-2, -1, -1, 1, 1, 2][(Math.random() * 6) | 0])); }
-      if (Math.random() < 0.5) this.pluck(SCALE[0] / 2, t + 0.05, 0.08);
-      this.nextPhrase = 9 + Math.random() * 12 + (when - t);
-    }
-    // duel drums under boss fights; a slow heartbeat while holding a standoff
-    if (s.arena && s.arena.boss && s.phase === 'play') { this.drumT -= dt; if (this.drumT <= 0) { this.taiko(t + 0.02, 0.16, 0.9); this.taiko(t + 0.42, 0.1, 0.9); this.drumT = 1.7; } }
-    if (standoff && s.so.st === 'hold') { this.beat = (this.beat || 0) - dt; if (this.beat <= 0) { this.taiko(t, 0.08, 0.55); this.taiko(t + 0.22, 0.05, 0.55); this.beat = 1.15; } }
+    this.music.gain.setTargetAtTime(this.vol.music * 0.8, t, 0.3);
+    // the score: one theme, the chapter's arrangement, the state of the game; ducked under narration
+    this.scoreTick(CHAPTERS[s.ch].key, screen === 'title' ? 'calm' : this.musicState(s), 0.3);
+    const duck = s.phase === 'narr' ? 0.6 : this.duckT > 0 ? 0.65 : 1; if (this.duckT > 0) this.duckT -= dt;
+    this.duckG.gain.setTargetAtTime(duck, t, 0.08);
   }
 }
