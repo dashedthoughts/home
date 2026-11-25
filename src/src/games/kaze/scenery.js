@@ -598,11 +598,25 @@ export const REDP = {
   castle: { top: '#3e0c06', mid: '#9b2a10', hor: '#e0601f', disc: '#f6e0c8', ring: '#eba0b2', ink: '#140604', glow: '#c4481a', ground: '#3a120a', part: '#f4a8b8' },
 };
 export function paintRedSky(W, H, k, key) {
+  // [inkfx grade] the duel sky is a red wash IN the paper: pale where the brush lifted at the top, deepening to the horizon,
+  // uneven blooms, and the sheet's own grain and fibre showing through
   const P = REDP[key], c = makeCanvas(W, H), g = c.getContext('2d'), R = rng(77 + key.length);
-  const gr = g.createLinearGradient(0, 0, 0, H); gr.addColorStop(0, P.top); gr.addColorStop(0.45, P.mid); gr.addColorStop(0.78, P.hor); gr.addColorStop(1, P.mid);
+  const gr = g.createLinearGradient(0, 0, 0, H); gr.addColorStop(0, mix(P.hor, '#e8cfc0', 0.35)); gr.addColorStop(0.35, P.hor); gr.addColorStop(0.62, P.mid); gr.addColorStop(0.82, P.top); gr.addColorStop(1, P.mid);
   g.fillStyle = gr; g.fillRect(0, 0, W, H);
-  // the wash is uneven: darker ink bleeds up from the horizon in soft blooms, paler pools where the brush lifted
-  for (let i = 0; i < 26; i++) { const x = R() * W, y = H * (0.35 + R() * 0.5), r = Math.max(W, H) * (0.05 + R() * 0.14); const rg = g.createRadialGradient(x, y, 0, x, y, r); const dark = R() < 0.6; rg.addColorStop(0, dark ? 'rgba(20,4,3,0.22)' : 'rgba(255,220,190,0.12)'); rg.addColorStop(1, 'rgba(0,0,0,0)'); g.fillStyle = rg; g.fillRect(x - r, y - r, r * 2, r * 2); }
-  for (let i = 0; i < 7; i++) { const y = H * (0.5 + R() * 0.35), x = R() * W * 0.7, L = W * (0.2 + R() * 0.4); stroke(g, [[x, y, 0.2], [x + L * 0.5, y - 3 * k, 1], [x + L, y + 2 * k, 0.2]], { w: (6 + R() * 10) * k, alpha: 0.18, dry: 0.8, seed: Math.floor(R() * 1e6), color: '#1a0504', taper: [0.3, 0.4], bristles: 16 }); }
+  for (let i = 0; i < 30; i++) { const x = R() * W, y = H * (0.15 + R() * 0.7), r = Math.max(W, H) * (0.05 + R() * 0.13); const rg = g.createRadialGradient(x, y, 0, x, y, r); const dark = R() < 0.55; rg.addColorStop(0, dark ? 'rgba(30,6,4,0.2)' : 'rgba(255,225,205,0.16)'); rg.addColorStop(0.8, dark ? 'rgba(30,6,4,0.08)' : 'rgba(255,225,205,0.05)'); rg.addColorStop(1, 'rgba(0,0,0,0)'); g.fillStyle = rg; g.fillRect(x - r, y - r, r * 2, r * 2); }
+  for (let i = 0; i < 7; i++) { const y = H * (0.5 + R() * 0.35), x = R() * W * 0.7, L = W * (0.2 + R() * 0.4); stroke(g, [[x, y, 0.2], [x + L * 0.5, y - 3 * k, 1], [x + L, y + 2 * k, 0.2]], { w: (6 + R() * 10) * k, alpha: 0.16, dry: 0.8, seed: Math.floor(R() * 1e6), color: '#1a0605' }); }
+  // the paper: grain multiplied in, and fibres
+  const tex = makePaperTex(W, H, 31 + key.length); g.globalCompositeOperation = 'multiply'; g.globalAlpha = 0.9; g.drawImage(tex, 0, 0); g.globalCompositeOperation = 'source-over'; g.globalAlpha = 1;
+  fibres(g, R, W, H, k);
   return c;
+}
+function makePaperTex(W, H, seed) {
+  // the sheet's mottle and speckle on white, for multiplying into a coloured wash
+  const R = rng(seed), c = makeCanvas(W, H), g = c.getContext('2d'); g.fillStyle = '#ffffff'; g.fillRect(0, 0, W, H);
+  for (const [cell, a] of [[Math.max(W, H) / 9, 0.1], [Math.max(W, H) / 40, 0.08], [Math.max(W, H) / 160, 0.07]]) {
+    const cw = Math.ceil(W / cell) + 2, ch = Math.ceil(H / cell) + 2, m = makeCanvas(cw, ch), mg = m.getContext('2d'), id = mg.createImageData(cw, ch);
+    for (let i = 0; i < cw * ch; i++) { const v = R(); id.data[i * 4] = id.data[i * 4 + 1] = id.data[i * 4 + 2] = v > 0.5 ? 255 : 90; id.data[i * 4 + 3] = Math.abs(v - 0.5) * 2 * 255; }
+    mg.putImageData(id, 0, 0); g.globalAlpha = a; g.imageSmoothingEnabled = true; g.drawImage(m, -cell, -cell, cw * cell, ch * cell);
+  }
+  g.globalAlpha = 1; return c;
 }

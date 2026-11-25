@@ -69,6 +69,7 @@ export const COMBAT = {
   // before the window opens or after it closes still wins; the first standoff runs its clock at drawTeachSlow from the tell
   drawTell: 0.42, drawGrace: 0.08, drawTeachSlow: 0.4,
   parryEarly: 0.1, parryHold: 0.32, parrySpam: 0.25,
+  space: 112, bodyMin: 64, // hips apart: where a foe holds at rest, and the closest anyone gets (a roll passes under)
   reachIn: 30, // a melee foe starts his windup from this far outside his reach (he closes it while winding)
   counterHit: 1.34, // a boss's blow that lands while the ronin is mid-swing (he cut into the glint) deals this many times its damage
   // pace: recovery after a strike (x the attack's rec) and the pause before the next one (x a 0.4..1.3 s roll), [phase 1, phase 2]

@@ -355,6 +355,30 @@ console.log('11. combat honesty');
   console.log(`  ${n} cuts on unready foes all landed; ${blocks} guard types block with a clash and counter; meters break in <= 4 quick / 2 heavy; ${clashes} blocks in play, all from a raised guard`);
 }
 
+// ---- 11b. spacing and hints: nobody stands inside anybody, foes hold a body and a half at rest, hints end with their moment ----
+{
+  let closest = 1e9, rest = [], stale = 0, hints = 0;
+  for (const [kind, seed, ch] of [['learner', 1, 0], ['competent', 2, 0], ['learner', 3, 1], ['masher', 4, 0], ['competent', 5, 2]]) {
+    const s = createSim({ seed, difficulty: 'blade', chapter: ch }); const m = makePersona(kind, seed);
+    for (let i = 0; i < 60 * 60 * 3; i++) {
+      step(s, personaInput(s, m)); s.cues.length = 0;
+      for (const f of s.foes) { if (f.st === 'dead' || f.st === 'enter' || s.p.st === 'dodge') continue; const d = Math.abs(f.x - s.p.x); closest = Math.min(closest, d); if (f.st === 'ready' && f.type !== 'archer' && (s.p.st === 'idle' || s.p.st === 'move')) rest.push(d); }
+      const h = s.hint; if (h && h.src != null) { hints++; const f = s.foes.find((q) => q.id === h.src); if (!f || f.st === 'dead' || (h.id === 'riposte' && f.st !== 'opened') || ((h.id === 'parry' || h.id === 'dodge') && f.st !== 'wind' && f.st !== 'act')) stale++; }
+    }
+  }
+  rest.sort((a, b) => a - b); const med = rest[rest.length >> 1];
+  ok(closest >= COMBAT.bodyMin - 1, `nobody closer than ${COMBAT.bodyMin}px hip to hip outside a roll (closest ${closest.toFixed(0)})`);
+  ok(med >= 100, `at rest a foe holds about a body and a half away (median ${med.toFixed(0)}px)`);
+  ok(stale === 0, `${stale} frames of a fight hint outliving its moment`);
+  // the riposte hint goes the moment the opened foe dies
+  { const s = createSim({ seed: 1, difficulty: 'blade', chapter: 0 }); const e = s.ev.find((q) => q.t === 'fight'); for (const q of s.ev) if (q !== e) q.done = true; s.p.x = s.p.ox = e.x - 80; step(s, blankInput());
+    const f = s.foes[0]; f.st = 'ready'; f.x = s.p.x + 100; f.face = -1; f.engaged = true; f.atk = 'cut'; f.st = 'wind'; f.windT = 0.6; f.stt = 0; s.token = f.id;
+    for (let i = 0; i < 40; i++) { const I = blankInput(); I.parry = i === 30; step(s, I); s.cues.length = 0; }
+    const had = s.hint && s.hint.id === 'riposte'; for (let i = 0; i < 30 && f.st !== 'dead'; i++) { const I = blankInput(); I.slash = i === 2; step(s, I); s.cues.length = 0; }
+    ok(had && f.st === 'dead' && !(s.hint && s.hint.id === 'riposte'), `"Strike now" shown on the parry (${had}) and gone when he dies (${s.hint && s.hint.id})`); }
+  console.log(`  closest ${closest.toFixed(0)}px, rest median ${med.toFixed(0)}px; ${hints} hint frames checked, none stale`);
+}
+
 // ---- 12. parry: the window opens at the press, a little early counts, a tap holds, a held guard never swallows a press,
 // and the result is the same at 60, 30 and 20 fps (input is sampled once per frame; a tap is latched for one sim step) ----
 console.log('12. parry timing');

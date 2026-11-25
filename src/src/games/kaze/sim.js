@@ -75,11 +75,16 @@ export function step(s, I) {
     case 'credits': if (s.pt > 26 || (s.pt > 1.5 && pressed(s, I, 'confirm'))) { s.phase = 'fin'; s.pt = 0; s.done = true; s.lethalUnlocked = true; } break;
     case 'fin': break;
   }
+  // a fight hint about a foe who is gone (dead, or the fight reset by a death) goes with him
+  if (s.hint && s.hint.src != null && !s.foes.some((f) => f.id === s.hint.src && f.st !== 'dead')) s.hint = null;
   updateParticlesLogic(s);
   Object.assign(s.prev, I);
 }
 
-function hint(s, id) { if (s.hintsSeen[id]) return; s.hintsSeen[id] = 1; s.hint = { id, t: 0 }; }
+function hint(s, id, src) { if (s.hintsSeen[id]) return; s.hintsSeen[id] = 1; s.hint = { id, t: 0, src: src ?? null }; }
+// a fight hint is about one foe's moment: it goes when that moment does (his attack resolves, his opening closes, he dies)
+const HINT_ENDS = { parry: (st) => st !== 'wind' && st !== 'act', dodge: (st) => st !== 'wind' && st !== 'act', jump: (st) => st !== 'wind' && st !== 'act', riposte: (st) => st !== 'opened', heavy: (st) => st === 'dead' };
+function hintFoeState(s, f, st) { const h = s.hint; if (h && h.src === f.id && HINT_ENDS[h.id] && HINT_ENDS[h.id](st)) s.hint = null; }
 
 function updateWind(s, I) {
   const W = s.wind, C = CHAPTERS[s.ch];
@@ -262,8 +267,13 @@ function updatePlayer(s, I) {
   p.x = Math.max(lo, Math.min(hi, p.x + p.vx * DT));
   // foes are solid: no walking through bodies (dodging through is allowed: the roll goes under)
   if (p.st !== 'dodge') for (const f of s.foes) {
-    if (f.st === 'dead' || f.st === 'enter') continue; const m = (f.w + 26) / 2, dx = p.x - f.x;
-    if (Math.abs(dx) < m) { p.x = f.x + (dx >= 0 ? m : -m); p.x = Math.max(lo, Math.min(hi, p.x)); }
+    if (f.st === 'dead' || f.st === 'enter') continue;
+    // walking up to a foe who is squared up, the ronin stops at the measure (a body and a half); only a strike, or a foe
+    // who is reeling or open, lets him close to bodyMin
+    const measure = (p.st === 'idle' || p.st === 'move') && (f.st === 'ready' || f.st === 'approach' || f.st === 'block' || f.st === 'wind') && f.type !== 'archer';
+    const m = measure ? COMBAT.space - 8 : COMBAT.bodyMin, dx = p.x - f.x;
+    // out of a roll that ended inside him, he is eased out rather than snapped
+    if (Math.abs(dx) < m) { const to = f.x + (dx >= 0 ? m : -m); p.x += Math.sign(to - p.x) * Math.min(Math.abs(to - p.x), 8); p.x = Math.max(lo, Math.min(hi, p.x)); }
   }
   if ((p.st === 'move') && Math.abs(p.vx) > 40) { p.stepAcc = (p.stepAcc || 0) + Math.abs(p.vx) * DT; if (p.stepAcc > 58) { p.stepAcc = 0; cue(s, 'step', { x: p.x, run: Math.abs(p.vx) > 200 }); } }
   if (p.st === 'idle' && !s.arena) s.idle += DT; else s.idle = 0;
@@ -345,7 +355,7 @@ function hurtFoe(s, f, kind) {
     if (f.gm >= max - 1e-6) {
       f.gm = 0; f.guard = 0; f.shield = 0; s.stats.guardBreaks++;
       cue(s, 'guardbreak', { x: f.x, id: f.id, boss: f.boss });
-      setF(s, f, 'opened'); f.openT = f.boss ? C.openBrokenBoss : C.openBroken; f.kb = away * 120; hint(s, 'riposte');
+      setF(s, f, 'opened'); f.openT = f.boss ? C.openBrokenBoss : C.openBroken; f.kb = away * 120; hint(s, 'riposte', f.id);
       return;
     }
     s.stats.blocks++; if (!(f.guard >= 1)) s.stats.blindBlocks++;
@@ -353,7 +363,7 @@ function hurtFoe(s, f, kind) {
     setF(s, f, 'block'); f.guard = 1; f.kb = away * 90;
     // both recoil: the ronin is thrown back and cannot cut again at once; the foe answers (his counter is telegraphed as usual)
     p.recoil = C.recoil; p.vx = -p.face * 170; p.buf = null;
-    if (f.shield || F.shield) hint(s, 'heavy');
+    if (f.shield || F.shield) hint(s, 'heavy', f.id);
     return;
   }
   // 4. it lands. Every landed hit costs him health, shows the cut, and moves him.
@@ -387,6 +397,7 @@ function killFoe(s, f, how) {
 }
 function setF(s, f, st) {
   if (s.token === f.id && st !== 'act' && st !== 'wind') { s.token = 0; s.tokenCD = 0.35 / D(s).aggr; }
+  hintFoeState(s, f, st);
   f.st = st; f.stt = 0; f.hitDone = false; f.openT = 0; if (st !== 'wind' && st !== 'act' && st !== 'rec') f.feinting = false;
 }
 
@@ -415,21 +426,22 @@ function updateFoe(s, f) {
       // he turns to face the ronin, but not instantly: a foe the ronin rolled past is turned away for a moment
       const toP = dx >= 0 ? 1 : -1;
       if (toP !== f.face) { f.turnT += DT; if (f.turnT >= 0.2 || dist > 160) { f.face = toP; f.turnT = 0; f.guard = 0; } } else f.turnT = 0;
-      const keep = F.keep;
+      const keep = F.keep, hold = Math.max(COMBAT.space, F.range * 0.7);
       let want = 0;
       if (keep) { if (dist < keep[0]) want = -1; else if (dist > keep[1]) want = 1; }
-      else if (dist > F.range * 0.85) want = 1; else if (dist < F.range * 0.45) want = -0.6;
+      // he holds a body and a half away (COMBAT.space) and steps back if crowded; his strikes cover the gap
+      else if (dist > hold + 8) want = 1; else if (dist < hold - 14) want = -0.6;
       // in a group, the ones without the token hang back a little
       if (s.token && s.token !== f.id && !keep && dist < F.range * 1.5) want = -0.4;
       // inside his own striking distance he closes with a short guarded shuffle; from further out he walks in, guard down
-      const shuffle = want > 0 && !keep && dist <= F.range + 12;
+      const shuffle = want > 0 && !keep && dist <= hold + 40;
       mv = want * F.speed * f.face * (keep && want < 0 ? 1.1 : shuffle ? 0.45 : 1);
       // walking in he is 'approach' (no guard); standing, shuffling or giving ground he is 'ready' and his guard comes up
       f.st = want > 0 && !shuffle ? 'approach' : 'ready';
       if (f.st === 'ready' && f.turnT === 0 && foeGuardMax(f) > 0) { const was = f.guard; f.guard = Math.min(1, f.guard + DT / (F.settle || 0.3)); if (was < 1 && f.guard >= 1) cue(s, 'guardup', { x: f.x, id: f.id }); }
       else f.guard = 0;
       f.readyT -= DT * d.aggr;
-      const inRange = keep ? dist < 640 : dist <= F.range + COMBAT.reachIn; // he steps in during the windup to close the rest
+      const inRange = keep ? dist < 640 : dist <= Math.max(F.range, hold) + COMBAT.reachIn; // he steps in during the windup to close the rest
       if (f.readyT <= 0 && inRange && !s.token && s.tokenCD <= 0 && p.st !== 'dead' && s.phase === 'play') {
         const list = f.boss ? (f.phase === 2 ? F.p2 : F.p1) : F.moves;
         f.atk = pick(s, f.boss && (p.turtle || 0) >= 2 ? list.map((m) => [m[0], m[1] * (ATK[m[0]].red ? 4 : 1)]) : list);
@@ -438,8 +450,8 @@ function updateFoe(s, f) {
         f.feinting = rnd(s) < fe * d.feint; f.feintT = 0.18 + rnd(s) * 0.14;
         s.token = f.id; setF(s, f, 'wind'); f.windT = windupOf(s, f.atk); f.engaged = true; f.guard = 0;
         cue(s, 'tell', { x: f.x, id: f.id, red: !!ATK[f.atk].red, feint: f.feinting });
-        if (s.ch === 0) hint(s, ATK[f.atk].red ? 'dodge' : 'parry'); else if (ATK[f.atk].red) hint(s, 'dodge');
-        if (ATK[f.atk].low) hint(s, 'jump');
+        if (s.ch === 0) hint(s, ATK[f.atk].red ? 'dodge' : 'parry', f.id); else if (ATK[f.atk].red) hint(s, 'dodge', f.id);
+        if (ATK[f.atk].low) hint(s, 'jump', f.id);
       }
       break;
     }
@@ -447,7 +459,8 @@ function updateFoe(s, f) {
       f.face = dx >= 0 ? 1 : -1;
       if (f.feinting && f.stt >= f.feintT) { f.feinting = false; cue(s, 'feint', { x: f.x, id: f.id }); setF(s, f, 'ready'); f.readyT = 0.25 + rnd(s) * 0.3; if (s.token === f.id) { s.token = 0; s.tokenCD = 0.1; } break; }
       // close a little while winding, if far
-      if (!A.arrow && dist > A.reach * 0.9) mv = f.face * F.speed * 0.5;
+      // he steps in through the windup to bring the blow into reach (a lunge to cover the gap he keeps at rest)
+      if (!A.arrow && dist > A.reach * 0.85) mv = f.face * Math.max(F.speed * 0.5, (dist - A.reach * 0.8) / Math.max(0.12, f.windT - f.stt));
       if (f.stt >= f.windT) {
         const tele = f.stt; const k = f.atk; s.stats.tele[k] = Math.min(s.stats.tele[k] ?? 9, tele); s.stats.teleMin = Math.min(s.stats.teleMin, tele);
         if (tele < d.react - 1e-6) s.stats.teleViol++;
@@ -499,7 +512,8 @@ function updateFoe(s, f) {
     if (g === f || g.st === 'dead' || g.st === 'enter') continue; const m = (f.w + g.w) / 2 - 4, ddx = f.x - g.x;
     if (Math.abs(ddx) < m) f.x = g.x + (ddx >= 0 ? m : -m);
   }
-  if (f.st !== 'dead' && f.st !== 'enter') { const m = (f.w + 26) / 2; if (Math.abs(f.x - p.x) < m && p.st !== 'dodge') f.x = p.x + (f.x >= p.x ? m : -m); }
+  // a striking or lunging foe stops short of the ronin's hip (bodyMin), never through him
+  if (f.st !== 'dead' && f.st !== 'enter') { const m = COMBAT.bodyMin; if (Math.abs(f.x - p.x) < m && p.st !== 'dodge') f.x = p.x + (f.x >= p.x ? m : -m); }
 }
 
 function strikePlayer(s, f, A, cont) {
@@ -515,7 +529,7 @@ function strikePlayer(s, f, A, cont) {
     if (parryLive(s)) {
       p.parryOk = false; p.turtle = 0; s.stats.parries++; setF(s, f, 'opened'); cue(s, 'parry', { x: (p.x + f.x) / 2, id: f.id }); s.slow = 0.18;
       p.resF += 0.5; if (p.resF >= 1) { p.resF -= 1; p.res = Math.min(s.resMax, p.res + 1); }
-      hint(s, 'riposte'); if (s.token === f.id) { s.token = 0; s.tokenCD = 0.6; }
+      hint(s, 'riposte', f.id); if (s.token === f.id) { s.token = 0; s.tokenCD = 0.6; }
       return;
     }
     p.parryOk = false; p.gp = (p.gp || 0) + (f.boss ? 1.5 : 1); p.turtle = (p.turtle || 0) + 1;

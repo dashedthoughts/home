@@ -9,7 +9,7 @@ import { hakamaTargets, hakamaPolys, stepChain, hull, soften, insideConvex } fro
 
 const E = { out: (t) => 1 - (1 - t) * (1 - t), inout: (t) => (t < 0.5 ? 2 * t * t : 1 - 2 * (1 - t) * (1 - t)), back: (t) => 1 + 2.2 * Math.pow(t - 1, 3) + 1.2 * Math.pow(t - 1, 2) };
 // a pose: hip offset, lean, head tilt, feet, grip (relative to hip), sword angle (0 = forward, -PI/2 = up)
-const mk = (o) => Object.assign({ hx: 0, hy: -49, lean: 0.06, head: 0, ff: [12, 0], fb: [-14, 0], grip: [16, -52], sw: -0.75, kneel: 0, roll: 0, sheath: 0, open: 0 }, o);
+const mk = (o) => Object.assign({ hx: 0, hy: -49, lean: 0.06, head: 0, ff: [12, 0], fb: [-14, 0], grip: [16, -52], sw: -0.75, kneel: 0, roll: 0, sheath: 0, open: 0, hand: [9, -4], handK: 0 }, o);
 export const POSE = {
   stand: mk({ grip: [8, -50], sw: 0.9, sheath: 1, ff: [6, 0], fb: [-8, 0], hy: -51, lean: 0.03 }),
   guard: mk({ grip: [20, -58], sw: -0.62, lean: 0.14, head: 0.1, ff: [18, 0], fb: [-24, 0], hy: -46 }),
@@ -27,7 +27,7 @@ export const POSE = {
   bow: mk({ grip: [8, -50], sw: 0.9, sheath: 1, lean: 0.95, head: 0.3, ff: [6, 0], fb: [-6, 0], hy: -49 }),
   sit: mk({ grip: [10, -24], sw: 0.9, sheath: 1, lean: 0.05, hy: -24, kneel: 1, ff: [-14, 0], fb: [-14, 0] }),
   kneel: mk({ grip: [24, -6], sw: 0.0, sheath: 0, lean: 0.25, head: 0.35, hy: -24, kneel: 1, ff: [-14, 0], fb: [-14, 0] }),
-  focus: mk({ grip: [9, -41], sw: 0.95, sheath: 1, lean: 0.44, hx: -8, ff: [16, 0], fb: [-44, 0], hy: -35, head: -0.36 }),
+  focus: mk({ grip: [9, -38], sw: 0.95, sheath: 1, lean: 0.28, hx: -12, ff: [14, 0], fb: [-30, 0], hy: -30, head: -0.2 }),
   iai: mk({ grip: [50, -60], sw: 0.04, lean: 0.26, head: -0.15, ff: [42, 0], fb: [-40, -3], hy: -35 }),
   heal: mk({ grip: [10, -40], sw: 0.9, sheath: 1, lean: 0.25, hy: -30, head: 0.35, kneel: 1, ff: [-10, 0], fb: [-14, 0] }),
   dead: mk({ grip: [10, -8], sw: 0.1, lean: -1.45, head: -0.3, hy: -12, ff: [24, 0], fb: [18, 0] }),
@@ -43,6 +43,7 @@ export const POSE = {
   // shield brute
   bashw: mk({ grip: [-8, -64], sw: -2.35, lean: 0.06, ff: [16, 0], fb: [-18, 0], hy: -47 }), basha: mk({ grip: [8, -56], sw: -1.0, lean: 0.4, ff: [30, 0], fb: [-24, 0], hy: -42 }),
 };
+function X0(o) { return mk(o); }
 const POSEK = Object.keys(POSE[`guard`]);
 export function lerpPose(a, b, t, out = {}, snapFlags) {
   for (const k of POSEK) {
@@ -64,6 +65,7 @@ const ATKPOSE = {
   thrust: ['thw', 'tha'], dthrust: ['thw', 'tha'], lunge: ['thw', 'tha'], rthrust: ['thw', 'tha'], sweep: ['swpw', 'swpa'], overhead: ['hw', 'ha'],
   shoot: ['boww', 'boww'], bash: ['bashw', 'basha'],
 };
+const ATKALT = { cut: ['r1w', 'r1a'], combo: ['h1w', 'h1a'], cut2: ['dgw', 'dga'], flurry: ['h1w', 'h1a'], flurry2: ['r1w', 'r1a'], flurry3: ['dgw', 'dga'], overhead: ['dgw', 'dga'], thrust: ['tw', 'ta'] };
 const GUARD = { ronin: 'guard', bandit: 'hasso', duelist: 'waki', master: 'iaigoshi', spear: 'thw', archer: 'bowg', brute: 'bashw', gonroku: 'katsugi', shizu: 'jodan', ono: 'thw', hyoe: 'bashw' };
 export const guardPose = (look) => POSE[GUARD[look] || 'guard'];
 
@@ -124,11 +126,24 @@ POSE.jumpFall = X(POSE.guard, { ff: [16, -4], fb: [-14, -2], hy: -48, lean: 0.05
 POSE.rise = X(POSE.guard, { hy: -38, lean: 0.3, ff: [14, 0], fb: [-20, 0] });
 // the dodge is a committed step-slide along the ground: plant, burst, slide low, skid, recover into guard
 POSE.dPlant = mk({ grip: [14, -50], sw: -0.4, lean: -0.08, head: 0.1, ff: [12, 0], fb: [-20, 0], hy: -43 });
-POSE.dBurst = mk({ grip: [24, -40], sw: 0.2, lean: 0.55, head: 0.35, ff: [36, -2], fb: [-34, -3], hy: -31 });
-POSE.dSlide = mk({ grip: [22, -32], sw: 0.35, lean: 0.4, head: 0.3, ff: [34, 0], fb: [-42, -2], hy: -25 });
+POSE.dBurst = mk({ grip: [24, -40], sw: 0.2, lean: 0.55, head: -0.2, ff: [36, -2], fb: [-34, -3], hy: -31 });
+POSE.dSlide = mk({ grip: [22, -32], sw: 0.35, lean: 0.4, head: -0.15, ff: [34, 0], fb: [-42, -2], hy: -25 });
 POSE.dSkid = mk({ grip: [18, -42], sw: -0.3, lean: -0.08, head: 0.05, ff: [26, -1], fb: [-26, 0], hy: -34 });
 POSE.dBack1 = mk({ grip: [16, -54], sw: -0.6, lean: -0.3, head: -0.1, ff: [18, -3], fb: [-28, 0], hy: -36 });
 POSE.dBack2 = mk({ grip: [14, -50], sw: -0.5, lean: -0.15, head: 0, ff: [24, -1], fb: [-30, 0], hy: -30 });
+// ---------- the variant library: several ways to do every frequent action, chosen by context, never twice in a row ----------
+POSE.r1w = mk({ grip: [-6, -30], sw: 2.55, lean: 0.24, head: 0.1, ff: [18, 0], fb: [-24, 0], hy: -42 }); POSE.r1a = mk({ grip: [36, -92], sw: -1.15, lean: -0.06, head: -0.05, ff: [30, 0], fb: [-28, -3], hy: -45 }); // rising
+POSE.h1w = mk({ grip: [-12, -64], sw: 3.05, lean: -0.12, head: 0, ff: [16, 0], fb: [-24, 0], hy: -45 }); POSE.h1a = mk({ grip: [50, -60], sw: 0.05, lean: 0.24, head: 0.12, ff: [36, 0], fb: [-30, -3], hy: -41 }); // horizontal
+POSE.tw = mk({ grip: [-4, -58], sw: 0.02, lean: -0.08, ff: [16, 0], fb: [-24, 0], hy: -45 }); POSE.ta = mk({ grip: [52, -58], sw: 0.0, lean: 0.32, head: 0.15, ff: [42, 0], fb: [-36, -4], hy: -38 }); // two-handed thrust
+POSE.dgw = mk({ grip: [-14, -86], sw: -2.75, lean: -0.18, ff: [16, 0], fb: [-22, 0], hy: -46 }); POSE.dga = mk({ grip: [46, -38], sw: 0.85, lean: 0.3, head: 0.25, ff: [42, 0], fb: [-34, -4], hy: -36 }); // diagonal
+POSE.hilt = X0({ grip: [8, -50], sw: 0.9, sheath: 1, ff: [6, 0], fb: [-8, 0], hy: -51, lean: 0.03, hand: [7, -8], handK: 1 }); // a hand resting on the hilt
+POSE.hat = X0({ grip: [8, -50], sw: 0.9, sheath: 1, ff: [6, 0], fb: [-8, 0], hy: -51, lean: 0.02, head: 0.15, hand: [15, -52], handK: 1 }); // touching the brim
+POSE.glance = X0({ grip: [8, -50], sw: 0.9, sheath: 1, ff: [5, 0], fb: [-9, 0], hy: -51, lean: -0.05, head: -0.3, hand: [7, -8], handK: 1 }); // a look back over the shoulder
+POSE.wary = X0({ grip: [8, -50], sw: 0.9, sheath: 1, lean: 0.12, head: 0.05, hand: [8, -7], handK: 1 }); // walking with the hand on the hilt
+POSE.kneeHit = mk({ grip: [20, -34], sw: 0.3, lean: 0.25, head: -0.1, hy: -27, kneel: 1, ff: [-14, 0], fb: [-14, 0] });
+const VAR = { cut: [['s1w', 's1a'], ['r1w', 'r1a'], ['h1w', 'h1a']], cut1: [['s2w', 's2a'], ['dgw', 'dga'], ['h1w', 'h1a']], cut2: [['s3w', 's3a'], ['h1w', 'h1a'], ['r1w', 'r1a']], heavy: [['hw', 'ha'], ['tw', 'ta'], ['dgw', 'dga']] };
+// pick one of n variants for a slot, never the same as last time; ctx can force a choice
+function pickVar(fig, slot, n, ctx) { const V = fig.vars || (fig.vars = {}); let i = ctx != null ? ctx : Math.floor(((fig.vseed = ((fig.vseed || fig.seed || 7) * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff) * n); if (n > 1 && i === V[slot]) i = (i + 1) % n; V[slot] = i; return i; }
 const DODGE = [[0, POSE.dPlant], [0.05, POSE.dPlant], [0.12, POSE.dBurst, E.out], [0.26, POSE.dSlide], [0.35, POSE.dSkid, E.out], [0.42, POSE.guard]];
 const DODGE_RUN = [[0, POSE.dBurst], [0.16, POSE.dSlide], [0.33, POSE.dSkid, E.out], [0.42, POSE.guard]];
 const DODGE_BACK = [[0, POSE.dPlant], [0.05, POSE.dBack1, E.out], [0.22, POSE.dBack2], [0.34, POSE.dSkid, E.out], [0.42, POSE.guard]];
@@ -137,13 +152,19 @@ const DODGE_BACK = [[0, POSE.dPlant], [0.05, POSE.dBack1, E.out], [0.22, POSE.dB
 export function poseFor(fig, e, kind, t, isPlayer, extra) {
   const P = POSE, gname = GUARD[kind] || 'guard', g = P[gname], T = fig.target, st = e.st, tt = e.stt;
   if (isPlayer) {
-    const sl = [['s1w', 's1a'], ['s2w', 's2a'], ['s3w', 's3a']], base = e.drawn ? P.guard : P.stand;
+    const base = e.drawn ? P.guard : P.stand, ek = st + (e.combo || 0), entry = ek !== fig.vEntry; fig.vEntry = ek;
+    const V = fig.vars || (fig.vars = {});
     switch (st) {
-      case 'slash': { const [w, ac] = sl[e.combo || 0], A = extra.slash[e.combo || 0]; strike(T, e.combo ? P[sl[e.combo - 1][1]] : base, w, ac, tt, A.wind, A.act, A.rec, P.guard); break; }
-      case 'heavy': case 'counter': { const A = extra[st]; strike(T, P.guard, 'hw', 'ha', tt, A.wind, A.act, A.rec, P.guard); break; }
+      case 'slash': { const c = e.combo || 0, slot = ['cut', 'cut1', 'cut2'][c]; if (entry) { V.prevA = V.lastA; V.cur = pickVar(fig, slot, 3); } const [w, ac] = VAR[slot][V.cur ?? 0], A = extra.slash[c];
+        strike(T, c ? P[V.prevA || 's1a'] : base, w, ac, tt, A.wind, A.act, A.rec, P.guard); V.lastA = ac; break; }
+      case 'heavy': case 'counter': { if (entry) V.hv = pickVar(fig, 'heavy', 3, st === 'counter' ? 0 : null); const [w, ac] = VAR.heavy[V.hv ?? 0], A = extra[st]; strike(T, P.guard, w, ac, tt, A.wind, A.act, A.rec, P.guard); break; }
+      case 'idle': case 'move': if (!e.drawn) { // at rest: still, a hand on the hilt, touching the hat, a glance back; walking calm or wary
+          if (st === 'idle') { const k = Math.floor(tt / 3.2), u = tt / 3.2 - k; if (k !== V.idleK) { V.idleK = k; V.idleV = k === 0 ? 0 : pickVar(fig, 'idle', 4); } const Q = [P.stand, P.hilt, P.hat, P.glance][V.idleV || 0], w = V.idleV === 2 || V.idleV === 3 ? Math.sin(Math.PI * clamp(u * 1.5, 0, 1)) : E.inout(clamp(u * 4, 0, 1)); lerpPose(P.stand, Q, w, T); }
+          else lerpPose(P.stand, extra.wary ? P.wary : P.stand, 1, T); break; }
+        lerpPose(base, base, 0, T); break;
       case 'guard': lerpPose(P.guard, P.parry, E.out(clamp(tt / 0.06, 0, 1)), T); break;
       case 'dodge': { const back = e.dodgeDir != null && e.dodgeDir !== e.face; keys(T, tt, back ? DODGE_BACK : e.fromRun ? DODGE_RUN : DODGE); break; }
-      case 'hit': if ((extra.hitDmg || 1) > 1) keys(T, tt, [[0, P.guard], [0.05, P.lift, E.out], [0.2, P.catchStep, EI], [0.36, P.guard]]); else keys(T, tt, [[0, P.guard], [0.05, P.snap, E.out], [0.16, P.catchStep], [0.36, P.guard]]); break;
+      case 'hit': if (entry) V.hit = pickVar(fig, 'hit', 2); if ((extra.hitDmg || 1) > 1 && V.hit === 1) keys(T, tt, [[0, P.guard], [0.05, P.snap, E.out], [0.14, P.kneeHit, EI], [0.26, P.kneeHit], [0.36, P.rise]]); else if ((extra.hitDmg || 1) > 1) keys(T, tt, [[0, P.guard], [0.05, P.lift, E.out], [0.2, P.catchStep, EI], [0.36, P.guard]]); else keys(T, tt, [[0, P.guard], [0.05, P.snap, E.out], [0.16, P.catchStep], [0.36, P.guard]]); break;
       case 'bow': lerpPose(P.stand, P.bow, clamp(Math.sin(clamp(tt / 1.2, 0, 1) * Math.PI) * 1.6, 0, 1), T); break;
       case 'sit': lerpPose(P.stand, P.sit, E.inout(clamp(tt / 0.6, 0, 1)), T); break;
       case 'heal': lerpPose(base, P.heal, Math.sin(clamp(tt / 0.75, 0, 1) * Math.PI), T); break;
@@ -153,18 +174,25 @@ export function poseFor(fig, e, kind, t, isPlayer, extra) {
       case 'air': keys(T, tt, [[0, base], [0.12, P.jumpUp, E.out], [0.42, P.jumpUp], [0.62, P.jumpFall, E.inout]]); T.sheath = base.sheath; if (base.sheath) { T.grip = base.grip.slice(); T.sw = base.sw; } break;
       case 'kneel': lerpPose(P.stand, P.kneel, E.inout(clamp(tt / 1.2, 0, 1)), T); break;
       // the ronin's death: a hit, the knees go, a held moment, then a slow fall forward
-      case 'dead': keys(T, tt, [[0, P.guard], [0.08, P.snap, E.out], [0.42, P.knee, E.inout], [0.62, P.knee], [1.0, P.deadFwd, EI]]); break;
+      case 'dead': if (entry) V.death = pickVar(fig, 'death', 3);
+        if (V.death === 1) keys(T, tt, [[0, P.guard], [0.06, P.lift, E.out], [0.3, P.downBack, EI]]); // thrown backward
+        else if (V.death === 2) keys(T, tt, [[0, P.guard], [0.1, P.catchStep, E.out], [0.35, P.fold], [0.7, P.deadFwd, EI]]); // spun round, folding forward
+        else keys(T, tt, [[0, P.guard], [0.08, P.snap, E.out], [0.42, P.knee, E.inout], [0.62, P.knee], [1.0, P.deadFwd, EI]]); break; // to the knees, then forward
       default: lerpPose(base, base, 0, T);
     }
   } else {
-    const A = e.atk ? ATK[e.atk] : null, ap = e.atk ? ATKPOSE[e.atk] : null;
+    const ek = st + (e.atk || ''), entry = ek !== fig.vEntry; fig.vEntry = ek; const V = fig.vars || (fig.vars = {});
+    // each foe has two ways to make every attack, chosen per attack and never twice in a row
+    if (entry && e.atk) V.atk = pickVar(fig, 'atk', 2);
+    const A = e.atk ? ATK[e.atk] : null, ap0 = e.atk ? ATKPOSE[e.atk] : null, ap = ap0 && V.atk === 1 && ATKALT[e.atk] ? ATKALT[e.atk] : ap0;
     switch (st) {
       case 'wind': { const u = E.out(clamp(tt / (e.windT * 0.6), 0, 1)) * (e.feinting ? 0.55 : 1); lerpPose(g, P[ap[0]], u, T); T.hx = lerp(0, -4, u);
         // anticipation: a small dip and lean back as the windup begins, then a held pose before the strike
-        const dip = Math.sin(Math.PI * clamp(tt / (e.windT * 0.4), 0, 1)); T.hy += 5 * dip; T.lean -= 0.14 * dip; break; }
+        const dip = Math.sin(Math.PI * clamp(tt / (e.windT * 0.4), 0, 1)); T.hy += 5 * dip; T.lean -= 0.14 * dip;
+        if (!e.feinting) { const ds = clamp((tt - (e.windT - 0.11)) / 0.11, 0, 1); if (ds > 0) { const Q = lerpPose(T, P[ap[1]], ds * ds * 0.45, {}); lerpPose(Q, Q, 0, T); } } break; }
       case 'act': strike(T, g, ap[0], ap[1], e.windT + tt, e.windT, A.act, A.rec * (extra.rec || 1), g); break;
       case 'rec': strike(T, g, ap[0], ap[1], e.windT + A.act + tt, e.windT, A.act, A.rec * (extra.rec || 1), g); break;
-      case 'stun': keys(T, tt, [[0, g], [0.05, P.snap, E.out], [0.14, P.catchStep], [Math.max(0.2, e.stunT || 0.32), g]]); break;
+      case 'stun': if (entry) V.hit = pickVar(fig, 'hit', 2); if (V.hit) keys(T, tt, [[0, g], [0.05, P.fold, E.out], [0.16, P.fold], [Math.max(0.22, e.stunT || 0.32), g]]); else keys(T, tt, [[0, g], [0.05, P.snap, E.out], [0.14, P.catchStep], [Math.max(0.2, e.stunT || 0.32), g]]); break;
       case 'stagger': {
         const Ts = e.stunT || 0.9, heavyFall = Ts >= 0.85 && kind !== 'brute' && kind !== 'hyoe' && !e.boss;
         if (heavyFall) keys(T, tt, [[0, g], [0.06, P.lift, E.out], [0.3, P.downBack, EI], [Ts - 0.42, P.downBack], [Ts - 0.26, P.knee, E.out], [Ts - 0.1, P.rise], [Ts, g]]);
@@ -176,6 +204,9 @@ export function poseFor(fig, e, kind, t, isPlayer, extra) {
       case 'opened': keys(T, tt, [[0, P.parry], [0.07, P.openedA, E.out], [0.3, P.opened, E.inout], [0.7, P.opened], [1.2, g]]); break;
       case 'shift': lerpPose(P.focus, g, E.inout(clamp((tt - 0.9) / 0.6, 0, 1)), T); break;
       case 'dead': keys(T, tt, [[0, P.snap], [0.4, P.knee, E.inout], [0.8, P.deadFwd, EI]]); break;
+      case 'approach': case 'ready': { // the guard is raised as far as he has raised it (f.guard 0..1); walking in, the weapon rests lower
+        if (entry) V.appr = pickVar(fig, 'appr', 2); const rel = X(g, { grip: [g.grip[0] * 0.5 + (V.appr ? 4 : 10), V.appr ? -46 : -40], sw: V.appr ? 0.35 : 0.75, lean: g.lean * 0.5 + 0.02, hy: g.hy - 2 }), k = e.guard != null ? clamp(e.guard, 0, 1) : st === 'ready' ? 1 : 0.35;
+        lerpPose(rel, g, E.inout(k), T); break; }
       default: lerpPose(g, g, 0, T);
     }
   }
@@ -360,7 +391,7 @@ export function drawFigure(g, x, y, look, pose, fig, o) {
   else if (L.weapon === 'bow') hand2 = [lerp(G[0] - f * 4 * sc, H[0] - f * 2 * sc, o.draw || 0), lerp(G[1], G[1] - 6 * sc, o.draw || 0)];
   else if (L.weapon === 'club') hand2 = null;
   else hand2 = [G[0] - dx * 12 * sc, G[1] - dy * 12 * sc];
-  if (pose.sheath && (L.weapon === 'katana' || L.weapon === 'odachi')) { const swing = o.walkPh != null && !o.running ? Math.sin(o.walkPh) * 6 * sc : 0; hand2 = o.running ? [H[0] + f * 10.5 * sc, H[1] - 4.5 * sc] : [H[0] - nfx * (4 * sc) + f * swing, H[1] + 12 * sc]; }
+  if (pose.sheath && (L.weapon === 'katana' || L.weapon === 'odachi')) { const swing = o.walkPh != null && !o.running ? Math.sin(o.walkPh) * 6 * sc : 0; hand2 = o.running ? [H[0] + f * 10.5 * sc, H[1] - 4.5 * sc] : o.walkPh != null ? [H[0] + f * 7 * sc, H[1] - 6.5 * sc] : [H[0] - nfx * (4 * sc) + f * swing, H[1] + 12 * sc]; }
   if (pose.open) hand2 = [N[0] - f * 28 * sc, N[1] + 6 * sc];
   // the archer's shot (kyudo): the bow raised overhead (uchiokoshi), then lowered while drawing until the string
   // hand is behind the ear at full draw; after the loose the bow turns in the hand
@@ -529,18 +560,18 @@ export function drawFigure(g, x, y, look, pose, fig, o) {
   if (o.running && hand2 && pose.sheath && (L.weapon === 'katana' || L.weapon === 'odachi')) { const hx = hand2[0], hy = hand2[1];
     mo([[hx - 3.4 * sc, hy - 2.4 * sc], [hx + 3 * sc, hy - 3 * sc], [hx + 3.8 * sc, hy + 1.8 * sc], [hx - 0.8 * sc, hy + 3.4 * sc], [hx - 3.8 * sc, hy + 1]], mix(L.skin, '#000000', 0.15), { k: 58, tex: 0.15, lw: 1.3 * sc, strokes: 2 }); }
   // neck: a column that sits down into the collar
-  { const nb = tp(0.98, tw * 0.04), nt = [Hd[0] - f * 0.8 * sc, Hd[1] + 5.5 * sc]; const nx2 = nfx * 3.6 * sc, ny2 = nfy * 3.6 * sc;
+  { const nb = tp(0.98, tw * 0.04), nt = [Hd[0] - f * 0.8 * sc, Hd[1] + 5.5 * sc]; const nx2 = nfx * 4.3 * sc, ny2 = nfy * 4.3 * sc;
     mo([[nb[0] - nx2, nb[1] - ny2], [nb[0] + nx2, nb[1] + ny2], [nt[0] + nx2 * 0.85, nt[1] + ny2 * 0.85], [nt[0] - nx2 * 0.9, nt[1] - ny2 * 0.9]], mix(L.skin, '#000000', 0.12), { k: 100, tex: 0.1, lw: 1.3 * sc, strokes: 2 }); }
   if (L.gourd) { const gx = H[0] - f * 10 * sc - nfx * 0, gy = H[1] + 6 * sc; sweep(g, [[H[0] - f * 6 * sc, H[1] - 2 * sc], [gx, gy - 6 * sc]], 0.9 * sc, INK, A, seed + 180, 2);
     mo([[gx - 2.4 * sc, gy - 6.5 * sc], [gx + 2.4 * sc, gy - 6.5 * sc], [gx + 2.2 * sc, gy - 3.6 * sc], [gx + 4.2 * sc, gy + 0.5 * sc], [gx + 3.4 * sc, gy + 4.4 * sc], [gx, gy + 5.4 * sc], [gx - 3.4 * sc, gy + 4.4 * sc], [gx - 4.2 * sc, gy + 0.5 * sc], [gx - 2.2 * sc, gy - 3.6 * sc]], '#a77a3e', { k: 181, lw: 1.2 * sc, tex: 0.3, strokes: 2 }); }
   // the V collar, left over right: a dark collar band with the pale under-collar line inside it, from the nape round
   // the front of the neck and down across the chest into the obi
   sweep(g, [tp(1.06, -tw * 0.2), tp(1.08, tw * 0.06), tp(0.9, tw * 0.3), tp(0.55, tw * 0.44), tp(0.2, tw * 0.44)], 3.4 * sc, mix(L.kim, PAPER, 0.16), A, seed + 97);
-  sweep(g, [tp(1.09, -tw * 0.12), tp(1.1, tw * 0.1), tp(0.93, tw * 0.24), tp(0.62, tw * 0.36)], 1.7 * sc, PAPER, A * 0.92, seed + 98);
+  sweep(g, [tp(1.09, -tw * 0.12), tp(1.1, tw * 0.1), tp(0.95, tw * 0.22), tp(0.84, tw * 0.28)], 1.7 * sc, PAPER, A * 0.92, seed + 98);
   if (tiedSl && L === LOOKS.ronin) { // the tasuki cord that ties the sleeves back, crossing over the back
     sweep(g, [tp(0.96, -tw * 0.46), tp(0.5, -tw * 0.05), tp(0.14, tw * 0.4)], 1.3 * sc, '#8c7a58', A * 0.9, seed + 175);
     sweep(g, [tp(0.96, tw * 0.3), tp(0.5, -tw * 0.1), tp(0.14, -tw * 0.42)], 1.3 * sc, '#8c7a58', A * 0.9, seed + 176); }
-  { const o0 = tp(0.08, -tw * 0.37), o1 = tp(0.08, tw * 0.39); rib(g, [o0[0], o0[1], o1[0], o1[1]], () => 6.5 * sc, o.sash || L.obi || '#7a7064', A, 0.8); sweep(g, [tp(0.02, -tw * 0.3), [tp(0.02, -tw * 0.3)[0] - f * 5 * sc + cloth * 0.6, tp(0.02, -tw * 0.3)[1] + 10 * sc]], 2.4 * sc, o.sash || L.obi || '#7a7064', A, seed + 98); }
+  { const o0 = tp(0.08, -tw * 0.37), o1 = tp(0.08, tw * 0.39); rib(g, [o0[0], o0[1], o1[0], o1[1]], () => 6.5 * sc, (L.obi || (L === LOOKS.ronin ? '#7a7064' : '#2e2924')), A, 0.8); sweep(g, [tp(0.02, -tw * 0.3), [tp(0.02, -tw * 0.3)[0] - f * 5 * sc + cloth * 0.6, tp(0.02, -tw * 0.3)[1] + 10 * sc]], 2.4 * sc, (L.obi || (L === LOOKS.ronin ? '#7a7064' : '#2e2924')), A, seed + 98); }
   if (L.mino) {
     // the scarecrow's straw raincoat: a ragged cape over the shoulders, all dry straw strokes
     const hem = []; for (let i = 0; i <= 10; i++) { const u = i / 10, bx = lerp(-tw * 0.95, tw * 0.75, u), dy = (i % 2 ? 10 : 20) * sc + Math.sin(i * 2.3) * 3 * sc; hem.push([H[0] + nfx * bx + cloth * (1 - u * 0.5), H[1] + dy]); }
@@ -565,7 +596,7 @@ export function drawFigure(g, x, y, look, pose, fig, o) {
     const hcol = L.hat === 'white' ? '#e4ddcf' : '#141210';
     mo([HP(-7.2, 3.5), HP(-7, -4), HP(-2, -9.4), HP(4.5, -7.6), HP(3, -4.5), HP(-1, -4), HP(-2.5, 1), HP(-4, 4.5)], hcol, { k: 104, tex: 0.4, lw: 1.5 * sc });
     if (L.hat === 'chonmage') { mo([HP(-7.2, 3.5), HP(-7.4, -2.5), HP(-4.5, -4), HP(-3, 1), HP(-4, 4.5)], '#141210', { k: 105, tex: 0.3, lw: 1.3 * sc, strokes: 2 }); sweep(g, [HP(-4, -8.6), HP(-0.5, -9.6), HP(3, -9.2)], 2.6 * sc, '#141210', A, seed + 106); }
-    const knot = HP(-3, -10.5);
+    const knot = HP(-2.6, -9.2); // on the crown
     if (L.hat === 'tail') sweep(g, [knot, HP(-9, -8), [knot[0] - f * 14 * sc + cloth * 1.4, knot[1] + 10 * sc], [knot[0] - f * 22 * sc + cloth * 2.2, knot[1] + 22 * sc]], 4.2 * sc, '#141210', A, seed + 105);
     else if (L.hat === 'band') { sweep(g, [knot, HP(-4.5, -13.2), HP(-7.5, -14.6)], 3.6 * sc, '#141210', A, seed + 106); sweep(g, [knot, HP(-6.5, -12.4), HP(-9.5, -12.8)], 2.4 * sc, '#141210', A, seed + 107); }
     else sweep(g, [knot, HP(-3.5, -13), HP(-6.5, -13.6)], 3.2 * sc, hcol, A, seed + 108);
@@ -633,7 +664,9 @@ export function drawFigure(g, x, y, look, pose, fig, o) {
     drawWeapon(g, L, G, dx, dy, f, sc, A, pose, o, seed, H, cloth);
   }
   const pump = o.walkPh != null ? -Math.sin(o.walkPh) : 0;
-  if (!(L.shield)) arm(Sf, pose.sheath && L.weapon !== 'spear' && L.weapon !== 'bow' ? H[0] + f * (10 + pump * (o.running ? 19 : 6)) * sc : G[0], pose.sheath && L.weapon !== 'spear' && L.weapon !== 'bow' ? H[1] - (4 + (o.running ? 8 + pump * 6 : 0)) * sc : G[1], 0, 2);
+  if (!(L.shield)) { const rest = pose.sheath && L.weapon !== 'spear' && L.weapon !== 'bow'; let hx = rest ? H[0] + f * (10 + pump * (o.running ? 19 : 6)) * sc : G[0], hy = rest ? H[1] - (4 + (o.running ? 4 + pump * 7 : 0)) * sc : G[1];
+    if (rest && pose.handK > 0.01 && !o.running) { const k = clamp(pose.handK, 0, 1); hx = lerp(hx, H[0] + f * pose.hand[0] * sc, k); hy = lerp(hy, H[1] + pose.hand[1] * sc, k); } // the hand on the hilt, or at the hat
+    arm(Sf, hx, hy, 0, 2); }
   else if (L.weapon === 'club') arm(Sb, G[0], G[1], 0, 4);
   g.restore(); g.globalAlpha = 1;
   let top = 1e9, bot = -1e9; for (const q of headP) { top = Math.min(top, q[1]); bot = Math.max(bot, q[1]); }

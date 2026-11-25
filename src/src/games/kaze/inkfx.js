@@ -1,7 +1,7 @@
 // KAZE ink effects: ink that lands, pools, drips, rises and dries on the paper.
 // Everything here is pooled (fixed arrays, no per-frame allocation) and drawn with a few cached sprites.
 // Under prefers-reduced-motion the moving parts are cut back to gentle fades.
-import { rng, clamp, makeCanvas, rgba, mix } from './brush.js';
+import { rng, clamp, makeCanvas, rgba, mix, stroke } from './brush.js';
 import { CHAPTERS, groundH } from './data.js';
 import { bloomKit } from './bloom.js';
 import { Petals } from './petals.js';
@@ -28,6 +28,22 @@ function blotSprite(seed, w, h, foot, dense) {
   g.fillStyle = INKW;
   for (let i = 0; i < 9; i++) { const a = R() * 6.2832, d = 0.36 + R() * 0.12; g.globalAlpha = 0.4 + R() * 0.4; g.beginPath(); g.ellipse(w * 0.5 + Math.cos(a) * w * d, h * 0.5 + Math.sin(a) * h * d * 0.9, 0.6 + R() * 1.6, 0.4 + R() * 0.8, 0, 0, 6.2832); g.fill(); }
   return c;
+}
+// a long tapered streak of thrown ink, painted horizontally (root at the left), drawn rotated along the cut
+function streakSprite(seed) {
+  const sc = 3, w = 120, h = 12, c = makeCanvas(w * sc, h * sc), g = c.getContext('2d'), R = rng(seed);
+  g.setTransform(sc, 0, 0, sc, 0, 0);
+  stroke(g, [[2, h / 2, 1], [40, h / 2 + (R() - 0.5) * 2, 0.7], [85, h / 2 + (R() - 0.5) * 3, 0.35], [118, h / 2 + (R() - 0.5) * 2, 0.05]], { w: 5.5, alpha: 0.95, dry: 0.3, seed, edge: 0.6, taper: [0.02, 0.85], tip: 0.03, color: INKW });
+  return { c, w, h };
+}
+// a parry: a short dry-brush burst fanning one way from the blade crossing (never a circle, never symmetrical)
+function parrySprite(seed) {
+  const sc = 3, w = 70, h = 70, c = makeCanvas(w * sc, h * sc), g = c.getContext('2d'), R = rng(seed);
+  g.setTransform(sc, 0, 0, sc, 10 * sc, 35 * sc);
+  const n = 4 + Math.floor(R() * 2);
+  for (let i = 0; i < n; i++) { const a = -0.7 + (i / (n - 1)) * 1.3 + (R() - 0.5) * 0.25, L = 22 + R() * 30, x1 = Math.cos(a) * L, y1 = Math.sin(a) * L;
+    stroke(g, [[2, 0, 1], [x1 * 0.55, y1 * 0.55 + (R() - 0.5) * 3, 0.7], [x1, y1, 0.1]], { w: 3.4 + R() * 2.4, alpha: 0.9, dry: 0.82, bristles: 7, seed: seed + i, edge: 0, taper: [0.05, 0.8], color: INKW }); }
+  return { c, w, h, ax: 10, ay: 35 };
 }
 function edgeWash(W, H, seed) {
   // the low-health bloom: wet ink creeping in from the edges of the sheet (drawn small, scaled up = soft)
@@ -60,14 +76,16 @@ export class InkFx {
     this.bx = new Float64Array(10); this.nb = 0; // bodies the grass parts around
     this.blots = typeof document === 'undefined' ? [] : [0, 1, 2, 3].map((i) => blotSprite(71 + i * 13, 96, 34));
     this.blotsD = typeof document === 'undefined' ? [] : [0, 1, 2, 3].map((i) => blotSprite(131 + i * 17, 96, 34, false, true));
+    this.streakS = typeof document === 'undefined' ? [] : [0, 1, 2].map((i) => streakSprite(301 + i * 7)); this.parryS = typeof document === 'undefined' ? [] : [0, 1, 2].map((i) => parrySprite(401 + i * 11));
+    this.streaks = Array.from({ length: 12 }, () => ({ on: 0 })); this.sti = 0; this.strands = Array.from({ length: 6 }, () => ({ on: 0 })); this.sri = 0; this.parries = Array.from({ length: 3 }, () => ({ on: 0 })); this.pai = 0; this.sparks = Array.from({ length: 9 }, () => ({ on: 0 })); this.spk = 0;
     this.foot = typeof document === 'undefined' ? null : blotSprite(5, 16, 7, true);
   }
-  reset() { for (const a of [this.stains, this.drops, this.motes, this.pools, this.ink, this.splats]) for (const p of a) p.on = 0; this.seen.clear(); this.dead.clear(); this.inky = 0; this.dripQ = 0; }
+  reset() { for (const a of [this.stains, this.drops, this.motes, this.pools, this.ink, this.splats, this.streaks, this.strands, this.parries, this.sparks]) for (const p of a) p.on = 0; this.seen.clear(); this.dead.clear(); this.inky = 0; this.dripQ = 0; }
   stain(x, y, r, life, foot, face) {
     this.si = (this.si + 1) % (this.capS || N_STAIN); const p = this.stains[this.si];
-    p.on = 1; p.x = x; p.y = y; p.r = r; p.t = 0; p.life = life; p.foot = foot ? 1 : 0; p.face = face || 1; p.v = (Math.random() * 4) | 0; p.flip = Math.random() < 0.5 ? -1 : 1; return p;
+    p.on = 1; p.x = x; p.y = y; p.r = r; p.t = 0; p.life = life; p.sp = 0.25; p.foot = foot ? 1 : 0; p.face = face || 1; p.v = (Math.random() * 4) | 0; p.flip = Math.random() < 0.5 ? -1 : 1; return p;
   }
-  pool(x, y, rise, big) { this.poi = (this.poi + 1) % N_POOL; const p = this.pools[this.poi]; p.on = 1; p.x = x; p.y = y; p.t = 0; p.rise = rise ? 1 : 0; p.big = big ? 1.5 : 1; p.seed = Math.random() * 9; p.life = rise ? 1.6 : 1.6; p.fid = -1; return p; }
+  pool(x, y, rise, big) { this.poi = (this.poi + 1) % N_POOL; const p = this.pools[this.poi]; p.on = 1; p.x = x; p.y = y; p.t = 0; p.rise = rise ? 1 : 0; p.big = big ? 1.5 : 1; p.seed = Math.random() * 9; p.life = rise ? 1.6 : 2.8; p.fid = -1; return p; }
   // moments bloom in the paper behind the action (called from Life.far, behind the near ranges and every figure):
   // the chapter's own pigment at low strength at the side edges of the sky, never over figures, the HUD or the plates
   drawMoments(g, r, dt) {
@@ -82,17 +100,34 @@ export class InkFx {
   moment(col, a, life, corner) { life = Math.min(life, 2.8); this.moi = (this.moi + 1) % this.moments.length; const M = this.moments[this.moi]; M.on = 1; M.t = 0; M.col = col; M.a = a; M.life = life; M.corner = corner; M.i = (Math.random() * 4) | 0; }
   killBloom(x, y, boss) { this.kbi = (this.kbi + 1) % this.kb.length; const B = this.kb[this.kbi]; B.on = 1; B.x = x; B.y = y - 40; B.t = 0; B.r = boss ? 120 : 80; B.i = (Math.random() * 4) | 0; B.rot = Math.random() * 6.28; }
   // the strike: a wet blot at the contact point thrown along the cut, a few fat drops and a fan of fine ones, all landing as stains
-  burst(x, y, dir, pw, red) {
+  // the grade's ink lift: warm umber normally, a dark red-brown as the duel sky floods in (cached strings, no per-frame allocation)
+  liftColor(red) { if (!this.lifts) this.lifts = Array.from({ length: 11 }, (_, i) => mix('#2e2924', '#3d1914', i / 10)); return this.lifts[Math.round(clamp(red, 0, 1) * 10)]; }
+  // the duel disc: a pale bloom with a pooled rim soaking into the red wash, not a hard disc
+  discBloom(g, cx, cy, rad, col, e) {
+    const K = bloomKit(); if (!K) return; g.setTransform(1, 0, 0, 1, 0, 0);
+    K.draw(g, 1, col, cx, cy, rad * 1.18, 0.95 * e, 0.45 * e); K.draw(g, 1, col, cx, cy, rad * 1.02, 0.9 * e, 0); g.globalAlpha = 1;
+  }
+  // the strike: one dominant wet mass at the contact, a few long tapered streaks thrown along the cut, and droplets of
+  // widely varied size (one or two heavy, many fine), all landing as stains. `splash`: a drop hitting the ground (no streaks).
+  burst(x, y, dir, pw, red, splash, life) {
     this.spi = (this.spi + 1) % N_SPLAT; const S = this.splats[this.spi];
-    S.on = 1; S.x = x; S.y = y; S.dir = dir; S.t = 0; S.pw = pw; S.v = (Math.random() * 4) | 0; S.a = dir * (-0.25 + Math.random() * 0.35);
-    const nFat = Math.round((red ? 2 : 3) * pw), nFine = Math.round((red ? 5 : this.lite ? 6 : 11) * pw);
-    for (let i = 0; i < nFat + nFine; i++) {
-      this.ii = (this.ii + 1) % N_INK; const d = this.ink[this.ii], fat = i < nFat;
-      const an = (fat ? -0.35 : -0.55) + (Math.random() - 0.5) * (fat ? 0.6 : 1.3), sp = (fat ? 170 + Math.random() * 220 : 240 + Math.random() * 320) * (0.75 + pw * 0.25);
-      d.on = 1; d.fat = fat ? 1 : 0; d.x = x + dir * Math.random() * 8; d.y = y + (Math.random() - 0.5) * 10; d.vx = dir * Math.cos(an) * sp; d.vy = Math.sin(an) * sp; d.r = fat ? 3.2 + Math.random() * 2.6 * pw : 0.9 + Math.random() * 1.1;
+    S.on = 1; S.x = x; S.y = y; S.dir = dir; S.t = 0; S.pw = splash ? pw * 0.6 : pw; S.v = (Math.random() * 4) | 0; S.a = dir * (-0.25 + Math.random() * 0.35); S.life = life || 0.42;
+    if (!splash) { const ns = red ? 1 : pw > 1.2 ? 4 : 3; for (let k = 0; k < ns; k++) { this.sti = (this.sti + 1) % this.streaks.length; const T = this.streaks[this.sti];
+      T.on = 1; T.x = x + dir * 4; T.y = y + (Math.random() - 0.5) * 12; T.a = (dir > 0 ? 0 : Math.PI) + dir * (-0.32 + Math.random() * 0.5); T.len = (45 + Math.random() * 75) * (0.7 + pw * 0.3) * (k ? 0.75 : 1); T.w = 0.8 + Math.random() * 0.7; T.t = 0; T.v = k % 3; } }
+    const n = Math.round((red ? 5 : this.lite ? 7 : 12) * pw);
+    for (let i = 0; i < n; i++) {
+      this.ii = (this.ii + 1) % N_INK; const d = this.ink[this.ii], q = Math.random();
+      const r = i === 0 ? 4.2 + Math.random() * 2.2 * pw : i < 3 ? 2 + Math.random() * 2 : 0.45 + 2.2 * q * q * q; // a power law: few heavy, many fine
+      const an = splash ? -0.35 - Math.random() * 1.15 : -0.45 + (Math.random() - 0.5) * 1.1, sp = (splash ? 90 + Math.random() * 220 : 150 + Math.random() * 480) * (1 - Math.min(0.55, r / 10)) * (0.75 + pw * 0.25);
+      d.on = 1; d.fat = r > 2 ? 1 : 0; d.x = x + dir * Math.random() * 10; d.y = y + (Math.random() - 0.5) * 12; d.vx = dir * Math.cos(an) * sp; d.vy = Math.sin(an) * sp; d.r = r;
     }
   }
-
+  // after a kill, thin strands of ink hang from the wet mass, sag, and let fall a drip or two
+  strandsAt(x, y) { for (let k = 0; k < 3; k++) { this.sri = (this.sri + 1) % this.strands.length; const T = this.strands[this.sri]; T.on = 1; T.x = x + (k - 1) * (6 + Math.random() * 8); T.y = y + 4 + Math.random() * 6; T.L = 16 + Math.random() * 26; T.t = 0; T.ph = Math.random() * 6; T.dripped = 0; } }
+  parryAt(x, y, dir) {
+    this.pai = (this.pai + 1) % this.parries.length; const P = this.parries[this.pai]; P.on = 1; P.x = x; P.y = y; P.t = 0; P.a = (dir > 0 ? 0 : Math.PI) + (Math.random() - 0.5) * 0.6 - 0.3; P.v = (Math.random() * 3) | 0; P.dir = dir;
+    const n = 2 + (Math.random() < 0.5 ? 1 : 0); for (let k = 0; k < n; k++) { this.spk = (this.spk + 1) % this.sparks.length; const Q = this.sparks[this.spk]; const a = P.a + (Math.random() - 0.5) * 1.4; Q.on = 1; Q.x = x; Q.y = y; Q.vx = Math.cos(a) * (380 + Math.random() * 260); Q.vy = Math.sin(a) * (380 + Math.random() * 260) - 60; Q.t = 0; Q.life = 0.16 + Math.random() * 0.08; }
+  }
 
   // read the frame's cues and the foe list (called before the renderer consumes the cues)
   pre(s, r, dt) {
@@ -115,8 +150,8 @@ export class InkFx {
         case 'hurt': this.burst(s.p.x + s.p.face * 4, -groundH(ch, s.p.x) - 60, -s.p.face, (c.dmg || 1) > 1 ? 1.1 : 0.85, red); break;
         case 'chip': this.burst(s.p.x + s.p.face * 4, -groundH(ch, s.p.x) - 60, -s.p.face, 0.45, red); break;
         case 'death': this.burst(s.p.x, -groundH(ch, s.p.x) - 56, -s.p.face, 1.3, red); this.stain(s.p.x, -groundH(ch, s.p.x), 26, 8); break;
-        case 'kill': if (c.boss) this.moment(CHAPTERS[ch].accent, 0.16, 3.6, 1); this.burst(c.x - s.p.face * 6, -groundH(ch, c.x) - 60, s.p.face, c.boss ? 2 : 1.7, red); if (s.p.drawn !== false) { this.dripQ = red ? 2 : 5; this.dripT = 0.25; } break;
-        case 'parry': case 'reflect': { const C = this.crack; C.t = 0; C.x = c.x; C.y = -groundH(ch, c.x) - 66; C.a = -0.9 + Math.random() * 0.5; C.seed = (Math.random() * 1e4) | 0; break; }
+        case 'kill': if (c.boss) this.moment(CHAPTERS[ch].accent, 0.16, 3.6, 1); this.burst(c.x - s.p.face * 6, -groundH(ch, c.x) - 60, s.p.face, c.boss ? 2 : 1.7, red, false, 1.3); if (!red) this.strandsAt(c.x - s.p.face * 6 + s.p.face * 14, -groundH(ch, c.x) - 60); if (s.p.drawn !== false) { this.dripQ = red ? 2 : 5; this.dripT = 0.25; } break;
+        case 'parry': case 'reflect': { this.parryAt(c.x, -groundH(ch, c.x) - 66, Math.sign(c.x - s.p.x) || s.p.face); const C = this.crack; C.t = 9; C.seed = (Math.random() * 1e4) | 0; break; }
         case 'step': {
           // walked through wet ink? leave a few prints
           let wet = false; for (const p of this.stains) if (p.on && !p.foot && p.t < p.life * 0.45 && Math.abs(p.x - c.x) < p.r * 1.2 + 6) { wet = true; break; }
@@ -137,7 +172,7 @@ export class InkFx {
     for (const f of s.foes) {
       if (!this.seen.has(f.id)) { this.seen.add(f.id); const P = this.pool(f.x, -groundH(ch, f.x), true, !!f.boss); P.fid = f.id; }
       else if (f.st === 'enter') for (const P of this.pools) if (P.on && P.rise && P.fid === f.id) { P.x = f.x; P.y = -groundH(ch, f.x); P.t = Math.min(P.t, 0.5); } // the pool travels with him while he walks up out of it
-      if (f.st === 'dead' && !this.dead.has(f.id)) { this.dead.add(f.id); this.pool(f.x, -groundH(ch, f.x), false, !!f.boss); this.stain(f.x, -groundH(ch, f.x), f.boss ? 34 : 24, 9); }
+      if (f.st === 'dead' && !this.dead.has(f.id)) { this.dead.add(f.id); this.pool(f.x, -groundH(ch, f.x), false, !!f.boss); const st = this.stain(f.x, -groundH(ch, f.x), f.boss ? 36 : 26, 10); st.sp = 2.4; }
     }
     if (this.seen.size > 200) { this.seen.clear(); this.dead.clear(); for (const f of s.foes) { this.seen.add(f.id); if (f.st === 'dead') this.dead.add(f.id); } }
     this.nb = 0; this.bx[this.nb++] = s.p.x; for (const f of s.foes) if (f.st !== 'dead' && this.nb < 10) this.bx[this.nb++] = f.x;
@@ -175,11 +210,13 @@ export class InkFx {
     const red = r.reduced, t = r.time;
     g.globalCompositeOperation = 'source-over';
     // stains and prints dry: dark and glossy while wet, then pale and gone
+    const cx0 = r.v.camX - r.v.W / (2 * r.v.k * r.v.zoom) - 40, cx1 = r.v.camX + r.v.W / (2 * r.v.k * r.v.zoom) + 40; // cull to the view
     for (const p of this.stains) {
       if (!p.on) continue; p.t += dt; if (p.t >= p.life) { p.on = 0; continue; }
-      const k = p.t / p.life, wet = clamp(1 - p.t / 0.9, 0, 1), fade = 1 - clamp((k - 0.55) / 0.45, 0, 1);
+      if (p.x < cx0 || p.x > cx1) continue;
+      const k = p.t / p.life, wet = clamp(1 - p.t / 0.9, 0, 1), fade = 1 - clamp((k - 0.55) / 0.45, 0, 1); if (fade < 0.04) continue;
       if (p.foot) { if (!this.foot) continue; g.globalAlpha = 0.5 * fade * (p.alpha || 1); g.drawImage(this.foot, p.x - 6, p.y - 2.2, 12, 4.4); continue; }
-      const spread = red ? 1 : 0.55 + 0.45 * clamp(p.t / 0.25, 0, 1); // lands and spreads
+      const spread = red ? 1 : (p.sp > 0.5 ? 0.25 + 0.75 * (1 - Math.pow(1 - clamp(p.t / p.sp, 0, 1), 2)) : 0.55 + 0.45 * clamp(p.t / p.sp, 0, 1)); // lands and spreads (a body's pool, slowly)
       const w = p.r * 2 * spread, h = p.r * 0.5 * spread;
       g.globalAlpha = (0.42 + wet * 0.35) * fade; g.drawImage(this.blots[p.v], p.x - w / 2, p.y - h * 0.55, w, h);
     }
@@ -188,8 +225,8 @@ export class InkFx {
     for (const p of this.pools) {
       if (!p.on) continue; p.t += dt; if (p.t >= p.life) { p.on = 0; continue; }
       const k = p.t / p.life, B = p.big;
-      const open = p.rise ? Math.min(1, k * 3) * (1 - clamp((k - 0.7) / 0.3, 0, 1)) : clamp(k * 2.5, 0, 1) * (1 - clamp((k - 0.5) / 0.5, 0, 1));
-      const rw = 44 * B * (p.rise ? 0.75 + k * 0.4 : 0.8 + k * 0.6);
+      const open = p.rise ? Math.min(1, k * 3) * (1 - clamp((k - 0.7) / 0.3, 0, 1)) : clamp(k * 1.6, 0, 1) * (1 - clamp((k - 0.6) / 0.4, 0, 1)); // a body's pool seeps out slowly
+      const rw = 44 * B * (p.rise ? 0.75 + k * 0.4 : 0.35 + 0.9 * (1 - Math.pow(1 - k, 2)));
       g.globalAlpha = 0.9 * open; g.drawImage(this.blotsD[(p.seed | 0) % 4], p.x - rw, p.y - rw * 0.16, rw * 2, rw * 0.32);
       g.globalAlpha = 0.35 * open; g.drawImage(this.blots[((p.seed | 0) + 1) % 4], p.x - rw * 1.35, p.y - rw * 0.2, rw * 2.7, rw * 0.4);
       // tendrils: on a rise they reach up and are drawn into the body; on a sink they slump back down
@@ -235,11 +272,39 @@ export class InkFx {
     const ch = r.ch, red = r.reduced;
     // strike blots: a wet stamp at the contact, spreading for a breath and then lifting off
     for (const S of this.splats) {
-      if (!S.on) continue; S.t += dt; const L = 0.42; if (S.t >= L) { S.on = 0; continue; }
+      if (!S.on) continue; S.t += dt; const L = S.life || 0.42; if (S.t >= L) { S.on = 0; continue; }
       const u = S.t / L, gr = red ? 1 : 0.75 + 0.35 * Math.min(1, u * 4), w = 58 * S.pw * gr, h = 20 * S.pw * gr;
       g.save(); g.translate(S.x + S.dir * w * 0.25, S.y); g.rotate(S.a);
       g.globalAlpha = (u < 0.25 ? 0.95 : 0.95 * (1 - (u - 0.25) / 0.75)) * (red ? 0.7 : 1); g.drawImage(this.blotsD[S.v], -w / 2, -h / 2, w, h); g.drawImage(this.blotsD[(S.v + 1) % 4], -w * 0.3, -h * 0.35, w * 0.6, h * 0.7); g.restore();
     }
+    // streaks: thrown out along the cut in a few frames, then they fade
+    for (const T of this.streaks) {
+      if (!T.on) continue; T.t += dt; if (T.t >= 0.5) { T.on = 0; continue; }
+      const S = this.streakS[T.v]; if (!S) continue; const e = Math.min(1, T.t / 0.07), a = T.t < 0.16 ? 0.95 : 0.95 * (1 - (T.t - 0.16) / 0.34), L = T.len * e, hh = 12 * T.w;
+      g.save(); g.translate(T.x, T.y); g.rotate(T.a); g.globalAlpha = a * (red ? 0.7 : 1); g.drawImage(S.c, 0, 0, S.c.width * e, S.c.height, 0, -hh / 2, L, hh); g.restore();
+    }
+    // strands hang from the wet mass, sag, swing a little, and drip
+    g.strokeStyle = INKW; g.lineCap = 'round';
+    for (const T of this.strands) {
+      if (!T.on) continue; T.t += dt; if (T.t >= 1.3) { T.on = 0; continue; }
+      const grow = Math.min(1, T.t / 0.5), fade = 1 - clamp((T.t - 0.9) / 0.4, 0, 1), L = T.L * grow, sw = Math.sin(T.t * 3 + T.ph) * 4 * grow, tx = T.x + sw, ty = T.y + L;
+      g.globalAlpha = 0.9 * fade; g.lineWidth = 1.6; g.beginPath(); g.moveTo(T.x, T.y); g.quadraticCurveTo(T.x + sw * 0.2, T.y + L * 0.6, tx, ty); g.stroke();
+      const bulb = 1.2 + grow * 1.6; g.fillStyle = INKW; g.beginPath(); g.ellipse(tx, ty + bulb * 0.4, bulb * 0.8, bulb, 0, 0, 6.2832); g.fill();
+      if (!T.dripped && T.t > 0.7 + T.ph * 0.04) { T.dripped = 1; this.di = (this.di + 1) % N_DROP; const d = this.drops[this.di]; d.on = 1; d.x = tx; d.y = ty + bulb; d.vy = 20; d.t = 0; }
+    }
+    // a parry: a short dry-brush burst at the blade crossing and two or three white sparks
+    for (const P of this.parries) {
+      if (!P.on) continue; P.t += dt; if (P.t >= 0.34) { P.on = 0; continue; }
+      const S = this.parryS[P.v]; if (!S) continue; const z = red ? 1 : 0.7 + 0.3 * Math.min(1, P.t / 0.06), a = P.t < 0.1 ? 0.95 : 0.95 * (1 - (P.t - 0.1) / 0.24);
+      g.save(); g.translate(P.x, P.y); g.rotate(P.a); g.scale(z * (P.dir > 0 ? 1 : 1), z); g.globalAlpha = a; g.drawImage(S.c, -S.ax, -S.ay, S.w, S.h); g.restore();
+    }
+    { const paper = CHAPTERS[ch].paper; g.lineCap = 'round';
+      for (const Q of this.sparks) {
+        if (!Q.on) continue; Q.t += dt; if (Q.t >= Q.life) { Q.on = 0; continue; }
+        const x0 = Q.x, y0 = Q.y; Q.x += Q.vx * dt; Q.y += Q.vy * dt; Q.vy += 500 * dt; const a = 1 - Q.t / Q.life, tx = Q.x - Q.vx * 0.03, ty = Q.y - Q.vy * 0.03;
+        g.globalAlpha = 0.5 * a; g.strokeStyle = INKW; g.lineWidth = 2.6; g.beginPath(); g.moveTo(tx + 0.8, ty + 0.8); g.lineTo(Q.x + 0.8, Q.y + 0.8); g.stroke(); // its ink edge
+        g.globalAlpha = a; g.strokeStyle = paper; g.lineWidth = 1.5; g.beginPath(); g.moveTo(tx, ty); g.lineTo(Q.x, Q.y); g.stroke();
+      } }
     g.fillStyle = INKW;
     for (const d of this.ink) {
       if (!d.on) continue; d.vy += 1100 * dt; d.vx *= 1 - dt * 1.5; d.x += d.vx * dt; d.y += d.vy * dt; const gy = -groundH(ch, d.x);
@@ -298,13 +363,12 @@ export class InkFx {
     }
     if (this.low < 0.01) return;
     if (!this.wash || this.washW !== W || this.washH !== H) { this.wash = edgeWash(W, H, 17); this.washW = W; this.washH = H; }
-    const br = r.reduced ? 0 : Math.sin(r.time * 1.6) * 0.012; // a slow wet breath
-    const sc = 1 + 0.06 * (1 - this.low) + br, w = W * sc, h = H * sc;
-    // only the edge strips are drawn (the centre of the wash is empty): four cheap source-over blits, no full-screen blend
-    g.setTransform(1, 0, 0, 1, 0, 0); g.globalAlpha = Math.min(0.6, this.low * 0.55);
-    const iw = this.wash.width, ih = this.wash.height, x0 = (W - w) / 2, y0 = (H - h) / 2, fx = w / iw, fy = h / ih, ty = Math.round(ih * 0.2), lx = Math.round(iw * 0.13);
-    g.drawImage(this.wash, 0, 0, iw, ty, x0, y0, w, ty * fy); g.drawImage(this.wash, 0, ih - ty, iw, ty, x0, y0 + h - ty * fy, w, ty * fy);
-    g.drawImage(this.wash, 0, ty, lx, ih - ty * 2, x0, y0 + ty * fy, lx * fx, h - ty * fy * 2); g.drawImage(this.wash, iw - lx, ty, lx, ih - ty * 2, x0 + w - lx * fx, y0 + ty * fy, lx * fx, h - ty * fy * 2);
+    // the wash is pre-scaled once to the frame (washF), so each frame is four unscaled edge blits; the breath is in the alpha
+    if (!this.washF || this.washF.width !== W || this.washF.height !== H) { this.washF = makeCanvas(W, H); this.washF.getContext('2d').drawImage(this.wash, 0, 0, W, H); }
+    const br = r.reduced ? 0 : Math.sin(r.time * 1.6) * 0.05, F = this.washF, ty = Math.round(H * 0.2), lx = Math.round(W * 0.13);
+    g.setTransform(1, 0, 0, 1, 0, 0); g.globalAlpha = Math.min(0.6, this.low * (0.55 + br));
+    g.drawImage(F, 0, 0, W, ty, 0, 0, W, ty); g.drawImage(F, 0, H - ty, W, ty, 0, H - ty, W, ty);
+    g.drawImage(F, 0, ty, lx, H - 2 * ty, 0, ty, lx, H - 2 * ty); g.drawImage(F, W - lx, ty, lx, H - 2 * ty, W - lx, ty, lx, H - 2 * ty);
     g.globalAlpha = 1;
   }
 }

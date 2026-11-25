@@ -24,7 +24,7 @@ export class Tell {
   constructor() { this.st = 'idle'; this.t = 0; this.usingCues = false; this.ring = { t: 9 }; this.flash = 0; this.flood = 0; this.ten = 0; this.drain = 0; this.beat = 0; this.D = null; this.G = null; this.lastFeint = -9; }
   pre(s, r, fx) {
     const so = s.so, ch = r.ch;
-    const opp = () => so ? [so.oppX - 14, -groundH(ch, so.oppX) - 66] : [s.p.x, -groundH(ch, s.p.x) - 66];
+    const mid = () => { const x = so ? (s.p.x + so.oppX) / 2 : s.p.x; return [x, -groundH(ch, x)]; }, opp = mid; // one event, one place: the drop lands between them and the ring is its splash
     const taken = s.cues.some((c) => c.k === 'socut');
     for (const c of s.cues) {
       const k = c.k;
@@ -41,9 +41,9 @@ export class Tell {
   }
   begin(kind, at, dur) { this.st = kind; this.t = 0; this.dur = Math.max(0.2, dur); this.at = at; }
   open(at, r, fx) {
-    this.st = 'win'; this.t = 0; this.at = at; this.ring = { t: 0, x: at[0] + 14, y: at[1] + 66 };
+    this.st = 'win'; this.t = 0; this.at = at; this.ring = { t: 0, x: at[0], y: at[1] };
     this.flash = r.reduced ? 0 : 2; // frames of bare paper behind the duellists
-    if (fx) fx.burst(at[0], at[1] + 4, -1, 0.9, r.reduced); // the drop splashes on the hilt
+    if (fx) { fx.burst(at[0], at[1] - 3, -1, 0.7, r.reduced, true); fx.burst(at[0], at[1] - 3, 1, 0.7, r.reduced, true); fx.stain(at[0], at[1], 22, 6); } // the drop splashes where it lands
   }
   // behind the figures (world transform set): the paper flash and the ring across the ground
   ground(g, s, dt, r) {
@@ -57,21 +57,22 @@ export class Tell {
       g.globalAlpha = 1;
     }
   }
-  // over the figures: the falling drop (it lands on the hilt, so it never crosses a face)
+  // the falling drop: a fixed vertical path in the clear sky between the two men, landing on the window-open frame
   air(g, s, dt, r) {
     if (this.st !== 'tell' && this.st !== 'feint') return;
     if (!this.D) { this.D = dropSprite(false); this.G = dropSprite(true); }
     this.t += dt; const grey = this.st === 'feint';
-    const fall = grey ? 0.42 : this.dur, u = Math.min(1, this.t / fall), [hx, hy] = this.at;
-    const top = r.v.camY - 100 - r.v.cy / (r.v.k * r.v.zoom) - 20; // the top of the frame, in world units
-    let x = hx, y = top + (hy - top) * u * u, sc = grey ? 0.7 : 1, a = 1;
+    const fall = grey ? 0.5 : this.dur, u = Math.min(1, this.t / fall), [hx, hy] = this.at;
+    const top = r.v.camY - 100 - r.v.cy / (r.v.k * r.v.zoom) - 30; // just above the top of the frame, in world units
+    const land = grey ? hy - 150 : hy; // a feint's drop never reaches the ground: it hangs, wobbles and is gone
+    let y = top + (land - top) * u * u, sc = grey ? 0.45 : 1, a = 1;
     if (u >= 1) {
-      if (grey) { const w = this.t - fall; y = hy; sc = 0.7 * (1 + Math.sin(w * 26) * 0.12 * Math.max(0, 1 - w * 3)) * Math.max(0, 1 - w / 0.3); a = Math.max(0, 1 - w / 0.3); if (w > 0.3) { this.st = 'idle'; return; } } // wobble and evaporate
-      else { y = hy - 2; sc = 1 + Math.min(0.25, (this.t - fall) * 0.8); } // a drop welling on the hilt, waiting
+      if (grey) { const w = this.t - fall; sc = 0.45 * (1 + Math.sin(w * 26) * 0.14 * Math.max(0, 1 - w * 3)) * Math.max(0, 1 - w / 0.35); a = Math.max(0, 1 - w / 0.35); if (w > 0.35) { this.st = 'idle'; return; } }
+      else { this.st = 'landed'; return; } // the window cue takes over on this frame
     }
-    const S = grey ? this.G : this.D, w = 15 * sc, h = 25 * sc * (u < 1 ? 1.3 : 1);
-    if (u < 1 && u > 0.05) { g.strokeStyle = grey ? '#6c6760' : INKW; g.lineCap = 'round'; g.globalAlpha = 0.35 * a; g.lineWidth = 2.2 * sc; g.beginPath(); g.moveTo(x, y - h * 0.8); g.lineTo(x, y - h * 0.8 - 46 * u); g.stroke(); } // the streak of its fall
-    g.globalAlpha = a; g.drawImage(S, x - w / 2, y - h * 0.82, w, h); g.globalAlpha = 1;
+    const S = grey ? this.G : this.D, w = 32 * sc, h = 54 * sc * (u < 1 ? 1 + 0.35 * u : 1);
+    if (u > 0.04) { g.strokeStyle = grey ? '#6c6760' : INKW; g.lineCap = 'round'; g.globalAlpha = 0.3 * a; g.lineWidth = 3.4 * sc; g.beginPath(); g.moveTo(hx, y - h * 0.8); g.lineTo(hx, y - h * 0.8 - 80 * u * sc); g.stroke(); } // the streak of its fall
+    g.globalAlpha = a; g.drawImage(S, hx - w / 2, y - h * 0.82, w, h); g.globalAlpha = 1;
   }
   // the frame: drain, tendrils along the ground, the heartbeat and the flood
   screen(g, s, dt, r, wash) {
@@ -80,6 +81,7 @@ export class Tell {
     this.ten += (tgtTen - this.ten) * Math.min(1, dt * (tgtTen > this.ten ? 7 : 14)); // recoil fast
     const dT = this.st === 'tell' && !red ? 1 : 0; this.drain += (dT - this.drain) * Math.min(1, dt * (dT ? 6 : 3));
     if (this.st === 'win') { this.t += dt; if (this.t > 0.6) this.st = 'idle'; }
+    if (this.st === 'landed') { this.t += dt; if (this.t > (this.dur || 0.42) + 0.4) this.st = 'idle'; }
     if (this.st === 'flood') { this.t += dt; this.flood = Math.max(0, 1 - this.t / 1.6); if (this.t > 1.6) this.st = 'idle'; }
     g.setTransform(1, 0, 0, 1, 0, 0);
     if (this.drain > 0.01) { g.globalCompositeOperation = 'saturation'; g.globalAlpha = this.drain * 0.75; g.fillStyle = '#808080'; g.fillRect(0, 0, W, H); g.globalCompositeOperation = 'source-over'; g.globalAlpha = 1; }

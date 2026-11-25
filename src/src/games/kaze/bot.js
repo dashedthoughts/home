@@ -57,7 +57,7 @@ export function botInput(s, m) {
     let tgt = open || foes.slice().sort((a, b) => Math.abs(a.x - p.x) - Math.abs(b.x - p.x))[0];
     const face = tgt.x > p.x ? 1 : -1, dist = Math.abs(tgt.x - p.x);
     if (p.hp <= Math.ceil(p.hpMax / 2) && p.res >= 1 && !th && !arrow && !busy && !open) { tap('heal'); return I; }
-    if (dist > 95) { if (face > 0) I.right = true; else I.left = true; I.run = dist > 200; return I; }
+    if (dist > 110) { if (face > 0) I.right = true; else I.left = true; I.run = dist > 200; return I; }
     if (p.face !== face && !busy) { if (face > 0) I.right = true; else I.left = true; return I; }
     if (soon && !open) return I;
     if (tgt.shield && (tgt.x - p.x) * tgt.face < 0 && !open) { if (p.st === 'idle' || p.st === 'move') tap('heavy'); return I; }
@@ -134,7 +134,7 @@ export function personaInput(s, m) {
   if (foes.length) {
     const tgt = foes.slice().sort((a, b) => Math.abs(a.x - p.x) - Math.abs(b.x - p.x))[0], face = tgt.x > p.x ? 1 : -1, dist = Math.abs(tgt.x - p.x);
     if (m.heal && p.hp <= 2 && p.res >= 1 && !busy && !foes.some((f) => f.st === 'wind')) { tap('heal'); return I; }
-    if (dist > 100) { if (face > 0) I.right = true; else I.left = true; return I; }
+    if (dist > 112) { if (face > 0) I.right = true; else I.left = true; return I; }
     if (p.face !== face && !busy) { if (face > 0) I.right = true; else I.left = true; return I; }
     if (m.kind !== 'masher' && tgt.shield && (tgt.x - p.x) * tgt.face < 0 && !busy) { if (pr(m) < 0.05) tap('heavy'); return I; }
     if (s.t >= m.nextCut) { tap('slash'); m.nextCut = s.t + (m.kind === 'masher' ? 0.1 : 0.16 + pr(m) * 0.25); }

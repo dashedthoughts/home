@@ -163,11 +163,11 @@ export class Life {
     const sc = Math.min(4, Math.max(2, Math.round(k * 1.6 * 2) / 2)); if (!this.S || sc !== this.sc) this.build(sc, r);
     g.setTransform(1, 0, 0, 1, 0, 0);
     // a kitchen chimney beyond the ridge: a smoke column leaning in the wind, two paintings of it slowly cross-fading (terraces, the snow pass)
-    if (key === 'terraces' || key === 'snow') {
+    if ((key === 'terraces' || key === 'snow') && this.calmK > 0.05) { // the chimney is a quiet-moment detail: it thins out in a fight
       const span = W * 2.4, bx = ((W * 0.66 - camX * 0.1 * k) % span + span) % span - W * 0.2, by = H * 0.6;
       if (bx > -W * 0.2 && bx < W * 1.2) {
         const wind = s.wind ? s.wind.w : 0.3, lean = 0.25 + wind * 0.5 + (red ? 0 : Math.sin(r.time * 0.23) * 0.1), z = k * 0.9, cyc = red ? 0.5 : 0.5 + 0.5 * Math.sin(r.time * 0.35);
-        for (let i = 0; i < 2; i++) { const S2 = this.S.smoke[i]; g.setTransform(z, 0, -z * lean, z, bx, by); g.globalAlpha = (night ? 0.7 : 0.85) * (i ? cyc : 1 - cyc) * (1 - r.red); g.drawImage(S2.c, -S2.ax, -S2.ay, S2.w, S2.h); }
+        for (let i = 0; i < 2; i++) { const S2 = this.S.smoke[i]; g.setTransform(z, 0, -z * lean, z, bx, by); g.globalAlpha = (night ? 0.7 : 0.85) * (i ? cyc : 1 - cyc) * (1 - r.red) * this.calmK; g.drawImage(S2.c, -S2.ax, -S2.ay, S2.w, S2.h); }
         g.setTransform(1, 0, 0, 1, 0, 0);
       }
     }
@@ -230,7 +230,7 @@ export class Life {
         if (L.kind === 'hang') {
           const gy = -groundH(ch, L.x), sw = Math.sin(t * 1.6 + L.seed * 6) * 0.12 + wind * 0.12, lx = L.x + 16 + Math.sin(sw) * 14, ly = gy - 94 + Math.cos(sw) * 14;
           if (night) { g.globalAlpha = 0.32 * n; g.drawImage(S.pool, lx - 70, gy - 8, 140, 18); }
-          g.globalAlpha = 0.45 * n; g.drawImage(S.glow, lx - 46, ly - 46, 92, 92);
+          g.globalAlpha = 0.5 * n; g.drawImage(S.glow, lx - 36, ly - 36, 72, 72);
           g.globalAlpha = 0.85 * n; g.drawImage(S.flame, lx - 4, ly - 4, 8, 10);
         } else {
           const sc = L.h / 60, fx = L.x, fy = L.base - 40 * sc;
