@@ -89,9 +89,11 @@ export const WEATHER = {
 };
 
 export const DIFFICULTY = {
-  chill: { name: 'CHILL', density: 0.6, trafficSpeed: 0.9, lives: 5, blurb: 'Light traffic, five hits.' },
-  street: { name: 'STREET', density: 1.0, trafficSpeed: 1.0, lives: 4, blurb: 'The intended ride. Four hits; every file repairs one.' },
-  redline: { name: 'REDLINE', density: 1.45, trafficSpeed: 1.12, lives: 2, blurb: 'Rush hour. Two hits.' },
+  // Tuned against human-like test drivers on the real loop (scratch study, 8 seeds each): on STREET a clumsy first-timer now finishes
+  // most runs and sees the whole road; before, nobody but a careful driver got past Ginza.
+  chill: { name: 'CHILL', density: 0.35, trafficSpeed: 1.0, lives: 6, blurb: 'Light traffic, six hits. See the whole loop.' },
+  street: { name: 'STREET', density: 0.5, trafficSpeed: 1.15, lives: 5, blurb: 'The intended ride. Five hits; every file repairs one.' },
+  redline: { name: 'REDLINE', density: 1.0, trafficSpeed: 1.0, lives: 3, blurb: 'Rush hour. Three hits.' },
 };
 
 // Render budgets are in pixels, not device ratios: a 4K laptop and a phone both get a frame they can hold at 60.
