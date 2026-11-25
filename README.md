@@ -50,20 +50,16 @@ Routes: `#/` home · `#/p/<slug>` case study · `#/arcade` the arcade · `#/arca
 To take a game off the floor, set `hidden: true` on its entry in `src/src/games/registry.js` and rebuild. The cabinet pictures are `media/arcade/<game>.jpg`.
 
 ## REDLINE
-A night lap of the real Shuto Expressway Inner Circular Route (C1) in Tokyo: 13.8 km, traced from OpenStreetMap, with its real curves, tunnels, junction names and districts. Five data shards open one case file; ten files end the run at the lookout, and whoever is in front at that moment wins.
+A night drive through an original Midnight-Tokyo-style megacity. Five data shards open one case file; ten files end the run at the lookout, and whoever is in front at that moment wins.
 
-- **The road:** you start at Shiodome and run the inner loop: the Ginza trench, Kyobashi, Edobashi JCT, Kandabashi, Takebashi, the Chiyoda tunnel beside the Imperial Palace, Miyakezaka, Kasumigaseki, Tanimachi, Iikura, Shibakoen under Tokyo Tower, Hamazakibashi and back. Tunnels, viaducts and merge zones are where the real ones are; the minimap and the green gantry signs show the next junction. Buildings and shop names are invented; road and place names are real.
-- **The look:** TOKYO is the default: a near-black sky with a sodium glow on the horizon, lit office grids, white and amber road lamps, thin tail-light streaks. DUSK, NEON BLUE, DAWN and OUTRUN are optional stylised moods.
 - **Modes:** Race (against KUROGANE), Road Brawl (bike), Zen Race (no damage, no police), Free Run.
 - **The rival:** launches past you off the line, makes attack runs, blocks your lane, sprints over the last two files. Whip him with X; he parries for a few seconds after a hit.
-- **Crashes:** severity follows closing speed; a truck barely moves. Five hits on STREET, and every file you open repairs one. The last hit is a spin-out.
+- **Crashes:** severity follows closing speed; a truck barely moves. Four hits on STREET, and every file you open repairs one. The last hit is a spin-out.
 - **Police:** sustained top speed and crashes build a wanted level; each full star brings a cruiser. Outrun them, outlast them or whip them back.
+- **Road:** junctions every 1.5 km (Expressway or Backstreets), a tunnel after each, and traffic that thickens every sector.
 - **Rain:** less grip, longer braking, aquaplaning flat out. Tunnels are dry.
-- **Garage:** the Vanta GT and the Tsubame bike, liveries, underglow (off by default), time of day, weather, three difficulties, radio (YouTube Mix or the built-in synth). Keyboard, touch and gamepad.
+- **Garage:** the Vanta GT and the Tsubame bike, liveries, underglow, five times of day, weather, three difficulties, radio (YouTube Mix or the built-in synth). Keyboard, touch and gamepad.
 
-No vehicles, logos, characters or scenery from any film or game are used.
+Art direction borrows the language of 80s cel-anime cities and light-cycle films; no vehicles, logos, characters or places from any film or game are used.
 
 Graphics: AUTO by default (Balanced on desktop, Low on phones, steps down by itself if frames drop); High adds 2.1 MP and 4× MSAA.
-
-## Credits
-Road geometry, junction names and landmark positions: Map data © OpenStreetMap contributors (ODbL), https://www.openstreetmap.org/copyright
