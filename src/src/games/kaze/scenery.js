@@ -13,12 +13,27 @@ export class Band {
     const s = this.scale, c = makeCanvas(TW * s, (yB - yT) * s), g = c.getContext('2d');
     g.setTransform(s, 0, 0, s, -i * TW * s, -yT * s);
     const x0 = i * TW, x1 = x0 + TW;
-    for (const o of this.objs) if (o.x1 >= x0 - 2 && o.x0 <= x1 + 2) { g.save(); o.draw(g, rng(o.seed)); g.restore(); }
+    // pad generously: blur halos and texture strokes spill past an object's declared range, and a neighbour tile
+    // that skipped the object would show a cut (a pale vertical seam in the sky)
+    for (const o of this.objs) if (o.x1 >= x0 - 120 && o.x0 <= x1 + 120) { g.save(); o.draw(g, rng(o.seed)); g.restore(); }
     t = { c, yT, yB }; this.cache.set(i, t);
     while (this.cache.size > this.max) this.cache.delete(this.cache.keys().next().value);
     return t;
   }
   setScale(s) { if (Math.abs(s - this.scale) > 1e-3) { this.scale = s; this.cache.clear(); } }
+  // red variant of a tile for boss fights: a gradient map, ink to near-black, paper and mist to the red glow
+  redTile(t, pal) {
+    const c = makeCanvas(t.c.width, t.c.height), g = c.getContext('2d'); g.drawImage(t.c, 0, 0);
+    const id = g.getImageData(0, 0, c.width, c.height), d = id.data, gain = this.redGain || 1.5;
+    const gl = parseInt((this.f === 1 ? pal.ground : pal.glow).slice(1), 16), ik = parseInt(pal.ink.slice(1), 16);
+    const gr = (gl >> 16) & 255, gg = (gl >> 8) & 255, gb = gl & 255, ir = (ik >> 16) & 255, ig = (ik >> 8) & 255, ib = ik & 255;
+    for (let i = 0; i < d.length; i += 4) {
+      if (!d[i + 3]) continue;
+      const l = (d[i] * 0.3 + d[i + 1] * 0.59 + d[i + 2] * 0.11) / 255; let k = Math.min(1, Math.max(0, (0.93 - l) / 0.7 * gain)); k = Math.pow(k, 0.75);
+      d[i] = gr + (ir - gr) * k; d[i + 1] = gg + (ig - gg) * k; d[i + 2] = gb + (ib - gb) * k;
+    }
+    g.putImageData(id, 0, 0); t.red = c; return c;
+  }
   // draw visible tiles; budget: how many new tiles may be painted this frame (prefetch is lazy)
   draw(ctx, v, budget) {
     const f = this.f, K = v.k * (1 + (v.zoom - 1) * f);
@@ -29,6 +44,10 @@ export class Band {
       const sx0 = Math.round(v.W / 2 + (i * TW - v.camX * f) * K), sx1 = Math.round(v.W / 2 + ((i + 1) * TW - v.camX * f) * K);
       const sy = Math.round(v.cy + (t.yT - v.camY * f + 100) * K);
       ctx.drawImage(t.c, sx0, sy, sx1 - sx0, Math.round((t.yB - t.yT) * K));
+      if (v.red > 0.01) {
+        if (!t.red && budget.r > 0) { budget.r--; this.redTile(t, v.pal); }
+        if (t.red) { ctx.globalAlpha = v.red; ctx.drawImage(t.red, sx0, sy, sx1 - sx0, Math.round((t.yB - t.yT) * K)); ctx.globalAlpha = 1; }
+      }
     }
     // prefetch the next tile in the direction of travel
     if (budget.n > 0) { const j = v.vx >= 0 ? i1 + 1 : i0 - 1; if (!this.cache.has(j)) { budget.n--; this.max = Math.max(this.max, i1 - i0 + 3); this.tile(j); } }
@@ -412,6 +431,7 @@ export function buildScene(ch) {
     const range = (i) => { let lo = 1e9, hi = -1e9; for (let x = i * TW - 40; x <= (i + 1) * TW + 40; x += 32) { const y = gy(x); lo = Math.min(lo, y); hi = Math.max(hi, y); } return [Math.floor(lo - 260), Math.ceil(hi + 260)]; };
     bands.push(new Band(1, 0, 0, 1, objs, { range, max: 6 }));
   }
+  [2.6, 2.1, 1.7, 1.4, 1.15].forEach((gn, i) => { if (bands[i]) bands[i].redGain = gn; });
   return { ch, key, paper, accent: acc, night, bands };
 }
 function snowCaps(g, R, cx, base, ph, hw, paper, o = {}) {
@@ -484,4 +504,23 @@ function groundPiece(g, R, ch, x0, x1, gy) {
     for (let i = 0; i < 4; i++) { const x = x0 + R() * (x1 - x0); drop(g, x, gy(x) + 1 + R() * 3, 0.9 + R() * 1.4, INK, 0.75); }
     if (R() < 0.2) { const x = x0 + R() * (x1 - x0); rock(g, R, x, gy(x) + 4, 18 + R() * 16, 7 + R() * 6, { a: 0.7 }); }
   }
+}
+
+// ---------- the duel sky: a staged mood for boss fights ----------
+// each chapter keeps its own note inside the red (disc ring, horizon hue, how the snow turns rose)
+export const REDP = {
+  bamboo: { top: '#3d0b0a', mid: '#8e1d14', hor: '#cf4a26', disc: '#f1e4cf', ring: '#a9c584', ink: '#120605', glow: '#b8381f', ground: '#3a120d', part: '#9fc27a' },
+  terraces: { top: '#4a120a', mid: '#a3301a', hor: '#e0782f', disc: '#f6e2b8', ring: '#e8b54e', ink: '#160806', glow: '#c75a24', ground: '#3d160b', part: '#f0b050' },
+  torii: { top: '#34070a', mid: '#8a1414', hor: '#c8321f', disc: '#efe1d2', ring: '#f06a48', ink: '#100405', glow: '#a82818', ground: '#36100c', part: '#f07048' },
+  snow: { top: '#2c0f18', mid: '#7a2a3a', hor: '#c06478', disc: '#f2e6ea', ring: '#9cbbe0', ink: '#12070b', glow: '#b25a6c', ground: '#c98f9c', part: '#f6d3da' },
+  castle: { top: '#3e0c06', mid: '#9b2a10', hor: '#e0601f', disc: '#f6e0c8', ring: '#eba0b2', ink: '#140604', glow: '#c4481a', ground: '#3a120a', part: '#f4a8b8' },
+};
+export function paintRedSky(W, H, k, key) {
+  const P = REDP[key], c = makeCanvas(W, H), g = c.getContext('2d'), R = rng(77 + key.length);
+  const gr = g.createLinearGradient(0, 0, 0, H); gr.addColorStop(0, P.top); gr.addColorStop(0.45, P.mid); gr.addColorStop(0.78, P.hor); gr.addColorStop(1, P.mid);
+  g.fillStyle = gr; g.fillRect(0, 0, W, H);
+  // the wash is uneven: darker ink bleeds up from the horizon in soft blooms, paler pools where the brush lifted
+  for (let i = 0; i < 26; i++) { const x = R() * W, y = H * (0.35 + R() * 0.5), r = Math.max(W, H) * (0.05 + R() * 0.14); const rg = g.createRadialGradient(x, y, 0, x, y, r); const dark = R() < 0.6; rg.addColorStop(0, dark ? 'rgba(20,4,3,0.22)' : 'rgba(255,220,190,0.12)'); rg.addColorStop(1, 'rgba(0,0,0,0)'); g.fillStyle = rg; g.fillRect(x - r, y - r, r * 2, r * 2); }
+  for (let i = 0; i < 7; i++) { const y = H * (0.5 + R() * 0.35), x = R() * W * 0.7, L = W * (0.2 + R() * 0.4); stroke(g, [[x, y, 0.2], [x + L * 0.5, y - 3 * k, 1], [x + L, y + 2 * k, 0.2]], { w: (6 + R() * 10) * k, alpha: 0.18, dry: 0.8, seed: Math.floor(R() * 1e6), color: '#1a0504', taper: [0.3, 0.4], bristles: 16 }); }
+  return c;
 }

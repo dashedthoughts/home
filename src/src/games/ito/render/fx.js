@@ -23,14 +23,16 @@ export function createFx(scene, sim, opts = {}) {
   lGeo.setAttribute('uv', new THREE.BufferAttribute(lUv, 2));
   lGeo.setIndex(lIdx);
   const lMat = keep(new THREE.ShaderMaterial({
-    uniforms: { ...shared, uA: { value: 1 } },
+    uniforms: { ...shared, uA: { value: 1 }, uCue: { value: 0 } },
     side: THREE.DoubleSide,
     vertexShader: /* glsl */ `varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * viewMatrix * vec4(position, 1.0); }`,
     fragmentShader: /* glsl */ `
-      uniform float uA; varying vec2 vUv;
+      uniform float uA; uniform float uCue; varying vec2 vUv;
       void main() {
         float core = 1.0 - smoothstep(0.18, 0.42, abs(vUv.y - 0.5));
-        vec3 c = mix(vec3(0.05, 0.85, 1.0), vec3(1.0), core);
+        // in the perfect-release window the line burns yellow: let go now
+        vec3 edge = mix(vec3(0.05, 0.85, 1.0), vec3(1.0, 0.88, 0.15), uCue);
+        vec3 c = mix(edge, vec3(1.0), core);
         gl_FragColor = vec4(c, 251.0 / 255.0);
       }`,
   }));
@@ -194,6 +196,7 @@ export function createFx(scene, sim, opts = {}) {
     update(o) {
       const { camera, dt, t, pl, handPos, aimPos, zipPos, rings, cranesHidden, roofY, speed } = o;
       if (lineState.on && o.lineAnchor) { lineState.ax = o.lineAnchor.x; lineState.ay = o.lineAnchor.y; lineState.az = o.lineAnchor.z; }
+      lMat.uniforms.uCue.value = o.cue ? (0.75 + 0.25 * Math.sin(t * 40)) : o.cueStatic ? 1 : 0;
       updateLine(camera, handPos, dt);
       // reticles
       if (aimPos) { anchorRet.visible = true; anchorRet.position.copy(aimPos); anchorRet.material.rotation = t * 0.8; } else anchorRet.visible = false;

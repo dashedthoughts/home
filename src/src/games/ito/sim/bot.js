@@ -32,7 +32,8 @@ function rollout(sim, plan, tg, magnetFn) {
   const pl = Object.assign({}, sim.S.pl);
   const city = sim.city;
   const yaw = Math.atan2(-(tg.x - pl.x), -(tg.z - pl.z));
-  rin.swing = pl.prevSwing; rin.dash = false; rin.zip = false; rin.dive = false;
+  rin.swing = pl.prevSwing; rin.dash = false; rin.zip = false; rin.dive = false; rin.guide = sim.input.guide;
+  const mR = sim.S.run ? sim.runs[sim.S.run.idx].assist.magnet : 44;
   let t = 0, holdLeft = plan.hold, attached = pl.mode === MODE.SWING, minD = 1e9, cost = 0, autoHold = 0, pressedDash = false;
   const steps = Math.ceil(HORIZON / ROLL_DT);
   for (let k = 0; k < steps; k++) {
@@ -52,7 +53,7 @@ function rollout(sim, plan, tg, magnetFn) {
     scratchEv.length = 0;
     const px = pl.x, py = pl.y, pz = pl.z;
     stepPlayer(city, pl, rin, ROLL_DT, scratchEv, 0);
-    magnetFn(pl, tg, ROLL_DT);
+    void magnetFn; void mR; // the ring magnet lives in the physics step now (via rin.guide)
     t += ROLL_DT;
     for (let e = 0; e < scratchEv.length; e++) {
       const ty = scratchEv[e].type;

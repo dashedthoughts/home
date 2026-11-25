@@ -6,7 +6,7 @@ import { LEVELS } from './ai.js';
 import { STAGES, STAGE_IDS, createStage, drawBack, drawFloor } from './stages.js';
 import { createAudio } from './audio.js';
 import { createInput, DEFAULT_KEYS, ACTIONS, ACTION_LABEL, keyName } from './input.js';
-import { drawFighter, sideColor } from './rig.js';
+import { drawFighter, sideColor, solve, LOOKS, stillChains } from './rig.js';
 import { BASE } from './anim.js';
 import { createEngine } from './engine.js';
 
@@ -32,9 +32,13 @@ function Portrait({ id, pose = 'win', size = 160, flip = false, dim = false, alt
     const bg = g.createLinearGradient(0, 0, 0, size * 1.25); bg.addColorStop(0, '#16121f'); bg.addColorStop(1, '#0b0910'); g.fillStyle = bg; g.fillRect(0, 0, size, size * 1.25);
     g.fillStyle = col; g.globalAlpha = 0.22; for (let y = 0; y < size * 1.25; y += 7) for (let x = (y / 7) % 2 * 3.5; x < size; x += 7) { g.beginPath(); g.arc(x, y, 2.2 * (y / (size * 1.25)), 0, 7); g.fill(); } g.globalAlpha = 1;
     g.fillStyle = col; g.globalAlpha = 0.85; g.beginPath(); g.moveTo(0, size * 0.95); g.lineTo(size, size * 0.7); g.lineTo(size, size * 0.82); g.lineTo(0, size * 1.07); g.fill(); g.globalAlpha = 1;
-    const s = (size / 105) * (id === 'ganji' ? 0.92 : 1.05);
-    g.save(); g.setTransform(dpr * s * (flip ? -1 : 1), 0, 0, -dpr * s, dpr * (size / 2 + (flip ? 8 : -8)), dpr * size * 1.95);
-    try { drawFighter(g, id, BASE[id][pose] || BASE[id].stance, { lw: 2.4, light: [0.5 * (flip ? -1 : 1), 0.85], rim: col, rimDir: -1, win: pose === 'win', alt }); } catch (e) { /* draw failure leaves the background */ }
+    // frame from the skeleton: head near the top, chest and arms filling the card
+    const P0 = BASE[id][pose] || BASE[id].stance; const J = solve(LOOKS[id], P0); const r = LOOKS[id].head;
+    const top = J.head[1] + r * 1.25, bottom = J.hip[1] - 6; const H = size * 1.25;
+    const s = Math.min((H * 0.86) / (top - bottom), size / 70);
+    const cx = (J.head[0] + J.chest[0]) / 2;
+    g.save(); g.setTransform(dpr * s * (flip ? -1 : 1), 0, 0, -dpr * s, dpr * (size / 2 + (flip ? 1 : -1) * cx * s), dpr * (H * 0.06 + top * s));
+    try { drawFighter(g, id, P0, { lw: 2.2, light: [0.5 * (flip ? -1 : 1), 0.85], rim: col, rimDir: -1, win: pose === 'win', alt, chains: stillChains(id, P0) }); } catch (e) { /* draw failure leaves the background */ }
     g.restore();
     if (dim) { g.fillStyle = 'rgba(0,0,0,0.45)'; g.fillRect(0, 0, size, size * 1.25); }
   }, [id, pose, size, flip, dim, alt]);
@@ -470,7 +474,7 @@ export default function NeonKumite({ onExit }) {
               <h2>{resultLine(result, screen).title}</h2>
               <p className="nk-result__sub">{resultLine(result, screen).sub}</p>
               <p className="nk-quote">“{result.quote}”</p>
-              <p className="nk-score"><b>{result.wins[0]}</b><span> : </span><b>{result.wins[1]}</b><small>{result.cpu && result.cpu[1] ? ' YOU · CPU' : ' P1 · P2'}</small>{result.mode === 'arcade' && arcade ? ` · stage ${Math.min(arcade.idx + (result.next ? 0 : 1), ladder.length)} of ${ladder.length}` : ''}</p>
+              <p className="nk-score"><b>{result.wins[0]}</b><span> : </span><b>{result.wins[1]}</b><small>{result.cpu && result.cpu[0] ? ' CPU · CPU' : result.cpu && result.cpu[1] ? ' YOU · CPU' : ' P1 · P2'}</small>{result.mode === 'arcade' && arcade ? ` · stage ${Math.min(arcade.idx + (result.next ? 0 : 1), ladder.length)} of ${ladder.length}` : ''}</p>
             </div>
           </div>
           <nav className="nk-menu nk-menu--row">

@@ -2,9 +2,9 @@
 // Order: paper+sky, parallax bands, back props, ground band, figures and ink effects, front props, weather,
 // paper grain (multiply), letterbox, calligraphy cards, HUD.
 import { INK, rng, clamp, lerp, makeCanvas, rgba, mix, makePaper, makeGrain, ribbon, leaf, drop, stroke } from './brush.js';
-import { buildScene, paintSky, bamboo, torii, pine, rock, TW } from './scenery.js';
+import { buildScene, paintSky, bamboo, torii, pine, rock, TW, REDP, paintRedSky } from './scenery.js';
 import { CHAPTERS, groundH, ATK, BOSSES, HAIKU } from './data.js';
-import { poseFor, drawFigure, newFig, stepScarf, LOOKS, POSE, lerpPose } from './figures.js';
+import { poseFor, drawFigure, newFig, stepScarf, LOOKS, POSE, lerpPose, BOSSLOOK, drawFoxFig, walkLegs, brushLine } from './figures.js';
 import { P as PT, standoffPose } from './sim.js';
 
 export const SERIF = '"Iowan Old Style","Palatino Linotype",Palatino,"Book Antiqua",Georgia,"Times New Roman",serif';
@@ -21,16 +21,16 @@ export class Renderer {
     this.cv = cv; this.g = cv.getContext('2d', { alpha: false });
     this.cam = { x: 0, y: 0, zoom: 1, vx: 0, init: false }; this.ch = -1; this.time = 0; this.reduced = false; this.lb = 0; this.shake = 0; this.flash = 0;
     this.parts = Array.from({ length: N_PART }, () => ({ on: 0 })); this.pi = 0; this.decals = []; this.arcs = []; this.figs = new Map();
-    this.pfig = newFig(true); this.ofig = newFig(false); this.foxFig = { t: 0 };
+    this.pfig = newFig(true, 7); this.ofig = newFig(false, 311); this.foxFig = { t: 0 }; this.expr = { k: 'calm', t: 0 };
     this.v = { W: 0, H: 0, k: 1, gy: 0, cy: 0, camX: 0, camY: 0, zoom: 1, vx: 0 };
-    this.weatherAcc = 0; this.bossCard = null; this.cutFx = null; this.lastSo = null; this.hurtT = 0; this.gust = null; this.titleDrift = 0;
+    this.weatherAcc = 0; this.red = 0; this.red2 = 0; this.cool = 0; this.redPulse = 0; this.inkFrame = 0; this.redSkyC = null; this.lastFigs = []; this.bossCard = null; this.cutFx = null; this.lastSo = null; this.hurtT = 0; this.gust = null; this.titleDrift = 0;
   }
   resize(w, h, dpr) {
     const W = Math.max(2, Math.round(w * dpr)), H = Math.max(2, Math.round(h * dpr));
     if (W === this.v.W && H === this.v.H) return;
     this.cv.width = W; this.cv.height = H; this.v.W = W; this.v.H = H; this.dpr = dpr;
     const portrait = W / H < 1.2;
-    this.v.k = portrait ? W / 620 : Math.min(H / 540, W / 640);
+    this.v.k = portrait ? W / 470 : Math.min(H / 480, W / 600);
     this.v.gy = portrait ? H * 0.6 : H * 0.8; this.v.cy = this.v.gy - 100 * this.v.k;
     this.portrait = portrait;
     if (this.ch >= 0) this.rebuild();
@@ -51,9 +51,14 @@ export class Renderer {
     const v = this.v, c = this.cam, p = s.p, px = lerp(p.ox, p.x, this.alpha);
     let tx = px + p.face * 90 + clamp(p.vx, -260, 260) * 0.3, zoom = 1;
     if (mode === 'title') { this.titleDrift += dt; tx = px - (this.portrait ? 0 : 150) + Math.sin(this.titleDrift * 0.08) * 40; zoom = 1; }
-    else if (s.phase === 'standoff' && s.so) { const so = s.so; tx = (px + lerp(so.oppOX, so.oppX, this.alpha)) / 2; zoom = so.st === 'hold' || so.st === 'strike' ? 1.2 + Math.min(0.08, so.t * 0.01) : so.st === 'ready' ? 1.12 : 1.04; }
+    else if (s.phase === 'standoff' && s.so) { const so = s.so; tx = (px + lerp(so.oppOX, so.oppX, this.alpha)) / 2; zoom = so.st === 'hold' || so.st === 'strike' ? 1.3 + Math.min(0.08, so.t * 0.01) : so.st === 'ready' ? 1.22 : 1.1; }
     else if (s.phase === 'haiku') { tx = px + 210; zoom = 0.84; }
-    else if (s.arena) { const hw = v.W / 2 / (v.k * 1.04); const a = s.arena; const mid = (a.x0 + a.x1) / 2; tx = (a.x1 - a.x0) < hw * 2 ? mid : clamp(px + p.face * 50, a.x0 + hw - 40, a.x1 - hw + 40); zoom = a.boss ? 1.06 : 1.03; }
+    else if (s.arena) {
+      // frame the fight: centre on the duellists and ease in until they stand about a third of the screen tall
+      let lo = px, hi = px; for (const f of s.foes) if (f.st !== 'dead' && (f.st !== 'enter' || Math.abs(f.x - px) < 500)) { lo = Math.min(lo, f.x); hi = Math.max(hi, f.x); }
+      tx = (lo + hi) / 2 * 0.8 + px * 0.2; const need = hi - lo + 300, fit = v.W / (v.k * need);
+      zoom = clamp(fit, 1, s.arena.boss ? 1.28 : 1.24) + (s.arena.boss ? this.red2 * 0.06 : 0);
+    }
     else if (s.phase === 'ending') { tx = px + 60; zoom = 0.92; }
     if (this.reduced && zoom > 1) zoom = 1 + (zoom - 1) * 0.5;
     if (!c.init) { c.x = tx; c.y = -groundH(this.ch, px); c.zoom = zoom; c.init = true; }
@@ -73,17 +78,20 @@ export class Renderer {
 
   // ---------- frame ----------
   frame(s, alpha, dt, ui) {
-    this.alpha = alpha; this.time += dt; this.reduced = !!ui.reduced;
+    this.alpha = alpha; this.time += dt; this.reduced = !!ui.reduced; this.boilN = this.reduced ? 0 : Math.floor(this.time * 12);
     if (s.ch !== this.ch) this.setChapter(s.ch);
     const g = this.g, v = this.v, W = v.W, H = v.H, C = CHAPTERS[this.ch];
     const mode = ui.mode || 'play';
     this.updateCamera(s, dt, mode);
     this.consume(s, ui);
     if (this.shake > 0) this.shake = Math.max(0, this.shake - dt * 3); if (this.flash > 0) this.flash = Math.max(0, this.flash - dt * 4);
-    const wind = s.wind.w;
+    this.updateMood(s, dt, mode);
+    const wind = s.wind.w * (1 + this.red * 0.9);
     g.setTransform(1, 0, 0, 1, 0, 0); g.globalAlpha = 1; g.globalCompositeOperation = 'source-over';
     g.drawImage(this.bg, 0, 0);
-    const budget = { n: 2 };
+    if (this.red > 0.01) this.drawDuelSky(g, s);
+    v.red = this.red; v.pal = REDP[this.scene.key];
+    const budget = { n: 2, r: this.red > 0.01 ? 3 : 0 };
     const bands = this.scene.bands;
     for (let i = 0; i < bands.length - 1; i++) { g.setTransform(1, 0, 0, 1, 0, 0); bands[i].draw(g, v, budget); }
     // back props (between the mid-ground and the path)
@@ -104,6 +112,11 @@ export class Renderer {
     // paper grain over everything: the ink sits in the paper
     g.setTransform(1, 0, 0, 1, 0, 0); g.globalAlpha = 1; g.globalCompositeOperation = 'multiply'; g.drawImage(this.grain, 0, 0); g.globalCompositeOperation = 'source-over';
     if (this.flash > 0 && !this.reduced) { g.globalAlpha = this.flash * 0.35; g.fillStyle = C.paper; g.fillRect(0, 0, W, H); g.globalAlpha = 1; }
+    // standoff: a cooler, desaturated held breath; the cut floods it red for an instant
+    if (this.cool > 0.01) { g.globalAlpha = this.cool * 0.55; g.globalCompositeOperation = 'saturation'; g.fillStyle = '#808080'; g.fillRect(0, 0, W, H); g.globalCompositeOperation = 'multiply'; g.globalAlpha = this.cool * 0.22; g.fillStyle = '#6f84a0'; g.fillRect(0, 0, W, H); g.globalCompositeOperation = 'source-over'; g.globalAlpha = 1; }
+    if (this.redPulse > 0.01) { g.globalCompositeOperation = 'multiply'; g.globalAlpha = this.redPulse * 0.7; g.fillStyle = '#c8321f'; g.fillRect(0, 0, W, H); g.globalCompositeOperation = 'source-over'; g.globalAlpha = 1; }
+    // the ink frame: one frame of bare paper and black ink on a perfect parry or the killing stroke
+    if (this.inkFrame > 0) { this.inkFrame--; this.drawInkFrame(g); }
     if (this.hurtT > 0) { this.hurtT -= dt; this.drawHurt(g, this.hurtT); }
     // letterbox for duels and standoffs
     const lbT = mode === 'play' && (s.phase === 'standoff' || (s.arena && s.arena.boss) || s.phase === 'ending') ? 1 : 0;
@@ -116,29 +129,71 @@ export class Renderer {
     if (s.phase === 'dead') { g.globalAlpha = clamp(s.pt / 1.2, 0, 0.7); g.fillStyle = INK; g.fillRect(0, 0, W, H); g.globalAlpha = 1; }
   }
 
+  // ---------- the duel mood ----------
+  updateMood(s, dt, mode) {
+    const boss = s.arena && s.arena.boss ? s.foes.find((f) => f.boss) : null;
+    const live = mode === 'play' && boss && boss.st !== 'dead' && boss.st !== 'enter' || (boss && boss.st === 'enter' && boss.stt > 0.4);
+    const tgt = live ? 1 : 0, rate = live ? 1 / 1.5 : 1 / 2.6;
+    this.red = clamp(this.red + Math.sign(tgt - this.red) * dt * rate, 0, 1); if (Math.abs(tgt - this.red) < dt * rate) this.red = tgt;
+    const t2 = live && boss.phase === 2 ? 1 : 0; this.red2 += (t2 - this.red2) * Math.min(1, dt * 1.2); if (!live && !boss) this.red2 *= 0.95;
+    const so = s.phase === 'standoff' && s.so && (s.so.st === 'ready' || s.so.st === 'hold' || s.so.st === 'strike');
+    this.cool += ((so ? 1 : 0) - this.cool) * Math.min(1, dt * (so ? 1.5 : 4));
+    if (this.redPulse > 0) this.redPulse = Math.max(0, this.redPulse - dt * 1.2);
+    this.bossX = boss ? boss.x : this.bossX;
+  }
+  drawDuelSky(g, s) {
+    const { W, H, k } = this.v, P = REDP[this.scene.key], r = this.red, e = r * r * (3 - 2 * r);
+    if (!this.redSkyC || this.redSkyC.width !== W || this.redSkyC.height !== H || this.redSkyC.key !== this.scene.key) { this.redSkyC = paintRedSky(W, H, k, this.scene.key); this.redSkyC.key = this.scene.key; }
+    // the wash bleeds up from the horizon: reveal it bottom-first as it floods in
+    const top = H * (1 - Math.min(1, e * 1.25));
+    g.globalAlpha = Math.min(1, e * 1.1); g.drawImage(this.redSkyC, 0, top, W, H - top, 0, top, W, H - top);
+    g.globalAlpha = e * 0.85; g.drawImage(this.redSkyC, 0, 0); g.globalAlpha = 1;
+    if (this.red2 > 0.01) { g.globalAlpha = this.red2 * 0.4 * e; g.fillStyle = P.top; g.fillRect(0, 0, W, H); g.globalAlpha = 1; }
+    // the pale disc behind the duel, larger in the second phase, ringed with the chapter's own colour
+    const cx = clamp(this.worldToScreenX(this.bossX || this.v.camX) - 60 * k, W * 0.3, W * 0.7), cy = H * 0.36, rad = k * 70 * (1 + 0.3 * this.red2) * (0.85 + 0.15 * e);
+    g.save(); g.globalAlpha = e * 0.5; const ring = g.createRadialGradient(cx, cy, rad * 0.9, cx, cy, rad * 1.7); ring.addColorStop(0, rgba(P.ring, 0.6)); ring.addColorStop(1, rgba(P.ring, 0)); g.fillStyle = ring; g.fillRect(cx - rad * 2, cy - rad * 2, rad * 4, rad * 4);
+    g.globalAlpha = e * 0.95; g.fillStyle = P.disc; g.shadowColor = P.disc; g.shadowBlur = 10 * k; g.beginPath(); g.arc(cx, cy, rad, 0, 6.2832); g.fill(); g.restore();
+    this.discX = cx; this.discY = cy;
+  }
+  drawInkFrame(g) {
+    const { W, H } = this.v, C = CHAPTERS[this.ch];
+    g.setTransform(1, 0, 0, 1, 0, 0); g.globalAlpha = 1; g.fillStyle = C.paper; g.fillRect(0, 0, W, H);
+    this.worldTransform(g, 1);
+    g.strokeStyle = INK; g.lineWidth = 3; g.beginPath(); for (let x = this.v.camX - 900; x < this.v.camX + 900; x += 20) { const y = -groundH(this.ch, x); x === this.v.camX - 900 ? g.moveTo(x, y) : g.lineTo(x, y); } g.stroke();
+    for (const F of this.lastFigs) drawFigure(g, F[0], F[1], F[2], F[3], F[4], Object.assign({}, F[5], { flat: INK, dt: 0, alpha: 1 }));
+    g.setTransform(1, 0, 0, 1, 0, 0);
+  }
+  // draw a figure: in the duel, a black silhouette with a thin rim of red light on the side facing the disc
+  fig(g, x, y, look, pose, fig, o) {
+    if (this.red > 0.05) {
+      const P = REDP[this.scene.key], dir = this.discX != null && this.worldToScreenX(x) > this.discX ? -1 : 1;
+      g.save(); g.translate(dir * 1.8, -0.9); drawFigure(g, x, y, look, pose, fig, Object.assign({}, o, { flat: mix(P.hor, '#ffe8d0', 0.35), dt: 0, alpha: (o.alpha ?? 1) * this.red })); g.restore();
+      o.shade = this.red * 0.6;
+    }
+    this.lastFigs.push([x, y, look, pose, fig, o]);
+    return drawFigure(g, x, y, look, pose, fig, o);
+  }
   // ---------- cues → effects ----------
   consume(s, ui) {
     const C = CHAPTERS[this.ch], acc = C.accent;
     for (const c of s.cues) {
       const gy = (x) => -groundH(this.ch, x);
       switch (c.k) {
-        case 'swing': {
-          const p = s.p, big = c.kind !== 'slash', cmb = c.combo || 0;
-          const a = [[-2.3, 0.7], [0.9, -1.2], [-2.6, 0.9]][big ? 2 : cmb];
-          this.arcs.push({ x: p.x + p.face * 8, y: gy(p.x) - 62 + (cmb === 1 ? 4 : 0), r: big ? 66 : 56, a0: a[0], a1: a[1], face: p.face, w: big ? 15 : 10, t: 0, life: big ? 0.6 : 0.42, col: INK });
-          break;
-        }
-        case 'cut': this.splash(c.x, gy(c.x) - 60, c.dmg > 1 ? 26 : 14, acc, s.p.face); this.shake = Math.max(this.shake, c.dmg > 1 ? 0.6 : 0.3); break;
-        case 'riposte': this.splash(c.x, gy(c.x) - 62, 34, acc, s.p.face); this.shake = 0.8; this.flash = 0.6; this.arcs.push({ x: c.x - s.p.face * 30, y: gy(c.x) - 60, r: 80, a0: -2.6, a1: 0.9, face: s.p.face, w: 18, t: 0, life: 0.8, col: INK }); break;
-        case 'kill': { const fig = this.figs.get(c.id); if (fig) fig.dieT = this.time; this.dissolveAt(c.x, gy(c.x), acc, c.boss ? 70 : 34); if (c.boss) { this.flash = 1; this.shake = 1; } break; }
-        case 'parry': case 'reflect': this.sparks(c.x, gy(c.x) - 66, 14); this.ring(c.x, gy(c.x) - 66); this.flash = Math.max(this.flash, 0.5); break;
+        case 'swing': break;
+        case 'cut': { const fg = this.figs.get(c.id); if (fg) fg.sqv = 5; }
+          this.splash(c.x, gy(c.x) - 60, c.dmg > 1 ? 26 : 14, acc, s.p.face); this.shake = Math.max(this.shake, c.dmg > 1 ? 0.6 : 0.3); break;
+        case 'riposte': if (s.arena && s.arena.boss && !this.reduced) this.inkFrame = 2; this.splash(c.x, gy(c.x) - 62, 34, acc, s.p.face); this.shake = 0.8; this.flash = 0.6; break;
+        case 'kill': { if (c.boss && !this.reduced) this.inkFrame = 3; const fig = this.figs.get(c.id); if (fig) fig.dieT = this.time; this.dissolveAt(c.x, gy(c.x), acc, c.boss ? 70 : 34); if (c.boss) { this.flash = 1; this.shake = 1; } break; }
+        case 'parry': case 'reflect': this.expr = { k: 'wide', t: 0.7 }; if (this.red > 0.5 && !this.reduced) this.inkFrame = 1; this.sparks(c.x, gy(c.x) - 66, 14); this.ring(c.x, gy(c.x) - 66); this.flash = Math.max(this.flash, 0.5); break;
         case 'deflect': case 'clash': this.sparks(c.x, gy(c.x) - 62, 7); this.shake = Math.max(this.shake, 0.25); break;
         case 'guardbreak': this.sparks(c.x, gy(c.x) - 60, 16); this.splash(c.x, gy(c.x) - 50, 10, INK, s.p.face); this.shake = 0.7; break;
-        case 'hurt': this.splash(c.x, gy(c.x) - 60, 18, acc, s.p.x < c.x ? 1 : -1); this.hurtT = 0.6; this.shake = 0.7; break;
+        case 'hurt': this.pfig.sqv = -5; this.splash(c.x, gy(c.x) - 60, 18, acc, s.p.x < c.x ? 1 : -1); this.hurtT = 0.6; this.shake = 0.7; break;
         case 'tell': { const fig = this.figs.get(c.id); if (fig) fig.tell = { t0: this.time, red: c.red }; break; }
         case 'feint': { const fig = this.figs.get(c.id); if (fig) fig.tell = null; break; }
         case 'gust': this.gust = { t: 0, x: c.x, tx: c.tx }; break;
-        case 'socut': this.cutFx = { t: 0 }; this.flash = 0.9; break;
+        case 'socut': this.cutFx = { t: 0 }; this.flash = this.reduced ? 0 : 0.9; this.redPulse = this.reduced ? 0.4 : 1; this.expr = { k: 'win', t: 1.6 }; break;
+        case 'clear': if (c.boss) this.expr = { k: 'win', t: 2.5 }; break;
+        case 'jump': this.pfig.sqv = -3; break;
         case 'sodraw': this.ofig.tell = { t0: this.time, red: false }; break;
         case 'sofeint': this.ofig.flick = this.time; break;
         case 'blessing': case 'secret': case 'charm': for (let i = 0; i < 26; i++) this.spawn(SMOKE, s.p.x + (Math.random() - 0.5) * 30, gy(s.p.x) - 30 - Math.random() * 30, (Math.random() - 0.5) * 10, -20 - Math.random() * 20, 2 + Math.random() * 2, 4 + Math.random() * 4, INK); if (c.k !== 'blessing') this.dissolveAt(s.p.x, gy(s.p.x), acc, 30, true); break;
@@ -146,7 +201,7 @@ export class Renderer {
         case 'phase2': this.ring(c.x, gy(c.x) - 60, 3); this.dissolveAt(c.x, gy(c.x), INK, 24); this.shake = 0.6; break;
         case 'boss': this.bossCard = { t0: this.time, boss: c.boss }; break;
         case 'step': if (C.key === 'snow') for (let i = 0; i < 3; i++) this.spawn(SNOW, c.x + (Math.random() - 0.5) * 10, gy(c.x) - 2, (Math.random() - 0.5) * 40, -30 - Math.random() * 30, 0.6, 1.5, C.paper); else if (c.run) this.spawn(MOTE, c.x, gy(c.x) - 2, -s.p.face * 10, -6, 0.6, 3, INK); break;
-        case 'land': for (let i = 0; i < 4; i++) this.spawn(MOTE, c.x + (Math.random() - 0.5) * 16, gy(c.x) - 2, (Math.random() - 0.5) * 30, -8, 0.6, 3, INK); break;
+        case 'land': this.pfig.sqv = 4.5; for (let i = 0; i < 4; i++) this.spawn(MOTE, c.x + (Math.random() - 0.5) * 16, gy(c.x) - 2, (Math.random() - 0.5) * 30, -8, 0.6, 3, INK); break;
         case 'chapter': case 'respawn': this.cam.init = false; this.arcs.length = 0; break;
       }
     }
@@ -227,21 +282,12 @@ export class Renderer {
     if (fx && fx.charm && fx.st !== 'gone') { const e = s.ev[fx.ev], x = e.path[e.path.length - 1] + 10, y = -groundH(this.ch, x); g.globalAlpha = 0.85 + Math.sin(t * 3) * 0.1; g.fillStyle = C.accent; g.beginPath(); g.ellipse(x, y - 26, 4, 6, 0, 0, 6.3); g.fill(); g.strokeStyle = INK; g.lineWidth = 1; g.stroke(); g.globalAlpha = 1; }
   }
   drawFox(g, fx, C) {
-    const x = lerp(fx.ox ?? fx.x, fx.x, this.alpha), y = -groundH(this.ch, x), f = fx.face || 1, run = fx.st === 'run', t = this.time;
-    g.save(); g.translate(x, y); g.scale(f, 1);
-    const b = run ? Math.sin(t * 20) * 3 : 0;
-    g.fillStyle = rgba(INK, 0.75); g.strokeStyle = INK; g.lineCap = 'round';
-    // body, legs, head with ears, and a big brush tail
-    g.beginPath(); g.ellipse(0, -14 + b * 0.3, 15, 6.5, run ? 0.05 : -0.15, 0, 6.3); g.fill();
-    g.lineWidth = 2; for (const lx of [-10, -6, 8, 12]) { const ph = run ? Math.sin(t * 20 + lx) * 6 : 0; g.beginPath(); g.moveTo(lx, -10); g.lineTo(lx + ph, 0); g.stroke(); }
-    g.beginPath(); g.moveTo(12, -16); g.quadraticCurveTo(20, run ? -20 : -26, 24, run ? -18 : -24); g.lineTo(18, run ? -14 : -20); g.closePath(); g.fill();
-    g.beginPath(); g.moveTo(20, run ? -22 : -28); g.lineTo(21, run ? -29 : -35); g.lineTo(24, run ? -23 : -29); g.fill();
-    ribbon(g, [-14, -14, -24, -18 - b, -34, -24 + Math.sin(t * 4) * 2, -40, -22], (u) => 3 + Math.sin(u * Math.PI) * 7, rgba(INK, 0.7), 1, 0);
-    g.globalAlpha = 0.85; g.fillStyle = '#f6f0e2'; g.beginPath(); g.ellipse(-40, -22, 3, 2.2, 0, 0, 6.3); g.fill(); g.globalAlpha = 1;
-    g.restore();
+    const x = lerp(fx.ox ?? fx.x, fx.x, this.alpha), y = -groundH(this.ch, x);
+    this.foxFig.t += 1 / 60; drawFoxFig(g, x, y, fx.face || 1, fx.st === 'run', this.time, 23, this.boilN, this.reduced);
   }
-  figFor(id, scarf) { let f = this.figs.get(id); if (!f) { f = newFig(scarf); this.figs.set(id, f); } return f; }
+  figFor(id, scarf) { let f = this.figs.get(id); if (!f) { f = newFig(scarf, id * 97 + 13); this.figs.set(id, f); } return f; }
   drawEntities(g, s, dt, mode) {
+    this.lastFigs.length = 0;
     const C = CHAPTERS[this.ch], acc = C.accent, wind = s.wind.w, a = this.alpha, t = this.time;
     const p = s.p, px = lerp(p.ox, p.x, a), py = -groundH(this.ch, px) - lerp(p.oy, p.y, a);
     // shadows: soft wash ellipses on the ground
@@ -253,13 +299,15 @@ export class Renderer {
       let al = 1; if (f.st === 'dead') { al = clamp(1 - (f.stt - 0.5) / 1.3, 0, 1); if (al > 0 && Math.random() < 0.35) this.spawn(MOTE, fx + (Math.random() - 0.5) * 26, fy - 10 - Math.random() * 80, wind * 30 + (Math.random() - 0.5) * 16, -18 - Math.random() * 14, 1.6, 2 + Math.random() * 3, INK); if (al <= 0) continue; }
       if (f.st === 'enter' && Math.abs(f.vx) > 1) fig.walk = (fig.walk || 0) + Math.abs(f.vx) * dt;
       else if (Math.abs(f.vx) > 1) fig.walk = (fig.walk || 0) + Math.abs(f.vx) * dt;
-      const look = f.type; const pose = poseFor(fig, f, look, t, false, { dt });
+      const look = f.boss ? BOSSLOOK[f.boss] : f.type; const pose = poseFor(fig, f, look, t, false, { dt });
       walkLegs(pose, fig.walk || 0, Math.abs(f.vx), f.st);
-      shadow(fx, 18 * (LOOKS[look] ? LOOKS[look].sc : 1));
-      const o = { face: f.face, alpha: al, wind, vx: f.vx, sash: f.boss ? acc : null, shield: !!f.shield, ink: INK, draw: look === 'archer' && f.st === 'wind' ? clamp(f.stt / f.windT, 0, 1) : 0, shieldOut: f.st === 'act' && f.atk === 'bash' };
+      shadow(fx, 20 * (LOOKS[look] ? LOOKS[look].sc : 1));
+      const o = { face: f.face, alpha: al, wind, vx: f.vx, dt, boilN: this.boilN, reduced: this.reduced, sash: f.boss ? acc : null, shield: !!f.shield, draw: look === 'archer' && f.st === 'wind' ? clamp(f.stt / f.windT, 0, 1) : 0, shieldOut: f.st === 'act' && f.atk === 'bash', walkPh: (fig.walk || 0) / 19, still: look === 'master' };
       if (f.st === 'opened') o.alpha = al * (0.85 + Math.sin(t * 30) * 0.1);
-      const geo = drawFigure(g, fx, fy, look, pose, fig, o);
+      const geo = this.fig(g, fx, fy, look, pose, fig, o);
       // telegraph: brush flick over the head, glint on the weapon (red = unblockable)
+      this.trail(g, fig, o._tip, f.st === 'act' || (f.st === 'rec' && f.stt < 0.06), 6, dt);
+      if (look === 'hyoe' && this.red > 0.2 && Math.random() < 0.35) this.spawn(GOLD, geo.N[0] - f.face * 14, geo.N[1] - 40, 0, -30, 2.5, 1 + Math.random() * 1.4, '#ffb46a');
       if (fig.tell && (f.st === 'wind' || f.st === 'act')) this.drawTell(g, fig.tell, o._tip || geo.G, geo.Hd, f.face);
       if (f.st === 'opened') this.drawOpened(g, geo.Hd, f.stt);
     }
@@ -280,14 +328,25 @@ export class Renderer {
     if (mode !== 'title') walkLegs(pose, fig.walk || 0, moving ? Math.abs(p.vx) : 0, p.st);
     let roll = 0; if (p.st === 'dodge') roll = clamp(p.stt / PT.dodgeT, 0, 1) * Math.PI * 2 * (p.dodgeDir === p.face ? 1 : -1);
     const dead = p.st === 'dead';
-    shadow(px, 18);
+    shadow(px, 22);
     const scarfCol = mix(acc, INK, 0.3);
-    const o = { face: p.face, alpha: p.ifr > 0 && p.st === 'hit' ? 0.75 : 1, wind, vx: p.vx, roll, scarf: scarfCol, hatCol: this.scene.night ? '#4d4a48' : '#5b5248' };
+    const ex = this.expr; ex.t -= dt; let expr = ex.t > 0 ? ex.k : 'calm'; if (p.st === 'hit' || p.st === 'dead') expr = 'hurt'; if (s.phase === 'ending' || p.st === 'iai') expr = 'win';
+    const o = { face: p.face, alpha: 1, wind, vx: p.vx, roll, scarf: scarfCol, dt, boilN: this.boilN, reduced: this.reduced, expr, walkPh: (fig.walk || 0) / 19 };
     // scarf anchor follows the neck of the previous pose (close enough at 60 fps)
-    const geo = drawFigure(g, px, py, 'ronin', pose, fig, o);
+    const geo = this.fig(g, px, py, 'ronin', pose, fig, o);
     stepScarf(fig, geo.N[0] - p.face * 2, geo.N[1] + 2, p.face, wind, p.vx, dt, !fig.scarf.inited);
+    const A0 = p.st === 'slash' ? PT.slash[p.combo || 0] : p.st === 'heavy' ? PT.heavy : p.st === 'counter' ? PT.counter : null;
+    this.trail(g, fig, o._tip, !!A0 && p.stt > A0.wind * 0.6 && p.stt < A0.wind + A0.act + 0.07, p.st === 'slash' ? 9 : 13, dt);
     if (p.st === 'guard' && p.stt < 0.2) { g.globalAlpha = (0.2 - p.stt) * 3; g.strokeStyle = INK; g.lineWidth = 1.2; g.beginPath(); g.arc(px + p.face * 22, py - 70, 10 + p.stt * 60, 0, 6.3); g.stroke(); g.globalAlpha = 1; }
     if (dead) { /* body lies; the dissolve happens in the dead overlay */ }
+  }
+  trail(g, fig, tip, live, w, dt) {
+    const T = fig.trailPts || (fig.trailPts = []); fig.trailAge = (fig.trailAge || 0) + dt;
+    if (live && tip) { if (!T.length || fig.trailAge > 0.4) { T.length = 0; } T.push([tip[0], tip[1]]); fig.trailAge = 0; if (T.length > 14) T.shift(); }
+    if (T.length < 3 || fig.trailAge > 0.38) return;
+    const a = 0.92 * (1 - fig.trailAge / 0.38);
+    // a single loaded stroke: thin where the cut began, full at the blade, drying from the tail
+    brushLine(g, T, w * (1 - fig.trailAge * 1.2), INK, a, 7, { t0: 0.7, swell: 0.6 });
   }
   drawTell(g, tell, tip, head, face) {
     const age = this.time - tell.t0; if (age > 0.5) return;
@@ -297,10 +356,12 @@ export class Renderer {
     // glint: four-point star
     const r = (tell.red ? 18 : 13) * (0.4 + k * 0.6) * (0.5 + fade * 0.5), x = tip[0], y = tip[1];
     g.save(); g.translate(x, y); g.rotate(age * 2);
-    g.globalAlpha = fade; g.fillStyle = tell.red ? RED : '#fffaf0';
+    const hot = tell.red && this.red > 0.3; // against the red sky the unblockable glint burns white with a dark core
+    g.globalAlpha = fade; g.fillStyle = hot ? '#fff6e6' : tell.red ? RED : '#fffaf0';
     g.beginPath(); for (let i = 0; i < 8; i++) { const rr = i % 2 ? r * 0.18 : r, an = (i / 8) * Math.PI * 2; g.lineTo(Math.cos(an) * rr, Math.sin(an) * rr); } g.closePath(); g.fill();
     g.strokeStyle = tell.red ? mix(RED, INK, 0.4) : INK; g.lineWidth = 0.9; g.stroke();
     if (!tell.red) { g.globalAlpha = fade * 0.5; g.beginPath(); g.arc(0, 0, r * 0.6, 0, 6.3); g.stroke(); }
+    else if (hot) { g.globalAlpha = fade; g.fillStyle = INK; g.beginPath(); g.arc(0, 0, r * 0.22, 0, 6.3); g.fill(); g.strokeStyle = INK; g.lineWidth = 2; g.beginPath(); g.arc(0, 0, r * 1.1, 0, 6.3); g.stroke(); }
     else { g.globalAlpha = fade * 0.35; g.fillStyle = RED; g.beginPath(); g.arc(0, 0, r * 1.4, 0, 6.3); g.fill(); }
     g.restore(); g.globalAlpha = 1;
   }
@@ -328,8 +389,8 @@ export class Renderer {
     let al = 1; if (pose === 'cut' && so.t > 0.9) { al = clamp(1 - (so.t - 0.9) / 0.6, 0, 1); if (Math.random() < 0.7) this.spawn(MOTE, x + (Math.random() - 0.5) * 30, y - Math.random() * 80, s.wind.w * 20 + 5, -12, 1.4, 3 + Math.random() * 4, INK); if (!fig.dis) { fig.dis = 1; this.dissolveAt(x, y, CHAPTERS[this.ch].accent, 30); } } else fig.dis = 0;
     if (pose === 'walk' || pose === 'next') { fig.walk = (fig.walk || 0) + 150 * dt; walkLegs(P, fig.walk, 150, 'move'); }
     g.globalAlpha = 0.16; g.fillStyle = INK; g.beginPath(); g.ellipse(x, y + 1, 18, 3.5, 0, 0, 6.3); g.fill(); g.globalAlpha = 1;
-    const o = { face, alpha: al, wind: s.wind.w, vx: 0 };
-    const geo = drawFigure(g, x, y, look, P, fig, o);
+    const o = { face, alpha: al, wind: s.wind.w, vx: 0, dt, boilN: this.boilN, reduced: this.reduced };
+    const geo = this.fig(g, x, y, look, P, fig, o);
     if (pose === 'feint' && fig.flick && t - fig.flick < 0.3) { const age = t - fig.flick; ribbon(g, [geo.Hd[0] + 4, geo.Hd[1] - 22, geo.Hd[0] - 2, geo.Hd[1] - 30, geo.Hd[0] - 10, geo.Hd[1] - 34], (u) => 3.2 * (1 - u) + 0.3, INK, clamp(1 - age / 0.3, 0, 1) * 0.8, 0); }
     if (pose === 'strike' && fig.tell) this.drawTell(g, fig.tell, o._tip || geo.G, geo.Hd, face);
     // the cut: one long horizontal stroke across the frame
@@ -359,10 +420,11 @@ export class Renderer {
     // weather spawns across the visible world
     const halfW = v.W / 2 / (v.k * v.zoom), top = v.camY - 100 - (v.cy / (v.k * v.zoom)), bot = v.camY + (v.H - v.cy) / (v.k * v.zoom) - 100;
     const rate = { bamboo: 2.2, terraces: 5, torii: 1.2, snow: this.reduced ? 26 : 70, castle: 6 }[key] * (s.phase === 'standoff' ? 0.15 : 1);
-    this.weatherAcc += dt * rate;
+    this.weatherAcc += dt * rate * (1 + this.red * 1.5);
     while (this.weatherAcc > 1) {
       this.weatherAcc -= 1;
       const x = v.camX + (Math.random() * 2.2 - 1.1) * halfW - wind * 120, y = top + Math.random() * (bot - top) * 0.5 - 20;
+      if (this.red > 0.3 && Math.random() < 0.5) { const pc = REDP[key].part; const q = this.spawn(key === 'snow' ? SNOW : key === 'castle' ? PETAL : LEAF, x, top + Math.random() * (bot - top) * 0.6, 0, 20, 6, key === 'snow' ? 1.6 : 5, pc); continue; }
       if (key === 'snow') this.spawn(SNOW, x, top - 10 + Math.random() * 40, 0, 30 + Math.random() * 30, 9, 0.7 + Math.random() * 1.6, '#f4f1ea');
       else if (key === 'castle') this.spawn(PETAL, x, y, 0, 10, 8, 2 + Math.random() * 1.8, acc);
       else if (key === 'terraces') { if (Math.random() < 0.7) this.spawn(GOLD, x, top + (bot - top) * (0.35 + Math.random() * 0.5), 0, -4, 6, 0.8 + Math.random() * 1.2, acc); else this.spawn(LEAF, x, y, 0, 10, 8, 5 + Math.random() * 3, INK); }
@@ -401,7 +463,7 @@ export class Renderer {
         }
         case SMOKE: { p.vx += (wind * 18 - p.vx) * dt; p.x += p.vx * dt + Math.sin(t * 2 + p.seed * 9) * 0.3; p.y += p.vy * dt; g.globalAlpha = 0.14 * (1 - u); g.strokeStyle = INK; g.lineWidth = p.size * (1 + u); g.beginPath(); g.moveTo(p.x, p.y); g.lineTo(p.x + Math.sin(t * 3 + p.seed * 5) * 3, p.y - 6); g.stroke(); break; }
         case SNOW: { const wx = wind * 140 + Math.sin(t * 1.3 + p.seed * 11) * 16; p.vx += (wx - p.vx) * dt * 2; p.x += p.vx * dt; p.y += p.vy * dt; if (p.y > -groundH(this.ch, p.x) + 30) { p.on = 0; break; } g.globalAlpha = 0.85 * fade; g.fillStyle = p.col; g.beginPath(); g.arc(p.x, p.y, p.size, 0, 6.3); g.fill(); break; }
-        case GOLD: { p.x += (wind * 20 + Math.sin(t + p.seed * 8) * 8) * dt; p.y += Math.sin(t * 1.4 + p.seed * 6) * 6 * dt; g.globalAlpha = (0.3 + 0.5 * Math.abs(Math.sin(t * 3 + p.seed * 20))) * fade; g.fillStyle = p.col; g.beginPath(); g.arc(p.x, p.y, p.size, 0, 6.3); g.fill(); break; }
+        case GOLD: { p.x += (wind * 20 + Math.sin(t + p.seed * 8) * 8) * dt; p.y += (p.vy + Math.sin(t * 1.4 + p.seed * 6) * 6) * dt; g.globalAlpha = (0.3 + 0.5 * Math.abs(Math.sin(t * 3 + p.seed * 20))) * fade; g.fillStyle = p.col; g.beginPath(); g.arc(p.x, p.y, p.size, 0, 6.3); g.fill(); break; }
         case MIST: { p.x += wind * 30 * dt; const gr = g.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.size); gr.addColorStop(0, rgba(p.col, 0.4 * fade)); gr.addColorStop(1, rgba(p.col, 0)); g.globalAlpha = 1; g.fillStyle = gr; g.fillRect(p.x - p.size, p.y - p.size, p.size * 2, p.size * 2); break; }
         case SPARK: { p.x += p.vx * dt; p.y += p.vy * dt; p.vx *= 0.9; p.vy *= 0.9; const l = p.size * (1 - u); g.globalAlpha = 1 - u; g.strokeStyle = INK; g.lineWidth = 2.6; g.beginPath(); g.moveTo(p.x, p.y); g.lineTo(p.x - Math.cos(p.rot) * l, p.y - Math.sin(p.rot) * l); g.stroke(); g.strokeStyle = '#fffaf0'; g.lineWidth = 1.2; g.stroke(); break; }
         case GUST: {
@@ -450,6 +512,7 @@ export class Renderer {
     if (s.phase === 'narr' || s.phase === 'ending' || s.phase === 'credits' || s.phase === 'fin' || s.phase === 'haiku') return;
     const top = this.lb > 0.1 ? H * 0.1 * this.lb + 10 * d : 0;
     const x0 = 22 * d, y0 = top + 20 * d, u = 1.05 * d * (this.portrait ? 1.1 : 1);
+    if (this.red > 0.05) { g.globalAlpha = 0.88 * this.red; g.fillStyle = C.paper; g.fillRect(x0 - 10 * d, y0 - 8 * d, Math.max(p.hpMax * 11, s.resMax * 20) * u + 14 * d, 58 * u); g.globalAlpha = 1; }
     // health: short upright brush strokes
     for (let i = 0; i < p.hpMax; i++) {
       const x = x0 + i * 11 * u, on = i < p.hp;
@@ -525,15 +588,6 @@ export function drawSeal(g, x, y, s, paper) {
   g.fillStyle = paper; for (let i = 0; i < 18; i++) { const a = (i * 2.399) % 6.28, r = s * 0.5; g.globalAlpha = 0.5; g.beginPath(); g.arc(Math.cos(a) * r * 0.98, s / 2 + Math.sin(a) * r * 0.98, s * 0.03 + (i % 3) * s * 0.012, 0, 6.3); g.fill(); }
   g.globalAlpha = 0.95; g.font = `700 ${Math.round(s * 0.78)}px ${JP}`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillStyle = paper; g.fillText('風', 0, s * 0.53);
   g.restore();
-}
-
-function walkLegs(pose, dist, speed, st) {
-  if (speed < 8 || !(st === 'move' || st === 'enter' || st === 'ready' || st === 'approach' || st === 'idle' || st === 'wind')) return;
-  const run = speed > 200, stride = run ? 22 : 15, ph = dist / (run ? 26 : 19);
-  const s1 = Math.sin(ph), c1 = Math.cos(ph);
-  pose.ff = [pose.ff[0] * 0.3 + s1 * stride, Math.min(0, -Math.max(0, c1) * (run ? 9 : 5))];
-  pose.fb = [pose.fb[0] * 0.3 - s1 * stride, Math.min(0, -Math.max(0, -c1) * (run ? 9 : 5))];
-  pose.hy += Math.abs(c1) * (run ? 3 : 1.5) - (run ? 4 : 1); if (run) pose.lean += 0.14;
 }
 
 // ---------- sprites and props ----------

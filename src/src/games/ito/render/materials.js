@@ -205,9 +205,11 @@ export function groundMaterial(city) {
         vec3 col = side;
         float onRoad = 0.0;
         vec3 mark = vec3(0.0);
+        float kerb = 0.0;
         for (int i = 0; i < 7; i++) {
           float dx = abs(p.x - uSX[i]), dz = abs(p.y - uSZ[i]);
           float hx = uWX[i] * 0.5 - 3.0, hz = uWZ[i] * 0.5 - 3.0;
+          kerb = max(kerb, (1.0 - step(0.35, abs(dx - hx))) + (1.0 - step(0.35, abs(dz - hz))));
           if (dx < hx) {
             onRoad = 1.0;
             // centre double line + lane dashes
@@ -230,7 +232,13 @@ export function groundMaterial(city) {
         if (bx < hx && bz > hz && bz < hz + 4.0) mark = max(mark, vec3(0.85) * step(0.5, fract(p.x / 1.6)));
         if (bz < hz && bx > hx && bx < hx + 4.0) mark = max(mark, vec3(0.85) * step(0.5, fract(p.y / 1.6)));
         if (bx < hx && bz < hz) mark = vec3(0.0); // the box itself stays clear
-        col = mix(side, asphalt, onRoad);
+        // close up the street has a surface: asphalt grain, paving joints on the pavement, a kerb line
+        float nearK = 1.0 - smoothstep(25.0, 90.0, dist);
+        float grain = hash21(floor(p * 3.0)) * 0.5 + hash21(floor(p * 0.7)) * 0.5;
+        vec3 asph = asphalt * (0.8 + 0.45 * grain * nearK) + vec3(0.02, 0.015, 0.04) * step(0.93, hash21(floor(p * 0.5))) * nearK;
+        vec2 tile = abs(fract(p / 1.5) - 0.5);
+        vec3 pave = side * (1.0 - 0.22 * step(0.45, max(tile.x, tile.y)) * nearK) * (0.92 + 0.16 * grain * nearK);
+        col = mix(pave, asph, onRoad);
         // park
         if (p.x > uPark.x && p.x < uPark.z && p.y > uPark.y && p.y < uPark.w) {
           col = vec3(0.07, 0.17, 0.15);
@@ -246,8 +254,9 @@ export function groundMaterial(city) {
           pool = max(pool, (1.0 - smoothstep(0.0, 6.0, length(vec2(dz, mod(p.x, 24.0) - 12.0)))));
         }
         col += vec3(1.0, 0.55, 0.3) * pool * 0.22;
+        col = mix(col, vec3(0.42, 0.36, 0.52), clamp(kerb, 0.0, 1.0) * 0.6 * (1.0 - smoothstep(40.0, 160.0, dist)));
         float far = smoothstep(80.0, 220.0, dist);
-        col = mix(col + mark * 0.55, col + mark * 0.12, far);
+        col = mix(col + mark * 0.85, col + mark * 0.2, far);
         col = mix(col, col * 0.5, halftone(gl_FragCoord.xy, 0.3 * (1.0 - pool), uDot));
         col = fogIt(col, dist);
         gl_FragColor = vec4(col, 1.0 / 255.0);
@@ -313,7 +322,9 @@ export function heroMaterial(color, id, emissive = 0) {
         vec3 c = uColor * (0.5 + 0.6 * band);
         // rim: a hard magenta kicker from the city behind
         float rim = 1.0 - max(dot(n, normalize(vV)), 0.0);
-        c = mix(c, vec3(1.0, 0.35, 0.85), step(0.72, rim) * 0.55 * (1.0 - uEm));
+        c = mix(c, vec3(1.0, 0.35, 0.85), step(0.66, rim) * 0.45 * (1.0 - uEm));
+        // a thin cream rim on the silhouette keeps the courier readable against dark walls
+        c = mix(c, vec3(1.0, 0.96, 0.86), step(0.86, rim) * 0.8 * (1.0 - uEm));
         float cov = band > 0.9 ? 0.0 : band > 0.6 ? 0.2 : 0.45;
         c = mix(c, c * 0.45, halftone(gl_FragCoord.xy, cov, uDot * 0.8) * (1.0 - uEm));
         c = mix(c, uColor * 1.15, uEm);

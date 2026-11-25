@@ -123,6 +123,7 @@ export function createAudio() {
         case 'finish': [659, 784, 988, 1319].forEach((f, i) => tone('triangle', f, f, 0.35, 0.07, sfxBus, i * 0.09)); break;
         case 'crane': tone('sine', 1568, 1568, 0.25, 0.07); tone('sine', 2093, 2093, 0.35, 0.05, sfxBus, 0.08); break;
         case 'close': noise(0.2, 1800, 600, 0.12, 'bandpass', 1.5); break;
+        case 'radio': noise(0.08, 2600, 1800, 0.05, 'bandpass', 3); tone('square', 1320, 1320, 0.05, 0.025, sfxBus, 0.06); tone('square', 990, 990, 0.06, 0.025, sfxBus, 0.13); break; // a two-note radio chirp
         case 'ui': tone('square', 1200, 1200, 0.03, 0.03); break;
         case 'uiback': tone('square', 700, 700, 0.04, 0.03); break;
         case 'chain': tone('triangle', 660 + Math.min(12, v) * 40, 660 + Math.min(12, v) * 40, 0.08, 0.04); break;

@@ -48,3 +48,13 @@ claude/vibrant-curie-0x7eb2 @ 1ad129b (main was published from it). Tag pushes a
 - Resumed via SendMessage: LOOK (a6d9e860ad1086c51), CITY (aa59423e14b1e4e96), MACHI fixer (a6bc7d6e2636e629e).
 - Live: arcade + four games (KUMITE at round 2, MACHI at round 1), REDLINE at the pre-v3 checkpoint.
 - Still queued: ITO and KAZE critics, REDLINE review, REDLINE v3 integration + deploy, README (REDLINE section, OSM credit), final report.
+
+## 02:12 UTC — REDLINE v3 live
+- LOOK and CITY reports in; integrator checks passed (sim + 4 game suites, site build, desktop + phone REDLINE flow; one HUD overlap fixed: radio vs map/place plate, ghost chip). Release built from a clean worktree at `eec8162` (scratchpad/rel) and DEPLOYED with MACHI round 2 and the README (REDLINE section rewritten, OSM credit). Live verified by hash.
+- Owner feedback (02:00): KAZE and KUMITE character design is bad ("stick figures", "sucks big time"), atmosphere fine. References given: /home/user/johnheibel/claudeanimationbase (ANIMATION_GUIDE.md), /home/user/ref/claude-code-anime-mj (masters list); a Reddit post that cannot be fetched from here.
+- Running: KAZE character redesign (a96e8e6fec773fc6e), KUMITE character redesign (ad57f81de1bb8825d), ITO critic (a198d9b860dde659a).
+- Next: review both model sheets myself before accepting; ITO fixes from its critic; REDLINE independent review if budget allows; new cabinet captures (redline.jpg and machi.jpg already replaced, uncommitted until next deploy); final report.
+
+## 02:30 UTC — planned pause (owner: stop at ~75% of the usage window, keep 25% for him)
+- Stopped KAZE, KUMITE and ITO builders mid-round; all suites pass and the site builds with their WIP; committed `c4970eb`.
+- Everything needed to resume is in `src/RESUME-NOTES.md`. Next reset is about 06:40 UTC; check-in 7 fires at 06:45.

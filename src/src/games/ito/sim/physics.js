@@ -152,7 +152,9 @@ export function sphereHits(city, x, y, z, r, ignore = -1) {
   }
   return false;
 }
-export function predictSafe(city, pl, ax, ay, az, horizon, dt, inflate, P_ = P, dx = 0, dz = 0) {
+export const pred = { minD: 1e9 };
+export function predictSafe(city, pl, ax, ay, az, horizon, dt, inflate, P_ = P, dx = 0, dz = 0, tg = null) {
+  pred.minD = 1e9;
   probe.x = pl.x; probe.y = pl.y; probe.z = pl.z; probe.vx = pl.vx; probe.vy = pl.vy; probe.vz = pl.vz;
   probe.ax = ax; probe.ay = ay; probe.az = az; probe.fl = roofBelow(city, ax, az, ay - 1);
   attachRedirect(probe, dx, dz);
@@ -162,6 +164,7 @@ export function predictSafe(city, pl, ax, ay, az, horizon, dt, inflate, P_ = P, 
     swingCore(probe, dt, 0, 0, 0, true, P_);
     if (probe.y < P_.R + 1.5) return false;
     if (sphereHits(city, probe.x, probe.y, probe.z, r)) return false;
+    if (tg) { const d = Math.hypot(probe.x - tg.x, probe.y - tg.y, probe.z - tg.z); if (d < pred.minD) pred.minD = d; }
   }
   return true;
 }
@@ -183,13 +186,26 @@ export function pivotFor(A, a, x, z, dx, dz, out) {
 }
 const cand = new Int32Array(1024), candS = new Float32Array(1024);
 const pv = { x: 0, y: 0, z: 0 };
-export function chooseAnchor(city, pl, fx, fz, P_ = P, maxChecks = 7) {
+// guide (during a delivery run): {x, y, z, k} = the next ring and how hard to lean toward it. The desired direction
+// bends toward the ring, and when the ring is near, the anchor whose predicted swing passes closest to it wins.
+export function chooseAnchor(city, pl, fx, fz, P_ = P, maxChecks = 7, guide = null) {
   const A = city.anchors, g = city.agrid;
   const x = pl.x, y = pl.y, z = pl.z;
   const sp = Math.hypot(pl.vx, pl.vz);
   let dx = fx, dz = fz;
   if (sp > 4) { const w = Math.min(0.5, sp / 70); dx = dx * (1 - w) + (pl.vx / sp) * w; dz = dz * (1 - w) + (pl.vz / sp) * w; }
+  let gd = 1e9;
+  if (guide && guide.k > 0) {
+    const gx = (guide.ax ?? guide.x) - x, gz = (guide.az ?? guide.z) - z;
+    gd = Math.hypot(gx, gz);
+    // lean toward the ring; much less once it is behind you (no U-turn spirals after a near miss)
+    const ahead = sp > 4 ? (gx * pl.vx + gz * pl.vz) / (gd * sp) : 1;
+    const k = ahead < -0.2 ? guide.k * 0.35 : guide.k;
+    if (gd > 6) { const dl0 = Math.hypot(dx, dz) || 1; dx = dx / dl0 + (gx / gd) * k; dz = dz / dl0 + (gz / gd) * k; }
+  }
   const dl = Math.hypot(dx, dz) || 1; dx /= dl; dz /= dl;
+  const near = guide && guide.k > 0 && gd < 110;
+  let best = -1, bestS = -1e9, valid = 0;
   pl.aimDx = dx; pl.aimDz = dz;
   const R = P_.AMAX;
   const i0 = g.ci(x - R), i1 = g.ci(x + R), j0 = g.ci(z - R), j1 = g.ci(z + R);
@@ -229,10 +245,13 @@ export function chooseAnchor(city, pl, fx, fz, P_ = P, maxChecks = 7) {
     if (!segmentClear(city, x, y, z, A[a * 4], A[a * 4 + 1], A[a * 4 + 2], 0.15)) continue;
     pivotFor(A, a, x, z, dx, dz, pv);
     if (!segmentClear(city, x, y, z, pv.x, pv.y, pv.z, 0.15)) continue;
-    if (!predictSafe(city, pl, pv.x, pv.y, pv.z, 1.4, 1 / 60, 0.8, P_, dx, dz)) continue;
-    return a;
+    if (!predictSafe(city, pl, pv.x, pv.y, pv.z, 1.4, 1 / 60, 0.8, P_, dx, dz, near ? guide : null)) continue;
+    if (!near) return a;
+    const total = -pred.minD / 8 + (valid === 0 ? 0.25 : 0);
+    if (total > bestS) { bestS = total; best = a; }
+    if (++valid >= 4) break;
   }
-  return -1;
+  return best;
 }
 
 // zip target: the perch nearest the centre of the view (3D camera direction), within 15..110 m, line of sight clear
@@ -308,6 +327,29 @@ export function resolve(city, pl) {
 // quadratic drag, plus a stronger term above cruise speed (returns accel per unit velocity)
 export function drag(v) { return P.DRAG * v + (v > P.CRUISE ? (P.DRAG2 * (v - P.CRUISE)) / v : 0); }
 
+// ring magnet (delivery runs): an acceleration that closes the miss vector of a flight heading roughly at the ring.
+// In free flight it bends the path; on a line it goes in as a tangential extra force, so the pendulum stays a pendulum.
+const gacc = { x: 0, y: 0, z: 0 };
+export function guideAccel(pl, g, R, swinging) {
+  gacc.x = gacc.y = gacc.z = 0;
+  const rx = g.x - pl.x, ry = g.y - pl.y, rz = g.z - pl.z;
+  const d = Math.sqrt(rx * rx + ry * ry + rz * rz);
+  if (d > R || d < 1) return gacc;
+  const v = Math.sqrt(pl.vx * pl.vx + pl.vy * pl.vy + pl.vz * pl.vz);
+  if (v < 8) return gacc;
+  const ux = pl.vx / v, uy = pl.vy / v, uz = pl.vz / v;
+  const along = rx * ux + ry * uy + rz * uz;
+  if (along < d * (swinging ? 0.35 : 0.5)) return gacc;
+  const ex = rx - ux * along, ey = ry - uy * along, ez = rz - uz * along;
+  const tt = along / v;
+  const k = Math.min(26, 2 / Math.max(tt * tt, 0.04));
+  let ax = ex * k, ay = ey * k, az = ez * k;
+  const al = Math.hypot(ax, ay, az), cap = swinging ? 16 : 26;
+  if (al > cap) { ax *= cap / al; ay *= cap / al; az *= cap / al; }
+  gacc.x = ax; gacc.y = ay; gacc.z = az;
+  return gacc;
+}
+
 // ---------------- the step ----------------
 // input: { mx, my (-1..1, camera space), swing, dash, zip, dive (held booleans), yaw, pitch }
 const tmp = { x: 0, y: 0, z: 0 };
@@ -335,7 +377,18 @@ export function stepPlayer(city, pl, input, dt, ev, t) {
   pl.aimT -= dt;
   if (pl.aimT <= 0) {
     pl.aimT = 1 / 30;
-    pl.aim = pl.mode === MODE.SWING || pl.mode === MODE.ZIP ? -1 : chooseAnchor(city, pl, fx, fz);
+    pl.aim = pl.mode === MODE.SWING || pl.mode === MODE.ZIP ? -1 : chooseAnchor(city, pl, fx, fz, P, 7, input.guide || null);
+    // boxed in (a podium pocket, facing a wall): during a run, look for a line toward the next ring instead
+    if (pl.aim < 0 && input.guide && pl.mode !== MODE.SWING && pl.mode !== MODE.ZIP) {
+      const g = input.guide, gx = g.x - pl.x, gz = g.z - pl.z, gl = Math.hypot(gx, gz);
+      if (gl > 10) {
+        const svx = pl.vx, svz = pl.vz;
+        pl.vx = 0; pl.vz = 0; // judge the fallback by direction alone
+        const a = chooseAnchor(city, pl, gx / gl, gz / gl, P, 9, null);
+        pl.vx = svx; pl.vz = svz;
+        if (a >= 0) { pl.aimDx = gx / gl; pl.aimDz = gz / gl; pl.aim = a; }
+      }
+    }
     pl.zipAim = pl.mode === MODE.ZIP ? -1 : chooseZip(city, pl, cdx, cdy, cdz, input.zipCone || 0.9);
   }
 
@@ -388,8 +441,14 @@ export function stepPlayer(city, pl, input, dt, ev, t) {
       ex += px * P.STEER; ez += pz * P.STEER;
       const dr = drag(vs);
       ex -= pl.vx * dr; ey -= pl.vy * dr; ez -= pl.vz * dr;
+      if (input.guide && input.guide.mag) { const ga = guideAccel(pl, input.guide, input.guide.mag, true); ex += ga.x; ey += ga.y; ez += ga.z; }
       swingCore(pl, dt, ex, ey, ez, true, P);
       collide(city, pl, ev);
+      // holding through the top of the arc lets go by itself (with the release throw): nobody dangles forever
+      if (pl.mode === MODE.SWING) {
+        if (pl.lineT > 0.45 && pl.vy > 3) pl.rose = true;
+        if ((pl.rose && pl.vy < 1.2) || pl.lineT > 3.2) release(pl, ev, true);
+      }
       break;
     }
     default: { // AIR
@@ -404,10 +463,11 @@ export function stepPlayer(city, pl, input, dt, ev, t) {
         const hs = Math.hypot(pl.vx, pl.vz);
         if (hs > 1) { pl.vx += (pl.vx / hs) * 4 * dt; pl.vz += (pl.vz / hs) * 4 * dt; }
       }
+      if (input.guide && input.guide.mag) { const ga = guideAccel(pl, input.guide, input.guide.mag, false); pl.vx += ga.x * dt; pl.vy += ga.y * dt; pl.vz += ga.z * dt; }
       pl.x += pl.vx * dt; pl.y += pl.vy * dt; pl.z += pl.vz * dt;
       collide(city, pl, ev);
       // holding swing in the air: attach as soon as a good anchor exists (forgiving)
-      if (pl.mode === MODE.AIR && input.swing && pl.aim >= 0 && (pl.wantAttach || pl.vy < 4) && pl.kickT > 0.12) attach(city, pl, pl.aim, ev);
+      if (pl.mode === MODE.AIR && input.swing && pl.aim >= 0 && (pl.wantAttach || (pl.vy < 4 && pl.releaseT > 0.3)) && pl.kickT > 0.12) attach(city, pl, pl.aim, ev);
     }
   }
 
@@ -451,7 +511,7 @@ export function attach(city, pl, a, ev) {
   pl.ax = pv.x; pl.ay = pv.y; pl.az = pv.z; pl.fl = roofBelow(city, pv.x, pv.z, pv.y - 1);
   pl.aIdx = a;
   attachRedirect(pl, pl.aimDx, pl.aimDz);
-  pl.mode = MODE.SWING; pl.lineT = 0; pl.wantAttach = false;
+  pl.mode = MODE.SWING; pl.lineT = 0; pl.wantAttach = false; pl.rose = false;
   const side = pl.aimDx * (pl.lz - pl.z) - pl.aimDz * (pl.lx - pl.x) > 0 ? 1 : -1;
   pl.side = side; pl.hand = side;
   pl.swingCount++;
@@ -459,22 +519,28 @@ export function attach(city, pl, a, ev) {
   ev.push({ type: 'attach', x: pl.lx, y: pl.ly, z: pl.lz });
 }
 
-function release(pl, ev) {
+// the "perfect" window: on the way up, climbing 9-58 degrees, past the bottom, with some speed (the HUD cues it)
+export function perfectWindow(pl) {
+  if (pl.mode !== MODE.SWING || pl.lineT <= 0.35 || pl.vy <= 1) return false;
   const sp = Math.hypot(pl.vx, pl.vy, pl.vz);
   const climb = pl.vy / Math.max(sp, 1e-6);
   const ny = (pl.y - pl.ay) / Math.max(pl.L, 1);
+  return climb > 0.15 && climb < 0.85 && ny > -0.9 && sp > 14;
+}
+function release(pl, ev, auto = false) {
+  const sp = Math.hypot(pl.vx, pl.vy, pl.vz);
   // a release on the way up throws you forward and up; the sweet spot is "perfect"
-  const rising = pl.vy > 1 && pl.lineT > 0.35;
-  const perfect = rising && climb > 0.22 && climb < 0.8 && ny > -0.75 && sp > 18;
+  const rising = (pl.vy > 1 && pl.lineT > 0.35) || auto;
+  const perfect = !auto && perfectWindow(pl);
   if (rising) {
     const hs = Math.hypot(pl.vx, pl.vz) || 1;
-    const b = perfect ? 4.5 : 2.2;
-    pl.vx += (pl.vx / hs) * b; pl.vz += (pl.vz / hs) * b; pl.vy += perfect ? 5 : 2.5;
-    if (perfect) { pl.vx *= 1.05; pl.vz *= 1.05; }
+    const b = perfect ? 3.6 : 2.2;
+    pl.vx += (pl.vx / hs) * b; pl.vz += (pl.vz / hs) * b; pl.vy += perfect ? 4.2 : 2.5;
+    if (perfect) { pl.vx *= 1.03; pl.vz *= 1.03; }
   }
   pl.mode = MODE.AIR; pl.aIdx = -1; pl.releaseT = 0; pl.airT = 0; pl.aimT = 0;
   if (perfect) pl.perfectT = 0;
-  ev.push({ type: 'release', perfect, rising, lineT: pl.lineT, speed: sp });
+  ev.push({ type: 'release', perfect, rising, auto, lineT: pl.lineT, speed: sp });
 }
 
 function land(city, pl, box, ev) {

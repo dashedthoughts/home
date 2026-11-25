@@ -1,7 +1,8 @@
 // ITO headless tests:  node src/games/ito/test.mjs   (from /home/user/home-site/src)
 // 1) the pendulum conserves energy without pumping, 2) the auto-anchor never picks a swing that hits a wall or the street,
 // 3) a scripted bot finishes all three delivery runs within gold x 1.5. Also prints swing-feel numbers.
-import { createSim, STEP, MEDALS, MODE, P, magnet } from './sim/index.js';
+import { createSim, STEP, MEDALS, MODE, P } from './sim/index.js';
+import { assistCamera } from './sim/assist.js';
 import { swingCore, chooseAnchor, attachRedirect, sphereHits, newPlayer, pivotFor } from './sim/physics.js';
 import { insideAny, makeRng, HALF, roofBelow } from './sim/city.js';
 import { createBot, botStep } from './sim/bot.js';
@@ -101,47 +102,79 @@ const check = (ok, msg) => { console.log(`${ok ? 'PASS' : 'FAIL'}  ${msg}`); if 
   check(a > 1.3 && a < 2.6 && m > 22 && m < 45, `swing rhythm in the target window (arc 1.3-2.6 s, cruise 22-45 m/s)`);
 }
 
-// ---------- 3. bot runs (three slightly different starts each; the median must beat gold x 1.5) ----------
+// ---------- 3. players (personas) and the bot against the medal times ----------
+// A first-timer: hold W, tap swing in a plain rhythm (about 1 s on, 0.35 s off, jittered), camera on assist (the engine's
+// own assist function). "aimed" keeps the camera on the next ring instead. "hold" just holds W and swing.
+function mulberry(s) { return () => { s = (s + 0x6d2b79f5) | 0; let t = Math.imul(s ^ (s >>> 15), 1 | s); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
+const wrapA = (a) => { while (a > Math.PI) a -= 2 * Math.PI; while (a < -Math.PI) a += 2 * Math.PI; return a; };
+function persona(run, kind, seed, limit = 180) {
+  const sim = createSim(); const { S, input } = sim; sim.startRun(run);
+  const rnd = mulberry(seed), rings = sim.runs[run].rings;
+  const cam = { yaw: input.yaw, pitch: sim.runs[run].start.pitch };
+  let t = 0, ph = 0, held = false, holdLen = 1.0, relLen = 0.35, maxLine = 0;
+  while (t < limit && !S.run.done) {
+    const pl = S.pl;
+    let swing;
+    if (kind === 'hold') swing = true;
+    else {
+      ph += STEP;
+      if (held && ph > holdLen) { held = false; ph = 0; relLen = 0.35 * (0.6 + rnd() * 0.8); }
+      else if (!held && ph > relLen) { held = true; ph = 0; holdLen = 1.0 * (0.6 + rnd() * 0.8); }
+      swing = held;
+    }
+    const q = rings[S.run.next];
+    if (kind === 'aimed') cam.yaw += wrapA(Math.atan2(-(q.x - pl.x), -(q.z - pl.z)) - cam.yaw) * Math.min(1, STEP * 3);
+    Object.assign(input, { mx: 0, my: 1, swing, dash: false, zip: false, dive: false, yaw: cam.yaw, pitch: cam.pitch + 0.12, zipCone: 0.9 });
+    sim.step(); S.events.length = 0;
+    const p2 = S.pl;
+    if (p2.mode === MODE.SWING) maxLine = Math.max(maxLine, p2.lineT);
+    if (kind !== 'aimed' && !S.run.done && (Math.hypot(p2.vx, p2.vz) > 6 || p2.mode !== MODE.GROUND)) assistCamera(cam, p2, STEP, rings[S.run.next]);
+    t += STEP;
+  }
+  return { done: S.run.done, t: S.run.done ? S.run.finishT : Infinity, rings: S.run.next, maxLine };
+}
+const SEEDS = [1, 2, 3, 4, 5, 6, 7, 8];
+const fmtT = (a) => a.map((r) => (r.done ? r.t.toFixed(0) : 'DNF')).join(' ');
+{
+  const plain = SEEDS.map((s) => persona(0, 'tap', s));
+  const fin = plain.filter((r) => r.done).length, bronze = plain.filter((r) => r.t <= MEDALS[0].bronze).length;
+  console.log(`      run 1, W + plain tap rhythm, no aiming: ${fmtT(plain)} s`);
+  check(fin >= 7, `first-timer (W + tap rhythm, no aiming) finishes run 1 on ${fin}/8 seeds (need 7)`);
+  check(bronze >= 5, `first-timer earns bronze (<= ${MEDALS[0].bronze} s) on run 1 on ${bronze}/8 seeds (need most)`);
+  const aimed = SEEDS.map((s) => persona(0, 'aimed', s));
+  const silver = aimed.filter((r) => r.t <= MEDALS[0].silver).length;
+  console.log(`      run 1, tap rhythm with the camera on the ring: ${fmtT(aimed)} s`);
+  check(silver >= 5, `aimed-rhythm player earns silver (<= ${MEDALS[0].silver} s) on run 1 on ${silver}/8 seeds`);
+  for (const n of [1, 2]) {
+    const r = SEEDS.map((s) => persona(n, 'aimed', s));
+    const f = r.filter((x) => x.done).length;
+    console.log(`      run ${n + 1}, aimed rhythm: ${fmtT(r)} s`);
+    check(f >= 5, `aimed-rhythm player finishes run ${n + 1} on ${f}/8 seeds (need 5); bronze ${MEDALS[n].bronze} s, silver ${MEDALS[n].silver} s`);
+  }
+  const hold = persona(0, 'hold', 1, 60);
+  check(hold.maxLine < 3.3, `holding swing never dangles: longest time on one line ${hold.maxLine.toFixed(2)} s, ${hold.rings} rings in 60 s`);
+}
 {
   for (let n = 0; n < 3; n++) {
     const times = [];
-    let info = '';
     for (let j = 0; j < 3; j++) {
-      const sim = createSim();
-      const bot = createBot();
+      const sim = createSim(); const bot = createBot();
       sim.startRun(n);
       sim.S.pl.x += (j - 1) * 0.4; sim.S.pl.z += (j - 1) * 0.3;
-      let t = 0, arcs = [], speeds = [], bounces = 0, walls = 0, zips = 0, perfects = 0, lastAttach = 0;
-      while (!sim.S.run.done && t < 300) {
-        botStep(bot, sim, sim.input, STEP, magnet);
-        sim.step();
-        t += STEP;
-        for (const e of sim.S.events) {
-          if (e.type === 'attach') lastAttach = t;
-          if (e.type === 'release') { arcs.push(t - lastAttach); if (e.perfect) perfects++; }
-          if (e.type === 'bounce') bounces++;
-          if (e.type === 'wall') walls++;
-          if (e.type === 'perch') zips++;
-        }
-        sim.S.events.length = 0;
-        if (sim.S.pl.mode === MODE.SWING || sim.S.pl.mode === MODE.AIR) speeds.push(Math.hypot(sim.S.pl.vx, sim.S.pl.vy, sim.S.pl.vz));
-      }
+      let t = 0;
+      while (!sim.S.run.done && t < 300) { botStep(bot, sim, sim.input, STEP); sim.step(); sim.S.events.length = 0; t += STEP; }
       times.push(sim.S.run.done ? sim.S.run.t : Infinity);
-      if (j === 1) {
-        speeds.sort((a, b) => a - b);
-        const r = sim.runs[n];
-        info = `${r.name}: ${r.rings.length} rings, ${r.length.toFixed(0)} m; speed median ${speeds[speeds.length >> 1].toFixed(1)} top ${sim.S.stats.top.toFixed(1)} m/s; swings ${arcs.length}, perfect ${perfects}, wall-runs ${walls}, zips ${zips}, street bounces ${bounces}, best chain ${sim.S.stats.maxChain}`;
-      }
     }
     const med = [...times].sort((a, b) => a - b)[1];
-    console.log(`      run ${n + 1} ${info}; bot times ${times.map((t) => t.toFixed(1)).join(' / ')} s`);
-    check(med <= MEDALS[n].gold * 1.5, `bot finishes run ${n + 1} within gold x 1.5 (median ${med.toFixed(1)} <= ${(MEDALS[n].gold * 1.5).toFixed(1)} s; medals ${MEDALS[n].gold}/${MEDALS[n].silver}/${MEDALS[n].bronze})`);
+    const r = createSim().runs[n];
+    console.log(`      run ${n + 1} ${r.name}: ${r.rings.length} rings, ${r.length.toFixed(0)} m; bot ${times.map((t) => t.toFixed(1)).join(' / ')} s`);
+    check(med <= MEDALS[n].gold, `planning bot earns gold on run ${n + 1} (median ${med.toFixed(1)} <= ${MEDALS[n].gold} s)`);
   }
 }
 
 // ---------- 4. determinism ----------
 {
-  const runOnce = () => { const sim = createSim(); const bot = createBot(); sim.startRun(1); for (let k = 0; k < 120 * 12; k++) { botStep(bot, sim, sim.input, STEP, magnet); sim.step(); sim.S.events.length = 0; } return [sim.S.pl.x, sim.S.pl.y, sim.S.pl.z].map((v) => v.toFixed(6)).join(','); };
+  const runOnce = () => { const sim = createSim(); const bot = createBot(); sim.startRun(1); for (let k = 0; k < 120 * 12; k++) { botStep(bot, sim, sim.input, STEP); sim.step(); sim.S.events.length = 0; } return [sim.S.pl.x, sim.S.pl.y, sim.S.pl.z].map((v) => v.toFixed(6)).join(','); };
   const a = runOnce(), b = runOnce();
   check(a === b, `simulation is deterministic (${a})`);
 }

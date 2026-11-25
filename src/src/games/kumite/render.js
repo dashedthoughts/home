@@ -1,7 +1,7 @@
 // NEON KUMITE · renderer. Reads the sim state, never writes it. FX are stepped per sim frame so test-hook advances are deterministic.
 import { FIGHTERS } from './data.js';
 import { STAGE_L, STAGE_R, moveOf, hurtboxes, isAir } from './sim.js';
-import { drawFighter, drawSilhouette, chain, stepChain, LOOKS } from './rig.js';
+import { drawFighter, drawSilhouette, chain, stepChain, LOOKS, FACES, GAME_LW } from './rig.js';
 import { poseFor } from './anim.js';
 import { createStage, drawBack, drawFloor, drawFront, STAGES } from './stages.js';
 import { drawHud } from './hud.js';
@@ -9,6 +9,14 @@ import { drawHud } from './hud.js';
 const JP = '"Noto Sans JP", sans-serif';
 const ONO = { heavy: ['ドン', 'バキッ', 'ズドン', 'ドカッ'], block: ['ガッ', 'ガキン'], ko: ['ドオン'] };
 
+// Camera zoom (CSS px per world unit). Fighters stand about half the screen tall on desktop; in touch landscape they fit
+// between the HUD and the thumb band. Exported so tools/measure.cjs checks the real formula.
+export const CAM_TALL = 172;
+export function cameraScale(W, H, portrait, touchL, sep = 260) {
+  const baseGy = portrait ? H * 0.6 : H * (touchL ? 0.6 : 0.86);
+  const vw = portrait ? Math.max(400, Math.min(740, sep + 190)) : Math.max(500, Math.min(880, sep + 250));
+  return portrait ? Math.min(W / vw, baseGy / 310) : Math.min(W / vw, touchL ? (baseGy - 58) / CAM_TALL : (0.5 * H) / CAM_TALL);
+}
 export function createRenderer(canvas) {
   const ctx = canvas.getContext('2d');
   const R = {
@@ -17,7 +25,7 @@ export function createRenderer(canvas) {
     fr: [mkFR(), mkFR()], fx: [], texts: [], ann: null, flash: 0, combo: [null, null], reduced: false, lowFx: false, hitboxes: false, portrait: false,
     superT: 0, superBy: -1, superId: '', koT: 0, training: null, seed: 1, drone: { x: 0, y: 0, a: 0, cast: 0 },
   };
-  function mkFR() { return { walk: 0, flash: 0, chains: {}, ghosts: [], lastX: 0, hpShown: 1, hpTrail: 1, trailHold: 0, meterShown: 0, init: false }; }
+  function mkFR() { return { walk: 0, flash: 0, chains: {}, ghosts: [], lastX: 0, hpShown: 1, hpTrail: 1, trailHold: 0, meterShown: 0, init: false, face: { ...FACES.idle } }; }
   const rnd = () => { R.seed = (R.seed * 16807) % 2147483647; return R.seed / 2147483647; };
 
   R.resize = (w, h, dpr) => {
@@ -34,7 +42,10 @@ export function createRenderer(canvas) {
       const big = e.str >= 3;
       switch (e.t) {
         case 'hit': {
-          spark(e.x, e.y, e.str, e.counter ? '#ffe14d' : '#ffffff', e.seq);
+          // the spark sits where the blow lands: on the defender's near edge, not between the two bodies (keeps faces clear)
+          const def = S.f[1 - e.p], att = S.f[e.p];
+          if (!S.proj.length || Math.abs(e.x - (att.x + def.x) / 2) < 30) { const side = Math.sign(def.x - att.x) || 1; e.x = def.x - side * FIGHTERS[def.id].hw * 0.9; }
+          spark(e.x, e.y, e.str, e.counter ? '#ffe14d' : '#ffd23a', e.seq);
           const vf = R.fr[1 - e.p]; vf.flash = 2;
           if (!R.reduced) R.cam.shake = Math.max(R.cam.shake, [1.5, 3, 5, 9][e.str] * (e.seq ? 0.6 : 1));
           if (big && !e.seq) R.cam.zoom = Math.max(R.cam.zoom, 1.05);
@@ -75,7 +86,7 @@ export function createRenderer(canvas) {
   function spark(x, y, str, col, small) {
     const n = small ? 5 : [5, 7, 10, 16][str];
     for (let i = 0; i < n; i++) { const a = rnd() * Math.PI * 2; const v = (2.5 + rnd() * 5) * (1 + str * 0.35); R.fx.push({ k: 'ray', x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, life: 10 + str * 2, t: 0, col, w: 2 + str * 0.7 }); }
-    R.fx.push({ k: 'burst', x, y, life: 8 + str * 2, t: 0, r: 16 + str * 12, col, str });
+    R.fx.push({ k: 'burst', x, y, life: 8 + str * 2, t: 0, r: 11 + str * 8, col, str });
     if (str >= 2) R.fx.push({ k: 'ring', x, y, life: 14, t: 0, r: 30 + str * 20, col: '#ffffff' });
   }
   function blockSpark(x, y, str) {
@@ -112,6 +123,13 @@ export function createRenderer(canvas) {
       const hp = f.hp / f.maxhp; fr.hpShown = hp;
       if (hp < fr.hpTrail) { if (f.combo.hits > 0 || f.st === 'hit' || f.st === 'juggle' || f.st === 'held') fr.trailHold = 30; if (fr.trailHold > 0) fr.trailHold--; else fr.hpTrail = Math.max(hp, fr.hpTrail - 0.006); } else fr.hpTrail = hp;
       fr.meterShown += (f.meter - fr.meterShown) * 0.25;
+      // faces act, they never snap: ease toward the expression the state calls for, blink now and then
+      const m = moveOf(f);
+      const key = f.st === 'atk' ? (m && f.mf < m.st + Math.max(1, m.ac) + 4 ? 'atk' : 'idle') : f.st === 'grab' ? 'atk' : f.st === 'hit' || f.st === 'juggle' || f.st === 'reset' ? 'hit' : f.st === 'block' || f.st === 'guard' ? 'block' : f.st === 'win' ? 'win' : f.st === 'lose' ? 'lose' : f.st === 'ko' || f.st === 'dead' || f.st === 'down' ? 'ko' : f.st === 'held' ? 'held' : 'idle';
+      const T = FACES[key]; const k = key === 'hit' || key === 'held' ? 0.6 : 0.3;
+      for (const q of ['brow', 'eye', 'mouth', 'curve']) fr.face[q] += (T[q] - fr.face[q]) * k;
+      fr.face.teeth = T.teeth;
+      if (key === 'idle' && (R.frame + i * 97) % 173 < 4) fr.face.eye = 0.05;
     });
   };
 
@@ -126,9 +144,14 @@ export function createRenderer(canvas) {
     const [a, b] = S.f;
     const sep = Math.abs(a.x - b.x);
     // with touch controls in landscape, the floor line sits above the thumb band so the fighters stay clear of the buttons
-    const gy = R.portrait ? Math.round(H * 0.6) : Math.round(H * (R.touch && H < 560 ? 0.6 : 0.86));
-    let vw = R.portrait ? Math.max(400, Math.min(740, sep + 190)) : Math.max(680, Math.min(860, sep + 320));
-    let scale = Math.min(W / vw, gy / (R.portrait ? 310 : 370)) * cam.zoom;
+    const touchL = !R.portrait && R.touch && H < 560;
+    const baseGy = R.portrait ? H * 0.6 : H * (touchL ? 0.6 : 0.86);
+    let scale = cameraScale(W, H, R.portrait, touchL, sep) * cam.zoom;
+    // the camera rises with a jump so heads never go under the HUD
+    const topW = Math.max(...S.f.map((f) => f.y + FIGHTERS[f.id].hh * FIGHTERS[f.id].scale * 1.06));
+    const gyT = Math.max(baseGy, H * (R.portrait ? 0.15 : 0.13) + topW * scale);
+    cam.gyOff = (cam.gyOff || 0) + (gyT - baseGy - (cam.gyOff || 0)) * (opts.snap ? 1 : 0.2);
+    const gy = Math.round(baseGy + cam.gyOff);
     const half = W / scale / 2;
     let cx = (a.x + b.x) / 2;
     cx = Math.max(STAGE_L + Math.min(half, (STAGE_R - STAGE_L) / 2), Math.min(STAGE_R - Math.min(half, (STAGE_R - STAGE_L) / 2), cx));
@@ -147,7 +170,7 @@ export function createRenderer(canvas) {
     const order = S.f[0].st === 'held' ? [1, 0] : S.f[1].st === 'held' ? [0, 1] : S.f[0].st === 'atk' || S.f[0].st === 'grab' ? [1, 0] : [0, 1];
     if (st.reflect > 0 && !R.lowFx) {
       ctx.save(); ctx.beginPath(); ctx.rect(0, gy, W, H - gy); ctx.clip();
-      for (const i of order) drawOne(S, i, toS, scale, st, true);
+      for (const i of order) drawOne(S, i, toS, scale, st, true, order);
       drawProjectiles(S, toS, scale, true);
       ctx.restore();
       const fade = ctx.createLinearGradient(0, gy, 0, H); fade.addColorStop(0, 'rgba(0,0,0,0)'); fade.addColorStop(0.6, 'rgba(0,0,0,0.35)'); fade.addColorStop(1, 'rgba(0,0,0,0.6)');
@@ -155,7 +178,7 @@ export function createRenderer(canvas) {
     }
     for (const f of S.f) { const [sx] = toS(f.x, 0); const h = Math.max(0.3, 1 - f.y / 200); ctx.fillStyle = `rgba(0,0,0,${0.45 * h})`; ctx.beginPath(); ctx.ellipse(sx, gy + 2, 34 * scale * h * FIGHTERS[f.id].scale, 7 * scale * h, 0, 0, 7); ctx.fill(); }
     drawMines(S, toS, scale);
-    for (const i of order) drawOne(S, i, toS, scale, st, false);
+    for (const i of order) drawOne(S, i, toS, scale, st, false, order);
     drawProjectiles(S, toS, scale, false);
     drawBeam(S, toS, scale);
     drawFx(toS, scale);
@@ -169,23 +192,25 @@ export function createRenderer(canvas) {
     drawHud(ctx, S, R, opts);
   };
 
-  function drawOne(S, i, toS, scale, st, reflect) {
+  function drawOne(S, i, toS, scale, st, reflect, order = [0, 1]) {
     const f = S.f[i]; const fr = R.fr[i]; const ch = FIGHTERS[f.id];
     const rs = { t: R.t + i * 1.3, walk: fr.walk };
     if (f.st === 'held') { const g = S.f[1 - i]; rs.heldRot = g.grab ? -Math.min(1, (g.sf || 0) / 20) * (g.grab.mv === 'SU' || g.grab.mv === 'S' || g.grab.mv === 'EX' || g.grab.mv === 'bS' ? 160 : 60) : 0; }
     const p = poseFor(f, S, rs);
     const s = scale * ch.scale;
     let [sx, sy] = toS(f.x, f.y);
+    { const o = S.f[1 - i]; const need = FIGHTERS[f.id].hw + FIGHTERS[o.id].hw + 26; const gap = Math.abs(f.x - o.x);
+      const behind = (order[0] === i); if (behind && gap < need && f.st !== 'held' && o.st !== 'held') sx += Math.sign(f.x - o.x || -f.face) * Math.min(10, (need - gap) * 0.45) * scale; }
     if ((f.hs > 0) && (f.st === 'hit' || f.st === 'block' || f.st === 'juggle' || f.st === 'ko' || f.st === 'atk')) { const jit = (f.st === 'atk' ? 0.6 : 1.6) * scale; sx += (R.frame % 2 ? jit : -jit); }
     const light = [st.key[0] * f.face, st.key[1]];
     const rimDir = (st.rimSide || 1) * f.face * -1;
-    const lw = 2.7;
+    const lw = GAME_LW;
     const alt = i === 1 && S.f[0].id === f.id;
-    const opts = { lw, light, rim: i === 0 ? st.rim : st.rim2, rimDir, state: f.st, win: f.st === 'win', chains: chainsFor(f, fr, p, s, reflect), t: R.t, alt };
+    const opts = { lw, light, tint: st.haze, rim: i === 0 ? st.rim : st.rim2, rimDir, state: f.st, win: f.st === 'win', chains: chainsFor(f, fr, p, s, reflect), t: R.t, alt, face: fr.face, vx: f.vx * f.face };
     const alpha = p.alpha == null ? 1 : p.alpha;
     if (reflect) {
       ctx.save(); ctx.globalAlpha = st.reflect * alpha; ctx.setTransform(R.dpr * s * f.face, 0, 0, R.dpr * s, R.dpr * (sx + R.cam.sx), R.dpr * (R.cam.gy + (R.cam.gy - sy)));
-      drawFighter(ctx, f.id, p, { ...opts, rimA: 0 }); ctx.restore();
+      drawFighter(ctx, f.id, p, { ...opts, rimA: 0, flat: true }); ctx.restore();
       return;
     }
     // after-images
@@ -325,10 +350,10 @@ export function createRenderer(canvas) {
       if (p.k === 'ray') { ctx.globalCompositeOperation = 'lighter'; ctx.strokeStyle = p.col; ctx.globalAlpha = 1 - k; ctx.lineWidth = p.w * scale * (1 - k * 0.5); ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x - p.vx * scale * 3, y + p.vy * scale * 3); ctx.stroke(); }
       else if (p.k === 'burst') { // a jagged comic impact star
         ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1 - k * k; const r = p.r * scale * (0.6 + k * 0.6);
-        ctx.fillStyle = p.str >= 2 ? '#fff6c8' : '#ffffff'; ctx.strokeStyle = '#0b0b10'; ctx.lineWidth = 2;
+        ctx.fillStyle = p.t < 1 ? '#ffffff' : p.col; ctx.strokeStyle = '#0b0b10'; ctx.lineWidth = 2; // one frame of white, then colour
         ctx.beginPath(); const n = 10 + p.str * 2; for (let i = 0; i <= n * 2; i++) { const a = i / (n * 2) * Math.PI * 2 + p.x; const rr = i % 2 ? r * 0.42 : r * (0.85 + ((i * 37) % 7) / 20); i ? ctx.lineTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr) : ctx.moveTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr); }
         ctx.closePath(); ctx.fill(); ctx.stroke();
-        if (p.str >= 2) { ctx.fillStyle = p.col === '#ffe14d' ? '#ffe14d' : '#ff3b5c'; ctx.beginPath(); ctx.arc(x, y, r * 0.3, 0, 7); ctx.fill(); }
+        if (p.str >= 2 && p.t >= 1) { ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.arc(x, y, r * 0.28, 0, 7); ctx.fill(); }
       }
       else if (p.k === 'ring') { ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = (1 - k) * 0.9; ctx.strokeStyle = p.col; ctx.lineWidth = 3 * (1 - k) + 1; ctx.beginPath(); ctx.arc(x, y, p.r * scale * (0.3 + k), 0, 7); ctx.stroke(); }
       else if (p.k === 'shield') { ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 1 - k; ctx.strokeStyle = '#9fe8ff'; ctx.lineWidth = 3; const r = p.r * scale * (0.8 + k * 0.4); ctx.beginPath(); for (let i = 0; i <= 6; i++) { const a = i / 6 * Math.PI * 2 + Math.PI / 6; i ? ctx.lineTo(x + Math.cos(a) * r, y + Math.sin(a) * r) : ctx.moveTo(x + Math.cos(a) * r, y + Math.sin(a) * r); } ctx.stroke(); ctx.fillStyle = 'rgba(120,220,255,0.18)'; ctx.fill(); }

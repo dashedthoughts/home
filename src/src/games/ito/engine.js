@@ -1,8 +1,10 @@
 // ITO engine: binds the pure simulation to WebGL, the camera, input, audio and the comic post pass.
 //   createIto(canvas, { reduced, settings, onEvent, onHud, ghosts }) -> engine
 import * as THREE from 'three';
-import { createSim, STEP, MODE, RING_R, magnet } from './sim/index.js';
+import { createSim, STEP, MODE, RING_R } from './sim/index.js';
 import { createBot, botStep } from './sim/bot.js';
+import { perfectWindow } from './sim/physics.js';
+import { assistCamera } from './sim/assist.js';
 import { roofBelow, boxesInRect, segHitsBox } from './sim/city.js';
 import { createCityView } from './render/city.js';
 import { createHero } from './render/hero.js';
@@ -192,7 +194,8 @@ export function createIto(canvas, opts = {}) {
     else if (p === 'title') { sim.startRun(0); ghostFrames = null; }
     // runs, free roam and the tutorial start on the run-1 roof edge (free roam from the same view)
     const pl = S.pl;
-    cam.yaw = wrap(pl.yaw + Math.PI); cam.pitch = -0.12; cam.init = false;
+    cam.yaw = wrap(pl.yaw + Math.PI); cam.pitch = p === 'run' || p === 'title' ? sim.runs[S.run.idx].start.pitch : -0.12; cam.init = false;
+    inp.lastLook = clock; // hold that framing for a moment before the assist takes over
     sim.input.yaw = cam.yaw;
     Object.assign(bot, createBot());
     attract = p === 'title';
@@ -216,7 +219,7 @@ export function createIto(canvas, opts = {}) {
         if (e.rising) fx.sticker(e.perfect ? 'perfect' : 'shu', pl.x, pl.y + 1.6, pl.z, e.perfect ? 1.1 : 1);
         audio.sfx(e.perfect ? 'perfect' : 'release', Math.min(1, e.speed / 40));
         if (e.perfect && !reduced && !botOn) freezeT = 0.12;
-        if (phase === 'tutorial' && tut.step === 1 && e.rising) tutNext();
+        if (phase === 'tutorial' && tut.step === 1 && e.lineT > 0.35) tutNext();
         break;
       case 'dash': fx.detach(); fx.sticker('byun', pl.x, pl.y + 1.2, pl.z, 1.0); audio.sfx('dash'); if (phase === 'tutorial' && tut.step === 2) tutNext(); break;
       case 'zip': fx.attach(pl.zx, pl.zy, pl.zz); audio.sfx('zip'); break;
@@ -273,31 +276,36 @@ export function createIto(canvas, opts = {}) {
     const heading = Math.atan2(-pl.vx, -pl.vz);
     const hs = Math.hypot(pl.vx, pl.vz);
     if (botOn) cam.yaw += wrap(sim.input.yaw - cam.yaw) * Math.min(1, dt * 5);
-    else if (settings.assist && !manualRecent && hs > 6 && pl.mode !== MODE.WALL && phase !== 'results') {
-      cam.yaw += wrap(heading - cam.yaw) * Math.min(1, dt * (0.5 + hs * 0.035));
-      const wantP = -0.14 - Math.max(-0.3, Math.min(0.3, pl.vy * 0.006));
-      cam.pitch += (wantP - cam.pitch) * Math.min(1, dt * 1.2);
+    else if (settings.assist && !manualRecent && phase !== 'results') {
+      const ring = S.run && !S.run.done && phase === 'run' ? sim.runs[S.run.idx].rings[S.run.next] : null;
+      if (hs > 6 || (ring && pl.mode !== MODE.GROUND)) assistCamera(cam, pl, dt, ring);
     }
     if (phase === 'results') cam.yaw += dt * 0.15;
-    const dist = 4.9 + Math.min(sp, 60) * 0.03 + (pl.mode === MODE.GROUND ? -0.4 : 0);
+    const dist = 4.9 + Math.min(sp, 60) * 0.03 + (pl.mode === MODE.GROUND ? -0.4 : 0) + (camera.aspect < 1 ? 2.2 * (1 - camera.aspect) : 0);
     // never clip into buildings: cast from the courier to the camera and pull in; if that leaves the camera
     // inside the courier's shoulders, try a higher and a sideways angle instead
     let best = null;
-    for (let c = 0; c < 4; c++) {
-      const yaw = cam.yaw + (c === 2 ? 0.55 : c === 3 ? -0.55 : 0);
-      const pitch = c === 0 ? cam.pitch : Math.min(cam.pitch, -0.75);
+    for (let c = 0; c < 6; c++) {
+      const yaw = cam.yaw + (c === 2 ? 0.55 : c === 3 ? -0.55 : c === 4 ? 1.1 : 0) - (c === 5 ? 0 : 0);
+      const pitch = c === 0 ? cam.pitch : c === 5 ? -1.3 : Math.min(cam.pitch, -0.75);
       const cp = Math.cos(pitch), spi = Math.sin(pitch);
       const fx = -Math.sin(yaw) * cp, fy = spi, fz = -Math.cos(yaw) * cp;
       const tHit = castCam(fx, fy, fz, dist);
       if (!best || tHit * dist > best.d + 0.3) best = { d: tHit * dist, t: tHit, fx, fy, fz, c };
-      if (tHit * dist > 2.6) break;
+      if (tHit * dist > 2.8) break;
     }
     fwd.set(best.fx, best.fy, best.fz);
     const tHit = best.t;
     const dx = -fwd.x * dist, dy = -fwd.y * dist + 0.9, dz = -fwd.z * dist;
-    let px = cam.tx + dx * tHit, py = Math.max(1.0, cam.ty + dy * tHit), pz = cam.tz + dz * tHit;
-    // fall back gracefully: smooth the switch between angles
-    if (cam.px !== undefined && best.c !== 0) { px = cam.px + (px - cam.px) * Math.min(1, dt * 12); py = cam.py + (py - cam.py) * Math.min(1, dt * 12); pz = cam.pz + (pz - cam.pz) * Math.min(1, dt * 12); }
+    // pull in at once when a wall demands it, ease back out slowly (no snap from 1 m to 4 m)
+    const want = tHit;
+    cam.t = cam.t === undefined ? want : want < cam.t ? want : cam.t + (want - cam.t) * Math.min(1, dt * 2.5);
+    let px = cam.tx + dx * cam.t, py = Math.max(1.0, cam.ty + dy * cam.t), pz = cam.tz + dz * cam.t;
+    // switching between fallback angles is smoothed too
+    if (best.c !== cam.lastC && cam.px !== undefined) cam.blend = 1;
+    cam.blend = Math.max(0, (cam.blend || 0) - dt * 3.5);
+    if (cam.blend > 0) { const k = cam.blend * cam.blend; px += (cam.px - px) * k; py += (cam.py - py) * k; pz += (cam.pz - pz) * k; }
+    cam.lastC = best.c;
     cam.px = px; cam.py = py; cam.pz = pz;
     if (cam.shake > 0) { cam.shake -= dt; const a = cam.shake * 0.6; px += (Math.random() - 0.5) * a; py += (Math.random() - 0.5) * a; }
     camera.position.set(px, py, pz);
@@ -315,7 +323,7 @@ export function createIto(canvas, opts = {}) {
     }
     cam.roll += (roll - cam.roll) * Math.min(1, dt * 3);
     camera.rotateZ(cam.roll);
-    const wantFov = 62 + Math.max(0, Math.min(1, (sp - 14) / 44)) * (reduced ? 10 : 20);
+    const wantFov = 62 + Math.max(0, Math.min(1, (sp - 14) / 44)) * (reduced ? 8 : 12);
     cam.fov += (wantFov - cam.fov) * Math.min(1, dt * 2.5);
     if (Math.abs(camera.fov - cam.fov) > 0.05) { camera.fov = cam.fov; camera.updateProjectionMatrix(); }
   }
@@ -324,7 +332,7 @@ export function createIto(canvas, opts = {}) {
   function simStep() {
     if (botOn) {
       if (!S.run || S.run.done) { if (attract) { sim.startRun((S.run ? S.run.idx + 1 : 0) % 3); Object.assign(bot, createBot()); } }
-      botStep(bot, sim, sim.input, STEP, magnet);
+      botStep(bot, sim, sim.input, STEP);
     } else composeInput();
     sim.step();
     for (let k = 0; k < S.events.length; k++) handle(S.events[k]);
@@ -338,12 +346,12 @@ export function createIto(canvas, opts = {}) {
   // ---------- render one frame ----------
   const handPos = new THREE.Vector3(), aimPos = new THREE.Vector3(), zipPos = new THREE.Vector3(), lineAnchor = new THREE.Vector3();
   let hudT = 0;
-  function draw(dt, alpha) {
+  function draw(dt, alpha, camDone = false) {
     const pl = S.pl;
     const x = pl.px + (pl.x - pl.px) * alpha, y = pl.py + (pl.y - pl.py) * alpha, z = pl.pz + (pl.z - pl.pz) * alpha;
     const t = S.t;
     shared.uTime.value = t;
-    updateCamera(dt, x, y, z);
+    if (!camDone) updateCamera(dt, x, y, z);
     shared.uCamPos.value.copy(camera.position);
     hero.update(pl, x, y, z, t);
     hero.root.updateMatrixWorld(true);
@@ -371,7 +379,7 @@ export function createIto(canvas, opts = {}) {
     let rings = null;
     if (S.run && !S.run.done && (phase === 'run' || phase === 'title')) { const R = sim.runs[S.run.idx].rings; rings = { next: R[S.run.next], after: R[S.run.next + 1] }; }
     const sp = Math.hypot(pl.vx, pl.vy, pl.vz);
-    fx.update({ camera, dt, t, pl, handPos, aimPos: showAim ? aimPos : null, zipPos: showZip ? zipPos : null, rings, cranesHidden: phase === 'free' ? S.cranes : true, roofY: roofBelow(sim.city, x, z, y), speed: sp, hx: x, hy: y, hz: z, lineAnchor: pl.mode === MODE.SWING || pl.mode === MODE.ZIP ? lineAnchor : null });
+    fx.update({ cue: playing && !reduced ? perfectWindow(pl) : false, cueStatic: playing && reduced && perfectWindow(pl), camera, dt, t, pl, handPos, aimPos: showAim ? aimPos : null, zipPos: showZip ? zipPos : null, rings, cranesHidden: phase === 'free' ? S.cranes : true, roofY: roofBelow(sim.city, x, z, y), speed: sp, hx: x, hy: y, hz: z, lineAnchor: pl.mode === MODE.SWING || pl.mode === MODE.ZIP ? lineAnchor : null });
     cityView.update(t, dt);
     // post uniforms
     post.uniforms.uTime.value = t;
@@ -387,7 +395,7 @@ export function createIto(canvas, opts = {}) {
   const proj = new THREE.Vector3();
   function hudData(sp) {
     const pl = S.pl;
-    const d = { phase, speed: sp, dash: pl.dash, mode: pl.mode, chain: S.style.chain, score: S.style.score, cranes: S.craneCount, totalCranes: sim.cranes.length, tut: tut.step, canZip: pl.zipAim >= 0, canSwing: pl.aim >= 0 || pl.mode === MODE.SWING };
+    const d = { phase, speed: sp, dash: pl.dash, mode: pl.mode, chain: S.style.chain, score: S.style.score, cranes: S.craneCount, totalCranes: sim.cranes.length, tut: tut.step, canZip: pl.zipAim >= 0, canSwing: pl.aim >= 0 || pl.mode === MODE.SWING, noLine: (phase === 'run' || phase === 'free' || phase === 'tutorial') && pl.mode === MODE.AIR && pl.aim < 0 && pl.zipAim < 0 };
     if (S.run) {
       d.t = S.run.t; d.ring = S.run.next; d.rings = sim.runs[S.run.idx].rings.length; d.run = S.run.idx; d.started = S.run.started;
       const q = sim.runs[S.run.idx].rings[S.run.next];
@@ -481,7 +489,7 @@ export function createIto(canvas, opts = {}) {
         updateCamera(STEP, pl.x, pl.y, pl.z);
       }
       acc = 0;
-      draw(STEP, 1);
+      draw(Math.max(STEP, sec), 1, true);
       return engine.state();
     },
     freeze(t) { freezeT = t; draw(0, 1);
