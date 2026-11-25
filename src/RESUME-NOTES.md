@@ -53,3 +53,17 @@ public domain; scratchpad/ref-ronin/00.jpg). What it and the wider record show, 
 What to check in KAZE's cast against this: two swords at the left hip on the ronin and the duelist, hair that reads as grown-out, no hakama on at
 least some figures (the ronin himself may read better kinagashi with a travel haori), sleeves tied back in fights, straw sandals, and the
 scabbards visible in the silhouette. Keep every design original.
+
+## Owner feedback at ~15:00 UTC 25 Nov (usage limit hit; resume at 16:40 UTC / 22:10 IST)
+KAZE is live at 308afbb. The owner played it and says (two screenshots: chapter 2 standoff, /tmp/claude-0/-home-user/a62bd8c0-dc8d-569b-8ca1-4d8ae268e991/images/33.webp and 34.webp):
+- "The heads are still an issue": the ronin's face reads as a pale blank mask under the hat; the opponent's face is a flat profile.
+- "Running still sucks."
+- "The head dies while sliding" (the head breaks/vanishes or folds during the dodge slide).
+- "The bosses look like clowns while coming" (boss approach poses/gaits).
+- "Swoops aren't smooth" (cut strokes and sword arcs not smooth: interpolation and trail).
+- "Animation needs significant work."
+- "The scarecrow is unbeatable" (Ono, chapter 2 boss: rebalance; check with personas AND a scripted human-like play; parry windows vs his spear).
+- "Parry isn't working great" (check parry input window, feedback, and that a correct parry always works and is shown).
+- "Our dude isn't doing somersaults or in-air acrobatics": significant expansion of acrobatics (flips, aerial cuts, wall/foe vaults) and the ragdoll and animation library.
+- Integrator's own note from the screenshots: the standoff crouch reads as SITTING ON AN INVISIBLE STOOL (front thigh horizontal, shin vertical, torso upright) and the ronin's hakama flares as two huge bell-bottoms; both need fixing.
+Resume plan: SendMessage the figure engineer (a96e8e6fec773fc6e) with all of the figure/animation items (heads, run, slide head, boss approach, swoops, standoff crouch, hakama width, acrobatics, library, ragdoll), the ink-and-life engineer (a9a56e8aa04e3e86b) with the cherry duel beats, and the combat engineer (ab6a66f35652040fc) with "scarecrow unbeatable" and "parry isn't working great" (both measured, both fixed, both proven in a real-key browser play).

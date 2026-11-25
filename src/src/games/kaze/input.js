@@ -2,7 +2,7 @@
 import { DEFAULT_KEYS } from './save.js';
 const ACTIONS = Object.keys(DEFAULT_KEYS);
 export class Input {
-  constructor() { this.keys = {}; this.map = JSON.parse(JSON.stringify(DEFAULT_KEYS)); this.touch = {}; this.script = {}; this.mode = 'kb'; this.pad = {}; this.choose = 0; this.onEsc = null; this.capture = null; this.ui = { up: 0, down: 0, confirm: 0 }; }
+  constructor() { this.latch = {}; this.keys = {}; this.map = JSON.parse(JSON.stringify(DEFAULT_KEYS)); this.touch = {}; this.script = {}; this.mode = 'kb'; this.pad = {}; this.choose = 0; this.onEsc = null; this.capture = null; this.ui = { up: 0, down: 0, confirm: 0 }; }
   setMap(m) { this.map = Object.assign(JSON.parse(JSON.stringify(DEFAULT_KEYS)), m || {}); }
   attach(target) {
     this.kd = (e) => {
@@ -13,6 +13,8 @@ export class Input {
       if (c === 'Enter' || c === 'NumpadEnter') this.keys.Enter = true;
       if (this.isGameKey(c)) e.preventDefault();
       this.keys[c] = true;
+      // [combat] latch the press: a tap that starts and ends between two frames (a slow frame) still reaches the sim once
+      for (const a of ACTIONS) if (this.map[a].includes(c)) this.latch[a] = true;
     };
     this.ku = (e) => { this.keys[e.code] = false; if (e.code === 'Digit1' || e.code === 'Digit2' || e.code === 'Digit3') this.choose = 0; if (e.code === 'Enter' || e.code === 'NumpadEnter') this.keys.Enter = false; };
     this.blur = () => { this.keys = {}; for (const k in this.touch) this.touch[k] = false; this.mouseParry = false; };
@@ -38,7 +40,7 @@ export class Input {
   }
   snapshot(out) {
     this.pollPad();
-    for (const a of ACTIONS) { let v = false; for (const c of this.map[a]) if (this.keys[c]) { v = true; break; } out[a] = v || !!this.pad[a] || !!this.touch[a] || !!this.script[a] || (a === 'parry' && !!this.mouseParry); }
+    for (const a of ACTIONS) { let v = false; for (const c of this.map[a]) if (this.keys[c]) { v = true; break; } out[a] = v || !!this.pad[a] || !!this.touch[a] || !!this.script[a] || (a === 'parry' && !!this.mouseParry) || !!this.latch[a]; this.latch[a] = false; }
     out.confirm = !!(this.keys.Enter || this.pad.confirm || this.touch.confirm || this.script.confirm);
     out.cancel = !!this.script.cancel;
     out.choose = this.choose || this.script.choose || 0;

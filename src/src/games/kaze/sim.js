@@ -186,6 +186,8 @@ function startFight(s, e) {
 function wantAction(s, I) {
   const p = s.p;
   for (const k of ['dodge', 'parry', 'heavy', 'slash', 'up', 'heal', 'interact']) if (pressed(s, I, k)) { p.buf = k; p.bufT = P.buffer; }
+  // the parry window runs from the moment of the press, even if the ronin is still busy and the guard comes up a beat later
+  if (pressed(s, I, 'parry')) { p.prevPress = p.pressAt ?? -9; p.pressAt = s.t; }
   if (p.bufT > 0) p.bufT -= DT; else p.buf = null;
 }
 function canAct(p) { return p.st === 'idle' || p.st === 'move' || p.st === 'air'; }
@@ -218,7 +220,8 @@ function updatePlayer(s, I) {
     }
     case 'guard': {
       p.vx += (dir * P.guardWalk - p.vx) * Math.min(1, DT * 10);
-      if (!I.parry) { p.lastRel = s.t; setP(p, 'idle'); }
+      // a tapped parry still holds the guard long enough to catch the blow it was meant for
+      if (!I.parry && s.t - (p.parryAt ?? -9) >= COMBAT.parryHold) { p.lastRel = s.t; setP(p, 'idle'); }
       else if (p.buf === 'dodge') { p.buf = null; setP(p, 'dodge'); p.dodgeDir = dir || p.face; p.ifr = Math.max(p.ifr, P.dodgeIfr); cue(s, 'dodge', { x: p.x }); }
       break;
     }
@@ -243,7 +246,7 @@ function updatePlayer(s, I) {
       p.vx += ((p.stt > A.wind * 0.6 && p.stt < A.wind + A.act ? p.face * (p.st === 'counter' ? 520 : 150) : 0) - p.vx) * Math.min(1, DT * 14);
       if (!p.hitDone && p.stt >= A.wind) { p.hitDone = true; playerHit(s, p.st, A.reach, 0); }
       if (p.stt >= A.wind + A.act + A.rec) setP(p, 'idle');
-      if (p.st === 'heavy' && p.stt >= A.wind + A.act && p.buf === 'dodge') setP(p, 'idle');
+      if (p.st === 'heavy' && p.stt >= A.wind + A.act && (p.buf === 'dodge' || p.buf === 'parry')) setP(p, 'idle');
       break;
     }
     case 'hit': p.vx *= 0.9; if (p.stt >= P.hitT) setP(p, 'idle'); break;
@@ -268,8 +271,10 @@ function updatePlayer(s, I) {
 function setP(p, st, keepCombo) { p.st = st; p.stt = 0; p.hitDone = false; if (!keepCombo && st !== 'slash') p.combo = 0; }
 function startGuard(s, held) {
   const p = s.p; setP(p, 'guard'); p.parryT = 0;
-  // the tight parry window needs a fresh press, not a held button or spam
-  p.parryOk = !held && s.t - p.lastRel > 0.22; cue(s, 'guard', { x: p.x });
+  // the parry window needs a fresh press (not a held button) and opens at the press itself (a buffered early press counts);
+  // spamming does not stack windows: a press within parrySpam of the previous one opens none
+  const at = p.pressAt ?? s.t; p.parryAt = at;
+  p.parryOk = !held && s.t - at <= P.buffer + 1e-9 && at - (p.prevPress ?? -9) >= COMBAT.parrySpam; cue(s, 'guard', { x: p.x });
 }
 
 function interact(s) {
@@ -284,7 +289,9 @@ function bowEffect(s) {
   else if (e.t === 'hidden') { e.done = e.found = true; if (!s.hidden.includes(e.id)) { s.hidden.push(e.id); s.resMax = Math.min(5, s.resMax + 1); } p.res = s.resMax; p.hp = p.hpMax; cue(s, 'secret', { x: e.x, id: e.id }); }
 }
 
-function parryWin(s) { return D(s).parry * (s.charms.includes('fox1') ? 1.2 : 1); }
+function parryWin(s) { return D(s).parry * (s.charms.includes('fox1') ? 1.2 : 1) + COMBAT.parryEarly; }
+// a blow landing now is parried if the guard came from a fresh press no longer ago than the window
+export function parryLive(s) { const p = s.p; return p.st === 'guard' && p.parryOk && s.t - p.parryAt <= parryWin(s) + 1e-9; }
 
 function playerHit(s, kind, reach, combo) {
   const p = s.p; let any = false;
@@ -459,7 +466,9 @@ function updateFoe(s, f) {
       break;
     }
     case 'rec': {
-      if (f.stt >= A.rec * (d.rec || 1) * (f.boss ? COMBAT.bossRec[f.phase - 1] : COMBAT.foeRec)) {
+      // a long-reach boss (the spear) is left overextended after a long attack: that is the opening to walk in and cut
+      const overreach = f.boss && F.recLong && (A.reach >= 150 || A.red) ? F.recLong : 1;
+      if (f.stt >= A.rec * (d.rec || 1) * overreach * (f.boss ? COMBAT.bossRec[f.phase - 1] : COMBAT.foeRec)) {
         if (A.next) { f.atk = A.next; s.token = f.id; setF(s, f, 'wind'); f.windT = windupOf(s, f.atk); cue(s, 'tell', { x: f.x, id: f.id, red: !!ATK[f.atk].red }); }
         else { if (s.token === f.id) s.token = 0; setF(s, f, 'ready'); f.readyT = (0.4 + rnd(s) * 0.9) * (f.boss ? COMBAT.bossReady[f.phase - 1] : COMBAT.foeReady); f.atk = null; }
       }
@@ -503,7 +512,7 @@ function strikePlayer(s, f, A, cont) {
   if (p.ifr > 0) { cue(s, 'evade', { x: p.x }); return; }
   const guarding = p.st === 'guard' && (f.x - p.x) * p.face > -6;
   if (guarding && !A.red) {
-    if (p.parryOk && p.parryT <= parryWin(s)) {
+    if (parryLive(s)) {
       p.parryOk = false; p.turtle = 0; s.stats.parries++; setF(s, f, 'opened'); cue(s, 'parry', { x: (p.x + f.x) / 2, id: f.id }); s.slow = 0.18;
       p.resF += 0.5; if (p.resF >= 1) { p.resF -= 1; p.res = Math.min(s.resMax, p.res + 1); }
       hint(s, 'riposte'); if (s.token === f.id) { s.token = 0; s.tokenCD = 0.6; }
@@ -544,7 +553,7 @@ function updateArrows(s) {
       if (Math.abs(a.x - p.x) < 18 && p.st !== 'dead') {
         if (p.ifr > 0 || p.y > 50) continue;
         if (p.st === 'guard' && (a.vx < 0) === (p.face > 0)) {
-          if (p.parryOk && p.parryT <= parryWin(s) + 0.04) { p.parryOk = false; a.ref = true; a.vx = -a.vx * 1.15; s.stats.parries++; cue(s, 'reflect', { x: a.x }); p.resF += 0.5; if (p.resF >= 1) { p.resF -= 1; p.res = Math.min(s.resMax, p.res + 1); } }
+          if (p.parryOk && s.t - p.parryAt <= parryWin(s) + 0.04) { p.parryOk = false; a.ref = true; a.vx = -a.vx * 1.15; s.stats.parries++; cue(s, 'reflect', { x: a.x }); p.resF += 0.5; if (p.resF >= 1) { p.resF -= 1; p.res = Math.min(s.resMax, p.res + 1); } }
           else { a.dead = true; cue(s, 'deflect', { x: a.x, arrow: 1 }); }
         } else { a.dead = true; hurtPlayer(s, D(s).dmg, a.x - a.vx, 120); }
       }
@@ -583,15 +592,25 @@ function scheduleStandoff(s) {
   const delay = 1.3 + rnd(s) * 2.0 + nf * 0.65;
   so.feints = []; let t = 0.6 + rnd(s) * 0.4;
   for (let i = 0; i < nf; i++) { if (t > delay - 0.55) break; so.feints.push(t); t += 0.6 + rnd(s) * 0.5; }
-  so.strikeAt = Math.max(delay, t + 0.25); so.win = d.standoff * Math.pow(0.85, so.idx); so.t = 0;
+  // every real draw is preceded by the same tell (hand closes on the hilt, weight drops: cue 'drawtell') drawTell seconds
+  // before the window opens; feints (a shoulder twitch, cue 'feinttell') always finish well before that tell starts
+  const lastFeint = so.feints.length ? so.feints[so.feints.length - 1] : -9;
+  so.strikeAt = Math.max(delay, lastFeint + 0.32 + 0.15 + COMBAT.drawTell); so.tellAt = so.strikeAt - COMBAT.drawTell;
+  so.win = d.standoff * Math.pow(0.85, so.idx); so.t = 0; so.told = false; so.closed = false; so.slowK = 1;
+  // the very first standoff of chapter 1 teaches the cue: time slows from the tell and a "Now" prompt marks the window
+  so.teach = s.ch === 0 && so.idx === 0 && !s.hintsSeen.drawteach && s.ev[so.ev] === s.ev.find((q) => q.t === 'standoff');
+}
+function standoffWin(s) {
+  const so = s.so; if (!so.closed) { so.closed = true; cue(s, 'drawwin', { open: 0 }); }
+  so.st = 'cut'; so.t = 0; so.slowK = 1; so.result = 'win'; s.stats.standoffWins++; cue(s, 'socut', {}); s.slow = 0.6;
 }
 export function standoffPose(so) {
   if (!so) return 'none';
-  if (so.st === 'hold') { for (const ft of so.feints) if (so.t >= ft && so.t < ft + 0.32) return 'feint'; return 'wait'; }
+  if (so.st === 'hold') { for (const ft of so.feints) if (so.t >= ft && so.t < ft + 0.32) return 'feint'; return so.tellAt != null && so.t >= so.tellAt ? 'tell' : 'wait'; }
   return so.st;
 }
 function stepStandoff(s, I) {
-  const so = s.so, p = s.p, d = D(s); so.t += DT; p.drawn = true;
+  const so = s.so, p = s.p, d = D(s); so.t += DT * (so.slowK || 1); p.drawn = true;
   so.oppOX = so.oppX;
   const markP = so.x - 150, markO = so.x + 150;
   switch (so.st) {
@@ -609,15 +628,19 @@ function stepStandoff(s, I) {
     case 'hold': {
       p.st = 'focus';
       const pose = standoffPose(so);
-      if (pose === 'feint' && !so.fcue) { so.fcue = true; cue(s, 'sofeint', {}); } else if (pose !== 'feint') so.fcue = false;
-      if (!I.focus) { so.st = 'fail'; so.t = 0; so.result = 'early'; cue(s, 'sofail', { early: 1 }); break; }
-      if (so.t >= so.strikeAt) { so.st = 'strike'; so.ts = 0; cue(s, 'sodraw', {}); }
+      if (pose === 'feint' && !so.fcue) { so.fcue = true; cue(s, 'sofeint', {}); cue(s, 'feinttell', { x: so.oppX }); } else if (pose !== 'feint') so.fcue = false;
+      if (pose === 'tell' && !so.told) { so.told = true; cue(s, 'drawtell', { x: so.oppX, lead: COMBAT.drawTell }); if (so.teach) { so.slowK = COMBAT.drawTeachSlow; s.hintsSeen.drawteach = 1; s.hint = null; delete s.hintsSeen.now; hint(s, 'now'); } }
+      // a release a hair before the window (drawGrace) still counts; earlier than that is too early (a feint, or a guess)
+      // (the teaching duel accepts a release anywhere after the tell)
+      if (!I.focus) { if (so.told && (so.teach || so.t >= so.strikeAt - COMBAT.drawGrace)) { standoffWin(s); break; } so.st = 'fail'; so.t = 0; so.slowK = 1; so.result = 'early'; cue(s, 'sofail', { early: 1, feint: pose === 'feint' ? 1 : 0 }); break; }
+      if (so.t >= so.strikeAt) { so.st = 'strike'; so.ts = 0; cue(s, 'sodraw', {}); cue(s, 'drawwin', { open: 1, win: so.win }); }
       break;
     }
     case 'strike': {
-      so.ts += DT;
-      if (!I.focus) { so.st = 'cut'; so.t = 0; so.result = 'win'; s.stats.standoffWins++; cue(s, 'socut', {}); s.slow = 0.6; break; }
-      if (so.ts > so.win) { so.st = 'fail'; so.t = 0; so.result = 'late'; cue(s, 'sofail', { late: 1 }); }
+      so.ts += DT * (so.slowK || 1);
+      if (!I.focus) { standoffWin(s); break; }
+      if (so.ts >= so.win && !so.closed) { so.closed = true; cue(s, 'drawwin', { open: 0 }); }
+      if (so.ts > so.win + COMBAT.drawGrace) { so.st = 'fail'; so.t = 0; so.slowK = 1; so.result = 'late'; cue(s, 'sofail', { late: 1 }); }
       break;
     }
     case 'cut': {

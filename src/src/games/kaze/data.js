@@ -37,9 +37,9 @@ export const FOES = {
 };
 
 export const BOSSES = {
-  gonroku: { jp: '竹割りの権六', name: 'Gonroku the Bamboo-Splitter', look: 'bandit', hp: 15, boss2: 1.5, w: 32, speed: 120, range: 92, guard: 4, settle: 0.28,
+  gonroku: { jp: '竹割りの権六', name: 'Gonroku the Bamboo-Splitter', look: 'bandit', hp: 16, boss2: 1.5, w: 32, speed: 120, range: 92, guard: 4, settle: 0.28,
     p1: [['cut', 5], ['combo', 1]], p2: [['combo', 2], ['flurry', 2], ['lunge', 2]], feint: [0, 0.12] },
-  ono: { jp: '案山子の大野', name: 'Ōno the Scarecrow', look: 'spear', hp: 19, w: 32, speed: 95, range: 150, guard: 4, settle: 0.3,
+  ono: { jp: '案山子の大野', name: 'Ōno the Scarecrow', look: 'spear', hp: 19, boss2: 1.5, recLong: 1.5, w: 32, speed: 95, range: 150, guard: 4, settle: 0.3,
     p1: [['thrust', 3], ['sweep', 2]], p2: [['dthrust', 2], ['lunge', 2], ['sweep', 2], ['thrust', 1]], feint: [0.08, 0.2] },
   shizu: { jp: '門番の静', name: 'Shizu the Gatekeeper', look: 'duelist', hp: 20, w: 30, speed: 140, range: 92, guard: 4, settle: 0.2,
     p1: [['cut', 2], ['flurry', 2], ['combo', 1]], p2: [['flurry', 2], ['rthrust', 2], ['combo', 2]], feint: [0.3, 0.5] },
@@ -63,10 +63,16 @@ export const COMBAT = {
   posture: { slash: 0.2, heavy: 1, counter: 1.5 }, // landed hits fill a boss's guard meter too
   postureRest: 2, postureEbb: 0.7, // seconds without pressure before the meter ebbs, then pips per second
   openBroken: 1.25, openBrokenBoss: 0.95, // how long a broken guard stays open for the riposte
+  // parry: the window (DIFF.parry) is measured from the key press; parryEarly widens it for a press a little early,
+  // parryHold keeps a tapped guard up that long, parrySpam: a press this soon after the last one opens no new window
+  // standoff draw: the tell (cue drawtell) comes this long before the release window opens; a release up to drawGrace
+  // before the window opens or after it closes still wins; the first standoff runs its clock at drawTeachSlow from the tell
+  drawTell: 0.42, drawGrace: 0.08, drawTeachSlow: 0.4,
+  parryEarly: 0.1, parryHold: 0.32, parrySpam: 0.25,
   reachIn: 30, // a melee foe starts his windup from this far outside his reach (he closes it while winding)
   counterHit: 1.34, // a boss's blow that lands while the ronin is mid-swing (he cut into the glint) deals this many times its damage
   // pace: recovery after a strike (x the attack's rec) and the pause before the next one (x a 0.4..1.3 s roll), [phase 1, phase 2]
-  bossRec: [1, 0.85], bossReady: [1.2, 0.6], foeRec: 1, foeReady: 1,
+  bossRec: [0.9, 0.8], bossReady: [0.9, 0.45], foeRec: 0.8, foeReady: 0.7,
 };
 
 // Ground profiles are [x, height] (height up, px). Events are triggered as the ronin reaches them.

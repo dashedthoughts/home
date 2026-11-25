@@ -4,6 +4,7 @@
 // 3 standoff windows are winnable: releasing inside the window wins, on a feint or late is punished;
 // 4 no softlocks: watchdogs over 20 seeds with a capable bot and a random "monkey";
 // 5 save/load round-trips (and survives broken storage); 6 determinism.
+// 12 parry timing (early/on-time/late presses at 60/30/20 fps, taps and holds); 13 a learner beats Ono in a few tries.
 // 11 combat honesty: unready foes cannot block, a raised guard always blocks visibly (clash cue, counter), guard meters
 // break within 4 hits, bosses take damage from every landed quick cut, and no block in real play comes without a raised guard.
 import { createSim, step, DT, blankInput, standoffPose, digest, foeGuarded, foeGuardMax } from './sim.js';
@@ -82,7 +83,7 @@ for (const diff of ['story', 'blade', 'lethal']) {
     if (sawFeint) { feintSeen++; ok(rB === 'early', `${diff} ch${ch + 1} seed ${seed}: releasing on a feint gave ${rB}`); }
     // release late (just after the window): punished
     const c = standoffAt(ch, idx, diff, seed);
-    const rC = runStandoff(c, (so) => !(so.st === 'strike' && so.ts > so.win + 0.05));
+    const rC = runStandoff(c, (so) => !(so.st === 'strike' && so.ts > so.win + COMBAT.drawGrace + 0.03));
     ok(rC === 'late', `${diff} ch${ch + 1} seed ${seed}: releasing late gave ${rC}`);
     // the window itself is humanly winnable: at least 0.2s and later duels in a chain only tighten
     ok(a.stats.standoffWins >= 1, 'a win is counted');
@@ -91,6 +92,44 @@ for (const diff of ['story', 'blade', 'lethal']) {
 for (const diff of ['story', 'blade', 'lethal']) ok(DIFF[diff].standoff * Math.pow(0.85, 2) >= 0.2, `${diff}: third duel window ${(DIFF[diff].standoff * 0.7225).toFixed(3)}s >= 0.2s`);
 ok(feintSeen > 10, `feints were exercised (${feintSeen})`);
 console.log(`  windows: story ${DIFF.story.standoff}s, blade ${DIFF.blade.standoff}s, lethal ${DIFF.lethal.standoff}s (x0.85 per chained duel); feint releases tested: ${feintSeen}`);
+
+// ---- 3b. the draw is readable: a tell always precedes the window by 0.35 to 0.5 s, feints never emit it, a release inside
+// the window (with its grace on both sides) always wins, and the first standoff teaches the cue ----
+{
+  let duels = 0, feintCues = 0, leads = [];
+  for (const diff of ['story', 'blade', 'lethal']) for (const [ch, idx] of [[0, 0], [1, 0], [2, 0], [3, 0], [4, 0]]) for (let seed = 1; seed <= 6; seed++) {
+    // watch the whole chain of duels with a policy that releases at a chosen point of the window
+    for (const at of ['grace-early', 'open', 'mid', 'end', 'grace-late']) {
+      const s = standoffAt(ch, idx, diff, seed); s.hintsSeen.drawteach = 1; if (s.so) s.so.teach = false;
+      let tell = null, open = null, sawFeint = false, res = [];
+      const I = blankInput();
+      for (let i = 0; i < 60 * 40 && s.phase === 'standoff'; i++) {
+        const so = s.so; let hold = true;
+        if (so.st === 'hold' && tell != null) { if (at === 'grace-early' && so.t >= so.strikeAt - COMBAT.drawGrace + 0.017) hold = false; }
+        if (so.st === 'strike') { const w = so.win; hold = !({ open: so.ts >= 0, mid: so.ts >= w / 2, end: so.ts >= w - 0.017, 'grace-late': so.ts >= w + COMBAT.drawGrace - 0.017 }[at] ?? false); }
+        I.focus = hold; step(s, I);
+        for (const c of s.cues) {
+          if (c.k === 'drawtell') { tell = s.so ? s.so.t : null; if (standoffPose(s.so) !== 'tell') ok(false, 'drawtell outside the tell pose'); }
+          if (c.k === 'feinttell') { feintCues++; sawFeint = true; if (tell != null && s.so && s.so.t >= s.so.tellAt) ok(false, 'a feint inside the tell'); }
+          if (c.k === 'drawwin' && c.open) { open = s.so.t; leads.push(open - tell); ok(tell != null && open - tell >= 0.35 - 1e-9 && open - tell <= 0.5 + 1e-9, `${diff} ch${ch + 1}: tell ${tell} precedes window ${open} by ${(open - tell).toFixed(3)}s`); }
+          if (c.k === 'feinttell' && tell != null) ok(false, 'feint after the tell');
+          if (c.k === 'socut' || c.k === 'sofail') { res.push(c.k); tell = null; open = null; }
+        }
+        s.cues.length = 0;
+      }
+      duels++;
+      ok(res.length > 0 && res.every((k) => k === 'socut'), `${diff} ch${ch + 1} seed ${seed}: release at ${at} of the window gave ${res.join(',')}`);
+    }
+  }
+  ok(feintCues > 20, `feint tells were exercised (${feintCues})`);
+  // the teaching beat: the first standoff of chapter 1 slows its clock from the tell and prompts "Now" as the window opens
+  { const s = standoffAt(0, 0, 'blade', 2); let slowed = false, now = false, realT0 = null, realOpen = null;
+    for (let i = 0; i < 60 * 30 && s.phase === 'standoff'; i++) { const I = blankInput(); I.focus = !(s.so.st === 'strike' && s.so.ts > s.so.win / 2); step(s, I);
+      for (const c of s.cues) { if (c.k === 'drawtell') realT0 = s.t; if (c.k === 'drawwin' && c.open) realOpen = s.t; } s.cues.length = 0;
+      if (s.so && s.so.slowK < 1) slowed = true; if (s.hint && s.hint.id === 'now') now = true; if (s.so && s.so.result) break; }
+    ok(slowed && now && realOpen - realT0 > 0.8, `first standoff teaches the tell (slowed ${slowed}, "Now" ${now}, tell to window ${(realOpen - realT0).toFixed(2)}s real time)`); }
+  console.log(`  ${duels} duel chains: tell leads the window by ${Math.min(...leads).toFixed(2)}..${Math.max(...leads).toFixed(2)}s; ${feintCues} feint tells, none with drawtell; releases from ${COMBAT.drawGrace}s before to ${COMBAT.drawGrace}s after the window all win`);
+}
 
 // ---- 4. no softlocks ----
 console.log('4. watchdogs (20 seeds)');
@@ -314,6 +353,76 @@ console.log('11. combat honesty');
   ok(blind === 0, `${blind} blocks happened without a raised guard`);
   ok(clashes > 10, `blocks were exercised in real play (${clashes})`);
   console.log(`  ${n} cuts on unready foes all landed; ${blocks} guard types block with a clash and counter; meters break in <= 4 quick / 2 heavy; ${clashes} blocks in play, all from a raised guard`);
+}
+
+// ---- 12. parry: the window opens at the press, a little early counts, a tap holds, a held guard never swallows a press,
+// and the result is the same at 60, 30 and 20 fps (input is sampled once per frame; a tap is latched for one sim step) ----
+console.log('12. parry timing');
+{
+  const W = DIFF.blade.parry + COMBAT.parryEarly;
+  // a bandit (or Ono) winding a parryable attack whose blow lands exactly at tHit after the setup
+  const setup = (type = 'bandit', atk = 'cut', seed = 1) => {
+    const s = createSim({ seed, difficulty: 'blade', chapter: type === 'ono' ? 1 : 0 });
+    const e = s.ev.find((q) => q.t === (type === 'ono' ? 'boss' : 'fight')); for (const q of s.ev) if (q !== e) q.done = true; if (type !== 'ono') e.foes = [type];
+    s.p.x = s.p.ox = e.x - 80; step(s, blankInput()); s.cues.length = 0;
+    const f = s.foes[0]; s.p.face = 1; f.face = -1; f.x = f.ox = s.p.x + 70; f.engaged = true; f.atk = atk; f.st = 'wind'; f.stt = 0; f.windT = 0.6; f.feinting = false; s.token = f.id;
+    return { s, f };
+  };
+  // run with the parry key pressed at time `at` (seconds after setup; negative = before), held for `hold` seconds; fps sets how
+  // often input is sampled. Returns 'parry', 'block' or 'hit'.
+  const trial = (at, o = {}) => {
+    const { s, f } = setup(o.type, o.atk, o.seed); const fps = o.fps || 60, per = Math.round(60 / fps), hold = o.hold ?? 0.02;
+    let out = null, latched = false, frameI = null;
+    for (let i = 0; i < 120 && !out; i++) {
+      const t = i * DT;
+      if (i % per === 0) { // a new frame: sample the keyboard (a press since the last frame is latched for one step)
+        const down = (o.pre && t < o.pre[1] && t >= o.pre[0]) || (t >= at && t < at + hold);
+        const pressedSince = at > t - per * DT && at <= t;
+        frameI = blankInput(); frameI.parry = down || pressedSince; latched = pressedSince && !down;
+      } else if (latched) { frameI = Object.assign({}, frameI, { parry: false }); latched = false; }
+      step(s, frameI);
+      for (const c of s.cues) { if (c.k === 'parry') out = 'parry'; else if (c.k === 'deflect' || c.k === 'guardbroken') out = 'block'; else if (c.k === 'hurt') out = 'hit'; }
+      s.cues.length = 0;
+    }
+    return out;
+  };
+  const hitT = 0.6; let n = 0;
+  for (const fps of [60, 30, 20]) for (const hold of [0.02, 0.8]) for (const [type, atk] of [['bandit', 'cut'], ['spear', 'thrust'], ['ono', 'thrust']]) for (const seed of [1, 2]) {
+    const o = { fps, hold, type, atk, seed }; n++;
+    // on time, and a little early (inside window + grace, allowing one frame of sampling delay): always a parry
+    for (const lead of [0.05, 0.1, W - 1 / fps - 0.02]) { const r = trial(hitT - lead, o); ok(r === 'parry', `${type} ${fps}fps hold ${hold}s: press ${lead.toFixed(2)}s before the blow gave ${r}`); }
+    // late (after the blow): never a parry
+    { const r = trial(hitT + 0.03, o); ok(r === 'hit', `${type} ${fps}fps: a late press gave ${r}`); }
+    // far too early: a held guard blocks, a tap has dropped by then; never a parry
+    { const r = trial(hitT - 0.5, o); ok(r === (hold > 0.3 ? 'block' : 'hit'), `${type} ${fps}fps hold ${hold}: a press 0.5s early gave ${r}`); }
+    // holding guard does not swallow a fresh press: hold 0.0-0.3s, release, press again on time
+    { const r = trial(hitT - 0.08, Object.assign({}, o, { pre: [0, 0.3] })); ok(r === 'parry', `${type} ${fps}fps: a press after releasing a held guard gave ${r}`); }
+  }
+  // a press buffered during the ronin's own swing still parries (the window runs from the press)
+  { const { s, f } = setup('bandit', 'cut'); let out = null; f.stt = 0.2; f.windT = 0.7; // committed: he trades through the cut
+    for (let i = 0; i < 90 && !out; i++) { const I = blankInput(); if (i === 0) I.slash = true; if (i >= 16 && i <= 17) I.parry = true; step(s, I); for (const c of s.cues) if (c.k === 'parry' || c.k === 'hurt' || c.k === 'deflect') out = out || c.k; s.cues.length = 0; }
+    ok(out === 'parry', `a parry pressed during the ronin's own cut recovery gave ${out}`); }
+  // a successful parry is unmistakable: parry cue, the foe opened (recoiling), and the riposte lands as a kill
+  { const { s, f } = setup('bandit', 'cut'); let parried = false; for (let i = 0; i < 40; i++) { const I = blankInput(); I.parry = i === 30; step(s, I); if (s.cues.some((c) => c.k === 'parry')) parried = true; s.cues.length = 0; }
+    ok(parried && f.st === 'opened', `parry opens the foe (st ${f.st})`);
+    let killed = false; for (let i = 0; i < 40 && !killed; i++) { const I = blankInput(); I.slash = i === 12; step(s, I); killed = s.cues.some((c) => c.k === 'riposte'); s.cues.length = 0; }
+    ok(killed, 'the riposte after a parry lands'); }
+  console.log(`  window ${W.toFixed(2)}s from the press (${DIFF.blade.parry}s + ${COMBAT.parryEarly}s early grace); ${n} setups x 6 timings at 60/30/20 fps, tapped and held`);
+}
+
+// ---- 13. Ono, the chapter 2 boss: a learner beats him within a few tries on most seeds ----
+console.log('13. Ono');
+{
+  const tries = [];
+  for (let seed = 1; seed <= 10; seed++) {
+    const s = createSim({ seed, difficulty: 'blade', chapter: 1, checkpoint: 3 }); const m = makePersona('learner', seed); let n = 0, won = false;
+    for (let i = 0; i < 60 * 60 * 8 && !won; i++) { step(s, personaInput(s, m)); for (const c of s.cues) { if (c.k === 'death' && s.arena && s.arena.boss) n++; if (c.k === 'kill' && c.boss === 'ono') won = true; } s.cues.length = 0; }
+    tries.push(won ? n + 1 : 99);
+  }
+  const within = tries.filter((t) => t <= 5).length;
+  ok(within >= 7, `learner beats Ono within 5 tries on ${within}/10 seeds (need 7): ${tries.join(',')}`);
+  ok(Math.max(...tries) < 99, `learner always beats Ono in the end (${tries.join(',')})`);
+  console.log(`  learner tries to beat Ono: ${tries.join(',')}`);
 }
 
 // ---- 7. personas: human-like players on the default difficulty (Blade), 8 seeds each ----

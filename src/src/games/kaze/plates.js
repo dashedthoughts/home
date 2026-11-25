@@ -8,6 +8,7 @@ export const HINT = {
   parry: { keys: ['parry'], text: 'Parry on the glint' }, dodge: { keys: ['dodge'], text: 'Red glint: dodge, it cannot be blocked' },
   riposte: { keys: ['slash'], text: 'He is open. Strike now' }, heavy: { keys: ['heavy'], text: 'A heavy cut breaks a guard' },
   focus: { keys: ['focus'], text: 'Hold to face him. Release when he draws' }, wind: { keys: ['wind'], text: 'Ask the wind the way' },
+  now: { keys: ['focus'], text: 'Now' }, // [combat] the first standoff's teaching beat: shown as the release window opens
   bow: { keys: ['interact'], text: 'Bow at the shrine to rest' }, jump: { keys: ['up'], text: 'Jump a low sweep' },
 };
 const PRI = { fight: 5, death: 4, boss: 3, story: 2, prompt: 1 };
@@ -29,7 +30,7 @@ export function plateStep(m, s, cues, input) {
   const C = [];
   const fight = !!s.arena && s.foes.some((f) => f.st !== 'dead');
   if (s.hint && s.phase !== 'dead' && HINT[s.hint.id]) C.push({ key: 'hint:' + s.hint.id + ':' + Math.round(s.t - s.hint.t), kind: 'fight', keys: HINT[s.hint.id].keys, text: HINT[s.hint.id].text, pos: 'high' });
-  if (s.phase === 'standoff' && s.so && s.ch < 2 && (s.so.st === 'ready' || s.so.st === 'hold' || s.so.st === 'strike')) C.push({ key: 'so:' + s.so.ev + ':' + s.so.idx + ':' + (s.so.st === 'ready' ? 'r' : 'h'), kind: 'fight', keys: ['focus'], text: s.so.st === 'ready' ? 'Hold to face him' : 'Release when he draws', pos: 'low' });
+  if (s.phase === 'standoff' && s.so && s.ch < 2 && !(s.hint && s.hint.id === 'now') /* [combat] the teaching "Now" takes over */ && (s.so.st === 'ready' || s.so.st === 'hold' || s.so.st === 'strike')) C.push({ key: 'so:' + s.so.ev + ':' + s.so.idx + ':' + (s.so.st === 'ready' ? 'r' : 'h'), kind: 'fight', keys: ['focus'], text: s.so.st === 'ready' ? 'Hold to face him' : 'Release when he draws', pos: 'low' });
   if (s.phase === 'dead') C.push({ key: 'death:' + s.stats.deaths, kind: 'death', label: '風', text: DEATH_LINES[(s.stats.deaths + 2) % DEATH_LINES.length], pos: 'mid', dur: 9 });
   if (m.boss && s.arena && s.arena.boss) { const L = BOSS_LINES[m.boss.id].before; for (let k = 0; k < L.length; k++) if (s.t >= m.boss.t0 + 1.2) C.push({ key: 'boss:' + m.boss.id + ':' + m.boss.t0.toFixed(2) + ':' + k, kind: 'boss', label: BOSSES[m.boss.id].jp.slice(-2), text: L[k], pos: 'low', order: k }); }
   if (m.fall && s.t - m.fall.t0 < 4) { const F = BOSS_LINES[m.fall.id].fall; for (let k = 0; k < F.length; k++) C.push({ key: 'fall:' + m.fall.id + ':' + k, kind: 'boss', label: BOSSES[m.fall.id].jp.slice(-2), text: F[k], pos: 'low', dur: F.length > 1 ? 1.4 : 2.6 }); }
