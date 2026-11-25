@@ -9,7 +9,7 @@ import { hakamaTargets, hakamaPolys, stepChain, hull, soften, insideConvex } fro
 
 const E = { out: (t) => 1 - (1 - t) * (1 - t), inout: (t) => (t < 0.5 ? 2 * t * t : 1 - 2 * (1 - t) * (1 - t)), back: (t) => 1 + 2.2 * Math.pow(t - 1, 3) + 1.2 * Math.pow(t - 1, 2) };
 // a pose: hip offset, lean, head tilt, feet, grip (relative to hip), sword angle (0 = forward, -PI/2 = up)
-const mk = (o) => Object.assign({ hx: 0, hy: -49, lean: 0.06, head: 0, ff: [12, 0], fb: [-14, 0], grip: [16, -52], sw: -0.75, kneel: 0, roll: 0, sheath: 0, open: 0, hand: [9, -4], handK: 0, rag: 0, rk: 0 }, o);
+const mk = (o) => Object.assign({ hx: 0, hy: -49, lean: 0.06, head: 0, ff: [12, 0], fb: [-14, 0], grip: [16, -52], sw: -0.75, kneel: 0, roll: 0, sheath: 0, open: 0, hand: [9, -4], handK: 0, rag: 0, rk: 0, fk: 0 }, o);
 export const POSE = {
   stand: mk({ grip: [8, -50], sw: 0.9, sheath: 1, ff: [6, 0], fb: [-8, 0], hy: -51, lean: 0.03 }),
   guard: mk({ grip: [20, -58], sw: -0.62, lean: 0.14, head: 0.1, ff: [18, 0], fb: [-24, 0], hy: -46 }),
@@ -37,7 +37,7 @@ export const POSE = {
   waki: mk({ grip: [-8, -42], sw: 2.75, lean: 0.24, head: 0.15, ff: [22, 0], fb: [-24, 0], hy: -43 }),
   jodan: mk({ grip: [8, -104], sw: -1.35, lean: -0.05, ff: [11, 0], fb: [-13, 0], hy: -50 }),
   iaigoshi: mk({ grip: [8, -48], sw: 0.95, sheath: 1, lean: 0.06, ff: [9, 0], fb: [-11, 0], hy: -50 }),
-  bowg: mk({ grip: [24, -44], sw: -1.57, kneel: 1, hy: -27, lean: 0.05, ff: [-14, 0], fb: [-14, 0] }), boww: mk({ grip: [28, -48], sw: -1.57, kneel: 1, hy: -28, lean: -0.1, ff: [-14, 0], fb: [-14, 0] }),
+  bowg: mk({ grip: [24, -44], sw: -1.57, kneel: 1, fk: 1, hy: -29, lean: 0.05, ff: [-14, 0], fb: [-14, 0] }), boww: mk({ grip: [28, -48], sw: -1.57, kneel: 1, fk: 1, hy: -30, lean: -0.1, ff: [-14, 0], fb: [-14, 0] }),
   katsugi: mk({ grip: [14, -72], sw: -2.7, lean: 0.08, head: 0.05, ff: [16, 0], fb: [-20, 0], hy: -46 }),
   gedan: mk({ grip: [28, -38], sw: 0.45, lean: 0.22, head: 0.15, ff: [28, 0], fb: [-32, 0], hy: -39 }),
   // shield brute
@@ -367,7 +367,7 @@ export function drawFigure(g, x, y, look, pose, fig, o) {
   // down; only kneels, crouches, rolls, falls and the standoff crouch go lower.
   const rg = clamp(pose.rag || 0, 0, 1); // 1: a ragdoll places the hips and hand exactly
   const lift = pose.kneel || pose.hy > -30 || rg > 0.5 ? 0 : 6 * clamp((-pose.hy - 30) / 18, 0, 1) + 3.5;
-  const upright = !pose.kneel && rg < 0.5 && (pose.hy <= -38 || pose.gait) && Math.abs(lean) < 0.75;
+  const upright = !pose.kneel && rg < 0.5 && (pose.hy <= -38 || pose.gait) && Math.abs(lean) < (pose.gait ? 0.98 : 0.75);
   // the head turns at most about 19 degrees on the neck: the shoulders and hips take a recoil
   const hdT = clamp(pose.head || 0, -0.33, 0.33) + (L.hunch ? 0.2 : 0), na = lean + hdT * 0.5, ha = lean + hdT;
   let hyU = pose.hy - lift; if (upright) hyU = Math.min(hyU, -0.47 * STAND_H, -(0.945 * STAND_H - TORSO * Math.cos(lean) - NECK * Math.cos(na) - 9.6 * Math.cos(ha)));
@@ -384,7 +384,8 @@ export function drawFigure(g, x, y, look, pose, fig, o) {
   for (const [ft, back] of [[pose.fb, 1], [pose.ff, 0]]) {
     const hx = H[0] - nfx * (back ? 3 : -3) * sc, hy = H[1];
     const F = [x + f * ft[0] * sc, y + ft[1] * sc];
-    if (pose.kneel) { const knee = back ? [H[0] + f * 17 * sc, y - 3 * sc] : [H[0] + f * 20 * sc, y - 4 * sc]; legs.push({ hx, hy, kx: knee[0], ky: knee[1], fx: H[0] - f * 13 * sc, fy: y - 1, back }); }
+    if (pose.kneel && pose.fk && !back) { const F2 = [H[0] + f * 24 * sc, y]; ik(hx, hy, F2[0], F2[1], LEG * sc, LEG * sc, f > 0 ? -1 : 1, T4); legs.push({ hx, hy, kx: T4[0], ky: T4[1], fx: T4[2], fy: T4[3], back }); }
+    else if (pose.kneel) { const knee = back ? [H[0] + f * 17 * sc, y - 3 * sc] : [H[0] + f * 20 * sc, y - 4 * sc]; legs.push({ hx, hy, kx: knee[0], ky: knee[1], fx: H[0] - f * 13 * sc, fy: y - 1, back }); }
     else if (back && pose.rk > 0.5) { // the iai-goshi: the rear knee down on the ground, the shin and toes along it behind
       const gyk = (o.groundY ?? y) - 2 * sc, Lt = LEG * sc, c = Math.min(1, Math.max(0.2, (gyk - hy) / Lt)), kx = hx - f * Lt * Math.sqrt(1 - c * c), ky = hy + Lt * c;
       legs.push({ hx, hy, kx, ky, fx: kx - f * Lt * 0.96, fy: (o.groundY ?? y) - 1.5 * sc, back }); }
@@ -524,6 +525,10 @@ export function drawFigure(g, x, y, look, pose, fig, o) {
           sweep(g, [w0, [lerp(w0[0], kc[0], 0.6), lerp(w0[1], kc[1], 0.6)], kc, hp], (j === 1 ? 1.5 : 1.2) * sc, j % 2 ? INK : PAPER, A * (j % 2 ? 0.42 : 0.26), seed + 80 + i * 7 + j); }
         // a fold breaks over a bent knee, only when the knee is actually bent
         const J = l.J, K = l.K, An = l.A, t1 = [K[0] - J[0], K[1] - J[1]], t2 = [An[0] - K[0], An[1] - K[1]], cb = (t1[0] * t2[0] + t1[1] * t2[1]) / ((Math.hypot(...t1) * Math.hypot(...t2)) || 1);
+        // the knee line: the front of the thigh breaking over the knee into the shin, so a leg reads inside the cloth
+        if (i === 1 || L.shins || pose.kneel) { const tl = Math.hypot(...t1) || 1, nx = -t1[1] / tl * f, ny = t1[0] / tl * f, o2 = (HG.wk / 2) * 0.8, s2l = Math.hypot(...t2) || 1;
+          const a0 = [lerp(J[0], K[0], 0.45) - nx * o2, lerp(J[1], K[1], 0.45) - ny * o2], a1 = [K[0] - nx * o2 * 1.05, K[1] - ny * o2 * 1.05], a2 = [K[0] + t2[0] / s2l * 12 * sc - nx * o2, K[1] + t2[1] / s2l * 12 * sc - ny * o2];
+          if (cb < 0.97) sweep(g, [a0, a1, a2], 1.3 * sc, INK, A * 0.55 * clamp((0.97 - cb) / 0.3, 0.3, 1), seed + 86 + i, 3); }
         if (cb < 0.75) { const k2 = clamp((0.75 - cb) / 0.9, 0, 1); for (const s2 of [-1, 1]) sweep(g, [[K[0] - f * 2 * sc, K[1] + 2 * sc], [K[0] - f * (6 + 3 * s2) * sc, K[1] + (7 + 4 * s2) * sc]], 1.2 * sc, INK, A * 0.45 * k2, seed + 88 + s2 + i); }
       });
       g.restore();
@@ -548,6 +553,8 @@ export function drawFigure(g, x, y, look, pose, fig, o) {
     mo([[Wb[0] + f * 1 * sc, Wb[1]], [Wb[0] - f * 2.6 * sc + up[0] * 1 * sc, Wb[1] + up[1] * 1 * sc], [Wb[0] - f * 2.2 * sc + up[0] * 9 * sc, Wb[1] + up[1] * 9 * sc], [Wb[0] + f * 1.6 * sc + up[0] * 9 * sc, Wb[1] + up[1] * 9 * sc]], mix(L.hak, '#000000', 0.2), { k: 74, lw: 1.3 * sc, strokes: 2, tex: 0.4 });
     const V = [HG.Hb[0] + f * 3 * sc, HG.Hb[1] - 1 * sc]; mo([[V[0] - f * 2.2 * sc, V[1] - 5 * sc], [V[0] + f * 2.2 * sc, V[1] - 5 * sc], [V[0], V[1] + 4 * sc]], L.kim, { k: 76, lw: 1 * sc, strokes: 2, tex: 0.3 });
   }
+  // a kneeling archer's planted front foot: a small dark sandal in front of the cloth
+  if (pose.kneel && pose.fk && legs[1]) { const F = [legs[1].fx, legs[1].fy]; const F0 = F; { const F = [F0[0] + f * 6 * sc, F0[1]]; mo([[F[0] - f * 4 * sc, F[1] - 0.5 * sc], [F[0] - f * 3 * sc, F[1] - 6.5 * sc], [F[0] + f * 4 * sc, F[1] - 6 * sc], [F[0] + f * 11 * sc, F[1] - 0.8 * sc]], '#1f1b17', { k: 66, tex: 0.2, lw: 1.2 * sc, strokes: 2 }); rib(g, [F[0] - f * 5 * sc, F[1] + 0.2 * sc, F[0] + f * 12 * sc, F[1] + 0.2 * sc], () => 2.2 * sc, '#6b5a3a', A, 0.6); } }
   // ---- torso: kimono, obi, white collar ----
   const tw = 21 * sc * bulk, tp = (u, s) => [lerp(H[0], N[0], u) + nfx * s, lerp(H[1], N[1], u) + nfy * s];
   if (L.coat && L.coatLong) { const hem = [H[0] - nfx * 16 * sc + cloth * 1.4, y - 4 * sc]; mo([tp(1, -tw * 0.5), tp(0.4, -tw * 0.62), hem, [hem[0] + f * 22 * sc, y - 3 * sc], tp(0.2, tw * 0.3)], L.coat, { k: 90, lw: 2 * sc }); }
@@ -674,7 +681,8 @@ export function drawFigure(g, x, y, look, pose, fig, o) {
     drawWeapon(g, L, G, dx, dy, f, sc, A, pose, o, seed, H, cloth);
   }
   const pump = o.walkPh != null ? -Math.sin(o.walkPh) : 0;
-  if (!(L.shield)) { const rest = pose.sheath && L.weapon !== 'spear' && L.weapon !== 'bow'; let hx = rest ? H[0] + f * (10 + pump * (o.running ? 19 : 6)) * sc : G[0], hy = rest ? H[1] - (4 + (o.running ? 4 + pump * 7 : 0)) * sc : G[1];
+  if (!(L.shield)) { const rest = pose.sheath && L.weapon !== 'spear' && L.weapon !== 'bow'; let hx = rest ? H[0] + f * (10 + pump * 6) * sc : G[0], hy = rest ? H[1] - 4 * sc : G[1];
+    if (rest && o.running) { const k = (pump + 1) / 2, fwd = [lerp(H[0], N[0], 0.5) + nfx * 15 * sc, lerp(H[1], N[1], 0.5) + nfy * 15 * sc], bk = [H[0] - nfx * 13 * sc, H[1] - nfy * 13 * sc + 7 * sc]; hx = lerp(bk[0], fwd[0], k); hy = lerp(bk[1], fwd[1], k); } // running: the fist drives to the sternum in front of the body, then back past the hip
     if (rest && pose.handK > 0.01 && !o.running) { const k = clamp(pose.handK, 0, 1); hx = lerp(hx, H[0] + f * pose.hand[0] * sc, k); hy = lerp(hy, H[1] + pose.hand[1] * sc, k); } // the hand on the hilt, or at the hat
     arm(Sf, hx, hy, 0, 2); }
   else if (L.weapon === 'club') arm(Sb, G[0], G[1], 0, 4);
@@ -807,7 +815,7 @@ export function drawFoxFig(g, x, y, f, run, t, seed, n, reduced) {
 // A cycle is two steps. The stance foot moves back exactly as fast as the ground passes (no sliding): the phase comes
 // from distance travelled, never from time. Swing feet travel on an eased arc with the knee lifted.
 const GAITS = {
-  ronin: { ws: 38, rs: 52, wd: 0.6, rd: 0.26, wl: 7, rl: 22, wb: 1.8, rb: 4, wn: 0.06, rn: 0.5, hy: 2, low: 6, kick: 18, reach: 14, fly: 8 },
+  ronin: { ws: 38, rs: 52, wd: 0.6, rd: 0.26, wl: 7, rl: 22, wb: 1.8, rb: 4, wn: 0.06, rn: 0.7, hy: 2, low: 6, kick: 18, reach: 14, fly: 8 },
   bandit: { ws: 30, rs: 40, wd: 0.58, rd: 0.4, wl: 8, rl: 12, wb: 3, rb: 5, wn: 0.22, rn: 0.32, hy: 5 },
   spear: { ws: 32, rs: 40, wd: 0.6, rd: 0.42, wl: 7, rl: 9, wb: 0.6, rb: 1.2, wn: 0.06, rn: 0.1, hy: 1 },
   brute: { ws: 30, rs: 36, wd: 0.66, rd: 0.5, wl: 10, rl: 12, wb: 4, rb: 6, wn: 0.1, rn: 0.14, hy: 2, stomp: 1 },

@@ -121,7 +121,7 @@ export class Life {
     const away = (x, d) => s.ev.some((e) => (e.t === 'fight' || e.t === 'boss' || e.t === 'shrine' || e.t === 'standoff') && Math.abs(e.x - x) < d);
     // crows on the path (not by the paddies)
     this.perch = [];
-    if (key !== 'terraces') for (let x = 800 + R() * 300; x < len - 500; x += 1300 + R() * 500) { if (away(x, 260)) continue; this.perch.push({ x, kind: 'crow', st: 0, t: 0, face: R() < 0.5 ? -1 : 1, ph: R() * 6, n: 1 + ((R() * 2.2) | 0) }); }
+    if (key !== 'terraces') for (let x = 800 + R() * 300; x < len - 500; x += 1300 + R() * 500) { if (away(x, 260)) continue; this.perch.push({ x, kind: 'crow', st: 0, t: 0, face: R() < 0.5 ? -1 : 1, ph: R() * 6, n: 1 }); R(); } // one crow per perch: a pair read as a ghost copy
     // frogs at the path edge (bamboo, terraces)
     this.frogs = [];
     if (key === 'bamboo' || key === 'terraces') for (let x = 600 + R() * 300; x < len - 400; x += 1100 + R() * 600) { if (away(x, 200)) continue; this.frogs.push({ x, x0: x, y: 0, st: 0, t: 0, face: R() < 0.5 ? -1 : 1, ph: R() * 6 }); }

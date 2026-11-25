@@ -315,7 +315,7 @@ export class Renderer {
       }
       case 'overflip': { // a forward somersault clean over the foe, tucked, landing facing on
         const u = clamp(p.stt / 0.4, 0, 1), P2 = keepSheath(lerpPose(pose, TUCK, Math.min(1, Math.sin(Math.PI * u) * 2.2), {}));
-        return { pose: P2, rot: (p.dodgeDir || p.face) * Math.PI * 2 * E2(u), lift: 64 * Math.sin(Math.PI * u) };
+        return { pose: P2, rot: (p.dodgeDir || p.face) * Math.PI * 2 * E2(u), lift: p.vault ? 0 : 64 * Math.sin(Math.PI * u), cy: 44 }; // the sim carries the height of a vault
       }
       case 'aircut': case 'divecut': case 'airspin': { // in the air: a rising cut tucked, a diving cut pitched forward, or a full spin with the blade flat
         const W = A.wind + A.act, u = clamp(tt / (W + 0.08), 0, 1), P2 = lerpPose(pose, pose, 0, {}); P2.ff = [P2.ff[0] * 0.5 + 6, -12]; P2.fb = [P2.fb[0] * 0.5 - 6, -16];
@@ -398,7 +398,7 @@ export class Renderer {
       if (!c.rag && t >= ragAt && c.geo && c.geo.legs) { const sc2 = c.geo.sc || 1, away = c.dir; c.rag = makeRag(c.geo, c.face, sc2, c.variant === 'back' ? [away * 260, -220] : c.variant === 'kneel' ? [away * 90, 40] : [away * 200, -140]); }
       if (c.rag) { if (this.hitstop <= 0) stepRag(c.rag, dt, gyf); lerpPose(ragPose(c.rag, c.x + xoff, -groundH(this.ch, c.x + xoff), c.k0, lerpPose), ragPose(c.rag, c.x + xoff, -groundH(this.ch, c.x + xoff), c.k0, lerpPose), 0, tgt); land = c.rag.touched ? Math.min(t, c.landT ?? t) : 99; if (c.rag.touched && c.landT == null) c.landT = t; if (c.landT != null) land = c.landT; }
       // never let the ronin walk through a body: he vaults it at speed, otherwise it sinks into its ink pool before he reaches it
-      if (this.lastP && c.rag && Math.abs(this.lastP.x - (c.rag.p[0][0] + c.rag.p[1][0]) / 2) < 44 && !(this.pfig.fl && this.pfig.fl.kind === 'vault')) c.fade = true;
+      { const bx = c.rag ? (c.rag.p[0][0] + c.rag.p[1][0]) / 2 : c.x + xoff; if (this.lastP && t > 0.12 && Math.abs(this.lastP.x - bx) < 40 && !(this.pfig.fl && this.pfig.fl.kind === 'vault')) c.fade = true; }
       if (t >= land && !c.landed) { c.landed = true; fig.sqv = 7; fig.cv = c.dir * 60; for (let j = 0; j < 10; j++) this.spawn(MOTE, c.x + xoff + (Math.random() - 0.5) * 40, -groundH(this.ch, c.x) - 3, (Math.random() - 0.5) * 70, -14 - Math.random() * 10, 0.9, 3 + Math.random() * 3, INK); }
       const still = land + (c.variant === 'boss' || c.variant === 'standoff' ? 1.4 : 0.9);
       if (c.fade) c.fadeT = (c.fadeT || 0) + dt; c.al = Math.min(clamp(1 - (t - still) / 1.1, 0, 1), c.fade ? clamp(1 - c.fadeT / 0.25, 0, 1) : 1);
@@ -408,8 +408,9 @@ export class Renderer {
       c.geo = this.fig(g, x, y, c.look, tgt, fig, { groundY: y, face: c.face, alpha: c.al, wind, vx: 0, dt, boilN: this.boilN, reduced: this.reduced, noWeapon: true, shield: false, still: true });
     }
     for (let i = this.drops.length - 1; i >= 0; i--) {
-      const d = this.drops[i]; if (this.hitstop <= 0) { d.t += dt; if (!d.rest) { d.vy += 1300 * dt; d.x += d.vx * dt; d.y += d.vy * dt; d.rot += d.vr * dt; const gy = -groundH(this.ch, d.x) - 2; if (d.y > gy) { d.y = gy; d.vy *= -0.28; d.vx *= 0.45; d.vr *= 0.4; if (Math.abs(d.vy) < 40) { d.rest = true; d.rot = Math.round(d.rot / Math.PI) * Math.PI; } } } }
+      const d = this.drops[i]; if (this.hitstop <= 0) { d.t += dt; if (!d.rest) { d.vy += 1300 * dt; d.x += d.vx * dt; d.y += d.vy * dt; d.rot += d.vr * dt; const gy = -groundH(this.ch, d.x) - 2; if (d.y > gy) { d.y = gy; d.vy *= -0.28; d.vx *= 0.45; d.vr *= 0.4; const flat = Math.round(d.rot / Math.PI) * Math.PI; d.rest = true; d.rot = flat; } } }
       const a = clamp(1 - (d.t - 2.6) / 1.0, 0, 1); if (a <= 0) { this.drops.splice(i, 1); continue; }
+      { const lowEnd = Math.abs(Math.sin(d.rot)) * d.len * 0.7, gy2 = -groundH(this.ch, d.x) - 2; if (d.y + lowEnd > gy2) d.y = gy2 - lowEnd; } // never stuck upright in the ground
       const c = Math.cos(d.rot), sn = Math.sin(d.rot), L = d.len, x0 = d.x - c * L * 0.3, y0 = d.y - sn * L * 0.3, x1 = d.x + c * L * 0.7, y1 = d.y + sn * L * 0.7;
       if (d.kind === 'katana' || d.kind === 'odachi') { ribbon(g, [x0, y0, d.x, d.y], () => 3.4, INK, a, 0); ribbon(g, [d.x, d.y, (d.x + x1) / 2, (d.y + y1) / 2, x1, y1], (u) => 2.4 * (1 - u * 0.7), '#f3eee3', a, 0); g.globalAlpha = a; g.strokeStyle = INK; g.lineWidth = 0.8; g.stroke(); }
       else if (d.kind === 'club') ribbon(g, [x0, y0, x1, y1], (u) => 3 + u * 6, '#2b2420', a, 0.4);
@@ -533,7 +534,7 @@ export class Renderer {
       const sway = ((this.fx && f > 0.85 ? this.fx.part(wx, pr) : 0) /* [inkfx] grass and bamboo part round bodies */ + wind * (pr.flex || 0.04) + gw * (pr.kind === 'grass' ? 0.22 : 0.07) + Math.sin(t * (0.9 + pr.seed) + pr.x * 0.01) * 0.012 * (0.5 + Math.abs(wind))) * (this.reduced ? 0.6 : 1);
       if (pr.kind === 'spr') {
         const S = spr[pr.set][pr.i % spr[pr.set].length]; let a = pr.a;
-        if (layer === 'front') { const cx = Math.abs(sx - v.W / 2) / (v.W / 2); a *= clamp(cx * 2.4 - 0.45, 0, 1) * (1 - this.lb); if (a <= 0.01) continue; }
+        if (layer === 'front') { const cx = Math.abs(sx - v.W / 2) / (v.W / 2); a *= clamp(cx * 7 - 4.2, 0, 1) * (1 - this.lb); if (a <= 0.05) continue; } // [inkfx] a near trunk leaves the middle quickly: a half-faded one read as a pale streak
         const c = Math.cos(sway), sn = Math.sin(sway), sc = pr.sc || 1;
         g.setTransform(K * c * sc, K * sn * sc, -K * sn * sc, K * c * sc, sx, sy); g.globalAlpha = a;
         g.drawImage(S.c, -S.ax, -S.ay, S.w, S.h);
@@ -1010,7 +1011,7 @@ export class Renderer {
     // plain italic words on a faint paper wash with soft ends; the speaker, when there is one, is a small red seal
     // with his kanji; a key is an italic letter with a short ink dash under it. No box, no border.
     const d = this.dpr, C = CHAPTERS[this.ch], W = this.v.W;
-    let fs = Math.round((o.small ? 13.5 : 16) * d);
+    let fs = Math.round((o.small ? 14.5 : 16) * d);
     g.save(); g.font = `italic ${fs}px ${SERIF}`; let tw = g.measureText(text).width;
     const sealH = 19 * d, chars = key && o.seal ? [...key] : null, sealW = chars ? chars.length * 12 * d + 8 * d : 0;
     g.font = `italic 600 ${Math.round(12.5 * d)}px ${SERIF}`; const kw = key ? (chars ? sealW + 12 * d : g.measureText(key).width + 14 * d) : 0;
@@ -1027,7 +1028,7 @@ export class Renderer {
       g.globalAlpha = ga * 0.95; g.fillStyle = C.paper; g.textAlign = 'center'; g.font = `700 ${Math.round(11.5 * d)}px ${JP}`; chars.forEach((c, i) => g.fillText(c, -sealW / 2 + 4 * d + 6 * d + i * 12 * d, 0.5 * d)); g.restore();
       g.fillStyle = txt; g.textAlign = 'left'; void sy;
     } else if (key) { g.globalAlpha = ga * 0.9; g.fillText(key, x0 + 15 * d, cy); ribbon(g, [x0 + 15 * d, cy + 8.5 * d, x0 + 15 * d + kw - 14 * d, cy + 9 * d], (u) => 2 * d * Math.sin(Math.PI * Math.min(1, u * 1.1 + 0.05)), txt, ga * 0.8, 0); g.fillStyle = txt; }
-    g.globalAlpha = ga * (o.small ? 0.85 : 0.92); g.font = `italic ${fs}px ${SERIF}`; g.fillText(text, x0 + 15 * d + kw, cy + 0.5 * d);
+    g.globalAlpha = ga; g.font = `italic ${fs}px ${SERIF}`; g.fillText(text, x0 + 15 * d + kw, cy + 0.5 * d); // [inkfx] full-strength ink: readable on light paper
     g.restore();
   }
 
