@@ -42,8 +42,8 @@ Routes: `#/` home · `#/p/<slug>` case study · `#/arcade` the arcade · `#/arca
 | Game | What it is |
 |---|---|
 | **REDLINE** `#/play` | the night race (below) |
-| **ITO 糸** `#/arcade/ito` | 3D swing traversal in a comic-book city: three timed delivery runs with medals and a ghost, plus free roam |
-| **NEON KUMITE 組手** `#/arcade/kumite` | a versus fighter: four fighters, three stages, arcade ladder, 1P vs CPU or 2P on one keyboard, training and move list |
+| **ITO 糸** `#/arcade/ito` | 3D swing traversal in a comic-book city: three timed delivery runs with a dispatcher, medals and a ghost, plus free roam |
+| **NEON KUMITE 組手** `#/arcade/kumite` | a versus fighter: four fighters, three stages, an arcade story for each fighter (one night, one sealed box), 1P vs CPU or 2P on one keyboard, training and move list |
 | **KAZE 風** `#/arcade/kaze` | ink-wash duels: five chapters, standoffs, parries, five bosses |
 | **MACHI 街** `#/arcade/machi` | a voxel block of Tokyo to rebuild: eight tools, walk mode, photo mode, three save slots |
 
