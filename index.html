@@ -2184,6 +2184,20 @@ html.is-gaming, html.is-gaming body { overflow: hidden; overscroll-behavior: non
 .kz-opt:focus-visible { outline: 0; text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 5px; text-decoration-color: rgba(184, 50, 30, 0.75); }
 .kz-haiku .kz-h span { font-size: 0.95rem; }
 @media (hover: none) { .kz-menu .kz-btn:focus-visible, .kz-opt:focus-visible { text-decoration: none; } }
+/* [inkfx] phone pass: safe areas, clear of the duel letterbox, outlines that read over plates and the red sky */
+.kz-pad { right: calc(max(16px, 3vw) + env(safe-area-inset-right, 0px)); bottom: calc(max(14px, 3vh) + env(safe-area-inset-bottom, 0px)); }
+.kz-stick { left: calc(max(16px, 3vw) + env(safe-area-inset-left, 0px)); bottom: calc(max(16px, 4vh) + env(safe-area-inset-bottom, 0px)); }
+.kz-touch--lb .kz-pad { bottom: calc(10vh + 8px + env(safe-area-inset-bottom, 0px)); }
+.kz-touch--lb .kz-stick { bottom: calc(10vh + 10px + env(safe-area-inset-bottom, 0px)); }
+.kz .kz-tb, .kz .kz-heal { opacity: 0.92; border: 1.5px solid rgba(42, 38, 34, 0.72); background: rgba(var(--kz-wash), 0.5); box-shadow: 0 0 0 1px rgba(var(--kz-wash), 0.55); }
+.kz .kz-tb--ctx { border-color: rgba(184, 50, 30, 0.8); }
+@media (max-height: 480px) and (orientation: landscape) {
+  .kz-pad { right: calc(max(10px, 2vw) + env(safe-area-inset-right, 0px)); bottom: calc(8px + env(safe-area-inset-bottom, 0px)); }
+  .kz-stick { left: calc(10px + env(safe-area-inset-left, 0px)); bottom: calc(10px + env(safe-area-inset-bottom, 0px)); }
+  .kz-touch--lb .kz-pad { bottom: calc(10vh + 6px + env(safe-area-inset-bottom, 0px)); }
+  .kz-touch--lb .kz-stick { bottom: calc(10vh + 8px + env(safe-area-inset-bottom, 0px)); }
+  .kz-heal { right: calc(max(10px, 2vw) + 108px + env(safe-area-inset-right, 0px)); }
+}
 
 /* NEON KUMITE (組手) · versus fighter. Canvas play field + DOM menus on top. */
 .nk { position: absolute; inset: 0; overflow: hidden; background: #07050c; color: var(--ink); font-family: var(--f-body); touch-action: none; user-select: none; -webkit-user-select: none; -webkit-tap-highlight-color: transparent; }
@@ -2618,5 +2632,5 @@ html.is-gaming, html.is-gaming body { overflow: hidden; overscroll-behavior: non
 </style>
 </head><body><div id="root"></div>
 <noscript><p style="padding:2rem;font-family:monospace;color:#f5f2ea;background:#0d0d0d">This page needs JavaScript. Contact: anur.dash@gmail.com</p></noscript>
-<script type="module" src="./assets/app-HZQT5FC7.js"></script>
+<script type="module" src="./assets/app-VBGUN3SE.js"></script>
 </body></html>
