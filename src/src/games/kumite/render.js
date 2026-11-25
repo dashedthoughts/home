@@ -13,9 +13,9 @@ const ONO = { heavy: ['ドン', 'バキッ', 'ズドン', 'ドカッ'], block: [
 // between the HUD and the thumb band. Exported so tools/measure.cjs checks the real formula.
 export const CAM_TALL = 182;
 export function cameraScale(W, H, portrait, touchL, sep = 260) {
-  const baseGy = portrait ? H * 0.6 : H * (touchL ? 0.6 : 0.86);
-  const vw = portrait ? Math.max(400, Math.min(740, sep + 190)) : Math.max(500, Math.min(880, sep + 250));
-  return portrait ? Math.min(W / vw, baseGy / 310) : Math.min(W / vw, touchL ? (baseGy - 58) / CAM_TALL : (0.5 * H) / CAM_TALL);
+  const baseGy = portrait ? H * 0.6 : H * (touchL ? 0.62 : 0.86);
+  const vw = portrait ? Math.max(340, Math.min(740, sep + 130)) : Math.max(500, Math.min(880, sep + 250));
+  return portrait ? Math.min(W / vw, baseGy / 290) : Math.min(W / vw, touchL ? (baseGy - 48) / CAM_TALL : (0.5 * H) / CAM_TALL);
 }
 export function createRenderer(canvas) {
   const ctx = canvas.getContext('2d');
@@ -45,6 +45,8 @@ export function createRenderer(canvas) {
           // the spark sits where the blow lands: on the defender's near edge, not between the two bodies (keeps faces clear)
           const def = S.f[1 - e.p], att = S.f[e.p];
           if (!S.proj.length || Math.abs(e.x - (att.x + def.x) / 2) < 30) { const side = Math.sign(def.x - att.x) || 1; e.x = def.x - side * FIGHTERS[def.id].hw * 0.9; }
+          const chin = Math.min(...S.f.map((q) => q.y + FIGHTERS[q.id].hh * FIGHTERS[q.id].scale * 0.7));
+          if (e.y > chin) e.y = chin; // sparks never cover a face
           spark(e.x, e.y, e.str, e.counter ? '#ffe14d' : '#ffd23a', e.seq);
           const vf = R.fr[1 - e.p]; vf.flash = 2;
           if (!R.reduced) R.cam.shake = Math.max(R.cam.shake, [1.5, 3, 5, 9][e.str] * (e.seq ? 0.6 : 1));
@@ -145,7 +147,7 @@ export function createRenderer(canvas) {
     const sep = Math.abs(a.x - b.x);
     // with touch controls in landscape, the floor line sits above the thumb band so the fighters stay clear of the buttons
     const touchL = !R.portrait && R.touch && H < 560;
-    const baseGy = R.portrait ? H * 0.6 : H * (touchL ? 0.6 : 0.86);
+    const baseGy = R.portrait ? H * 0.6 : H * (touchL ? 0.62 : 0.86);
     let scale = cameraScale(W, H, R.portrait, touchL, sep) * cam.zoom;
     // the camera rises with a jump so heads never go under the HUD
     const topW = Math.max(...S.f.map((f) => f.y + FIGHTERS[f.id].hh * FIGHTERS[f.id].scale * 1.06));
@@ -199,8 +201,10 @@ export function createRenderer(canvas) {
     const p = poseFor(f, S, rs);
     const s = scale * ch.scale;
     let [sx, sy] = toS(f.x, f.y);
-    { const o = S.f[1 - i]; const need = FIGHTERS[f.id].hw + FIGHTERS[o.id].hw + 26; const gap = Math.abs(f.x - o.x);
-      const behind = (order[0] === i); if (behind && gap < need && f.st !== 'held' && o.st !== 'held') sx += Math.sign(f.x - o.x || -f.face) * Math.min(10, (need - gap) * 0.45) * scale; }
+    const o = S.f[1 - i]; const need = FIGHTERS[f.id].hw + FIGHTERS[o.id].hw + 40; const gap = Math.abs(f.x - o.x);
+    const close = gap < need && f.st !== 'held' && o.st !== 'held' && f.st !== 'grab' && o.st !== 'grab';
+    const behind = order[0] === i;
+    if (behind && close) sx += Math.sign(f.x - o.x || -f.face) * Math.min(18, (need - gap) * 0.7) * scale; // render only: the sim spacing is untouched
     if ((f.hs > 0) && (f.st === 'hit' || f.st === 'block' || f.st === 'juggle' || f.st === 'ko' || f.st === 'atk')) { const jit = (f.st === 'atk' ? 0.6 : 1.6) * scale; sx += (R.frame % 2 ? jit : -jit); }
     const light = [st.key[0] * f.face, st.key[1]];
     const rimDir = (st.rimSide || 1) * f.face * -1;
@@ -224,7 +228,13 @@ export function createRenderer(canvas) {
     ctx.setTransform(R.dpr * s * f.face, 0, 0, -R.dpr * s, R.dpr * (sx + shakeX()), R.dpr * (sy + shakeY()));
     // smear trail behind a fast limb
     if (p.smear && p.smear.k > 0 && !R.lowFx) smear(ctx, f, p, ch);
+    if (close && !behind && !R.lowFx) { // a thin back-light halo around the front fighter so the two bodies separate
+      ctx.save(); ctx.globalAlpha *= 0.85;
+      for (const [dx, dy] of [[2.2, 0], [-2.2, 0], [0, 2.2], [0, -2.2]]) { ctx.save(); ctx.translate(dx, dy); drawSilhouette(ctx, f.id, p, i === 0 ? st.rim : st.rim2, opts.chains); ctx.restore(); }
+      ctx.restore();
+    }
     drawFighter(ctx, f.id, p, opts);
+    if (close && behind) { ctx.save(); ctx.globalAlpha = 0.32; drawSilhouette(ctx, f.id, p, '#05030a', opts.chains); ctx.restore(); } // a value darker behind
     ctx.restore();
     if (fr.flash > 0 && !R.reduced) { // white hit flash: a flat silhouette pass over the fighter
       ctx.save(); ctx.globalAlpha = 0.2 * (fr.flash / 2); ctx.setTransform(R.dpr * s * f.face, 0, 0, -R.dpr * s, R.dpr * (sx + shakeX()), R.dpr * (sy + shakeY()));

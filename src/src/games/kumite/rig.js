@@ -227,6 +227,8 @@ export const FACES = {
 };
 function face(ctx, L, id, r, F) {
   const ink = L.ink;
+  const m = ctx.getTransform(); const dpr = (typeof window !== 'undefined' && window.devicePixelRatio) ? Math.min(2, window.devicePixelRatio) : 1;
+  if (r * Math.hypot(m.a, m.b) / dpr < 15) return faceBold(ctx, L, id, r, F); // small on screen: fewer, bolder marks
   // brows: thick wedges; angry = front ends dip toward the nose
   const brow = (x0, x1, y, w, k) => {
     const tilt = F.brow * r * 0.22 * BROW_K * k;
@@ -266,6 +268,22 @@ function face(ctx, L, id, r, F) {
   mouth(r * 0.64, -r * 0.55, r * 0.32);
 }
 
+// The face at phone size: two solid eyes, one heavy brow bar, a mouth shape. No lids, catch lights or nose line.
+function faceBold(ctx, L, id, r, F) {
+  const ink = L.ink, tilt = F.brow * r * 0.34;
+  const bar = new Path2D(); bar.moveTo(r * 0.06, r * 0.5); bar.lineTo(r * 1.04, r * 0.5 - tilt); bar.lineTo(r * 1.0, r * 0.5 - tilt + r * 0.32); bar.lineTo(r * 0.08, r * 0.5 + r * 0.3); bar.closePath();
+  ctx.fillStyle = id === 'ganji' ? L.beard : ink; ctx.fill(bar);
+  if (id !== 'suzu') {
+    const o = clamp(F.eye, 0, 1.3);
+    for (const [cx, w] of [[0.42, 0.2], [0.86, 0.13]]) {
+      if (o < 0.15) { line(ctx, [[(cx - w) * r, 0.1 * r], [(cx + w) * r, 0.1 * r]], r * 0.14, ink); continue; }
+      ctx.beginPath(); ctx.ellipse(cx * r, 0.1 * r, w * r, r * 0.26 * Math.min(1, o), 0, 0, 7); ctx.fillStyle = ink; ctx.fill();
+    }
+  }
+  const op = clamp(F.mouth, 0, 1);
+  if (op < 0.15) line(ctx, [[0.42 * r, -0.55 * r + F.curve * r * 0.08], [0.9 * r, -0.55 * r - F.curve * r * 0.06]], r * 0.14, ink);
+  else { ctx.beginPath(); ctx.ellipse(0.68 * r, -0.56 * r, 0.26 * r, Math.max(0.1, op) * 0.3 * r, 0, 0, 7); ctx.fillStyle = '#2a0a10'; ctx.fill(); ctx.strokeStyle = ink; ctx.lineWidth = r * 0.1; ctx.stroke(); }
+}
 function head(ctx, L, id, J, F, opts) {
   const r = L.head; const [x, y] = J.head; const a = J.headA; const ink = L.ink;
   ctx.save(); ctx.translate(x, y); ctx.rotate(-a);

@@ -32,6 +32,7 @@ const { buildSync } = require(path.join(__dirname, '../../../../node_modules/esb
     const bad = Object.entries(checks).filter(([, v]) => !v).map(([k]) => k);
     fails += bad.length;
     console.log(`${id.padEnd(8)} ${pct(r.screenDesk).padStart(8)}     ${pct(r.screenLand).padStart(8)}   ${pct(r.forearmMin).padStart(6)} ${pct(r.shinMin).padStart(6)} ${pct(r.thighMin).padStart(6)} ${pct(r.upperArmMin).padStart(6)} ${pct(r.shoulders).padStart(7)} ${pct(r.head).padStart(6)} ${r.browPx.toFixed(1).padStart(5)} ${r.eyePx.toFixed(1).padStart(4)} ${r.mouthPx.toFixed(1).padStart(5)}  ${r.outlinePx.toFixed(2).padStart(5)}  ${r.innerPx.toFixed(2).padStart(4)}  ${r.lum.toFixed(3)} ${r.faces.length}`);
+    console.log(`         phone face scale: head ${(r.headPxLand).toFixed(0)} px tall in landscape, ${(r.headPxPort).toFixed(0)} px in portrait (bold face below 30 px)`);
     console.log(`         stance ${pct(r.stanceRatio)} of full height, knees ${r.kneeN.toFixed(0)} / ${r.kneeF.toFixed(0)} deg (near / far)`);
     if (bad.length) console.log('         FAIL ' + bad.join(', '));
     // poses

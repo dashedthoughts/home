@@ -65,7 +65,7 @@ function faceDistinct(id) {
 }
 
 window.measure = () => {
-  const cam = { desk: cameraScale(960, 540, false, false), land: cameraScale(750, 342, false, true), landH: 342 };
+  const cam = { desk: cameraScale(960, 540, false, false), land: cameraScale(750, 342, false, true), landH: 342, port: cameraScale(390, 664, true, false) };
   const out = { fighters: {}, cast: {}, stages: {} };
   const idleN = {};
   for (const id of ROSTER) {
@@ -88,6 +88,7 @@ window.measure = () => {
     r.browPx = geo.browH * px; r.eyePx = geo.eyeH * px; r.mouthPx = geo.mouthH * px;
     r.outlinePx = geo.outline * px; r.innerPx = geo.inner * px;
     r.outlinePxLand = geo.outline * ch.scale * cam.land; r.innerPxLand = geo.inner * ch.scale * cam.land;
+    r.headPxLand = geo.headH * ch.scale * cam.land; r.headPxPort = geo.headH * ch.scale * cam.port;
     r.lum = fighterLum(id, '#ff9a3c', [0.5, 0.85]);
     r.faces = faceDistinct(id);
     // poses: startup (anticipation), active (strike), recovery (follow-through) for every attack
