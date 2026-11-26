@@ -126,6 +126,8 @@ export class InkFx {
     }
   }
   // after a kill, thin strands of ink hang from the wet mass, sag, and let fall a drip or two
+  // flecks behind the figures: a few drops that fall to the ground and soak in fast (never left on a body)
+  flecks(x, y, dir, n) { this.fk = this.fk || Array.from({ length: 12 }, () => ({ on: 0 })); for (let i = 0; i < n; i++) { this.fki = ((this.fki || 0) + 1) % 12; const d = this.fk[this.fki]; const an = -0.4 - Math.random() * 1.1; const sp = 120 + Math.random() * 200; d.on = 1; d.x = x; d.y = y + (Math.random() - 0.5) * 10; d.vx = dir * Math.cos(an) * sp; d.vy = Math.sin(an) * sp; d.r = 0.8 + Math.random() * 1.8; } }
   strandsAt(x, y) { for (let k = 0; k < 3; k++) { this.sri = (this.sri + 1) % this.strands.length; const T = this.strands[this.sri]; T.on = 1; T.x = x + (k - 1) * (6 + Math.random() * 8); T.y = y + 4 + Math.random() * 6; T.L = 16 + Math.random() * 26; T.t = 0; T.ph = Math.random() * 6; T.dripped = 0; } }
   parryAt(x, y, dir) {
     this.pai = (this.pai + 1) % this.parries.length; const P = this.parries[this.pai]; P.on = 1; P.x = x; P.y = y; P.t = 0; P.a = (dir > 0 ? 0 : Math.PI) + (Math.random() - 0.5) * 0.6 - 0.3; P.v = (Math.random() * 3) | 0; P.dir = dir;
@@ -209,6 +211,7 @@ export class InkFx {
   }
   // ground layer, world space, drawn under the figures
   ground(g, s, dt, r) {
+    if (this.fk) { g.fillStyle = INKW; for (const d of this.fk) { if (!d.on) continue; d.vy += 1100 * dt; d.x += d.vx * dt; d.y += d.vy * dt; const gy = -groundH(r.ch, d.x); if (d.y >= gy) { d.on = 0; this.stain(d.x, gy, 2 + d.r * 1.4, 0.4); continue; } g.globalAlpha = 0.85; g.beginPath(); g.ellipse(d.x, d.y, d.r * 1.4, d.r * 0.8, Math.atan2(d.vy, d.vx), 0, 6.2832); g.fill(); } g.globalAlpha = 1; } // dash flecks, behind the figures
     this.tell.ground(g, s, dt, r);
     const red = r.reduced, t = r.time;
     g.globalCompositeOperation = 'source-over';

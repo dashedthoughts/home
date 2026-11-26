@@ -1,5 +1,5 @@
 import { Suspense, lazy, useEffect, useMemo } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, Navigate, useNavigate, useParams } from 'react-router-dom';
 import { gameById } from '../games/registry.js';
 
 // Full-screen host for one arcade game. The game owns everything inside .gamehost__stage.
@@ -14,6 +14,7 @@ export default function GameHost() {
     if (g) document.title = `${g.title} · Arcade · Anuraag Dash`;
     return () => { document.documentElement.classList.remove('is-gaming'); document.title = t; };
   }, [g]);
+  if (g && g.route && !Game) return <Navigate to={g.route} replace />; // e.g. /arcade/redline lives at /play
   if (!g || !Game) return (
     <main className="gamehost"><div className="gamehost__missing"><p className="hud-label">// NO SUCH CABINET</p><Link className="btn btn--signal" to="/arcade">← ARCADE</Link></div></main>
   );

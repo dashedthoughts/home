@@ -57,7 +57,7 @@ export const COMBAT = {
   surpriseBossStun: 0.5, // a boss caught before he has fought: a full cut and a long stagger (regular foes die)
   bossFlinch: 0.22, // the first landed quick cut of a combo staggers a boss this long
   bossPoise: 1.4, // after that flinch he will not flinch again from quick cuts for this long
-  bossAnswer: [0.12, 0.6], // a boss back on his feet (from a flinch or an opening) attacks again this soon (seconds, min..max)
+  bossAnswer: [0.12, 0.55], // a boss back on his feet (from a flinch or an opening) attacks again this soon (seconds, min..max)
   stun: 0.32, stagger: 0.9, // a regular foe's flinch from a quick cut, and from a heavy one
   block: 0.3, recoil: 0.28, // a block: the foe holds the parry pose this long; the ronin cannot cut again this long
   posture: { slash: 0.2, heavy: 1, counter: 1.5 }, // landed hits fill a boss's guard meter too
@@ -70,7 +70,9 @@ export const COMBAT = {
   drawTell: 0.42, drawGrace: 0.08, drawTeachSlow: 0.4,
   parryEarly: 0.1, parryHold: 0.32, parrySpam: 0.25,
   bossIntro: 3.4, introGap: 200, // a boss speaks from this far away for this long before the duel begins
-  vaultReach: 140, vaultPast: 110, vaultH: 64, // a dodge toward a foe this close flips over him, landing this far past his hip
+  dashT: 0.16, // the dash through a foe crosses in this long (ease-out), the rest of the dodge is the skid and recovery
+  turnT: 0.12, // a foe whose back is to the ronin turns to face him after this long
+  vaultReach: 140, vaultPast: 110, // a dodge toward a foe this close dashes through him, landing this far past his hip
   passPast: 120, passDash: 0.12, passHold: 0.16, passSheathe: 0.9, // the standoff pass: lands this far beyond him; dash, held extreme, sheathe
   space: 112, bodyMin: 64, // hips apart: where a foe holds at rest, and the closest anyone gets (a roll passes under)
   reachIn: 30, // a melee foe starts his windup from this far outside his reach (he closes it while winding)

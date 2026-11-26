@@ -26,6 +26,8 @@ export class Tell {
     const so = s.so, ch = r.ch;
     const mid = () => { const x = so ? (s.p.x + so.oppX) / 2 : s.p.x; return [x, -groundH(ch, x)]; }, opp = mid; // one event, one place: the drop lands between them and the ring is its splash
     const taken = s.cues.some((c) => c.k === 'socut'); if (taken && !r.reduced) this.passCut(s, r);
+    // a dodge into a foe is a low dash through him: the same arc at hip height, lighter, and a few flecks flung at him
+    if (!r.reduced) for (const c of s.cues) if (c.k === 'vault' && c.kind === 'dash' && c.from != null && c.to != null) { this.dash = this.paintArc(ch, c.from, c.to, 50, 50, 0.7, 10, 0.06, 0.3, true); if (fx && c.x != null) fx.flecks(c.x, -groundH(ch, c.x) - 52, Math.sign(c.to - c.from) || 1, 6); }
     for (const c of s.cues) {
       const k = c.k;
       if (k === 'drawtell' || k === 'drawwin' || k === 'feinttell') this.usingCues = true;
@@ -47,6 +49,7 @@ export class Tell {
   }
   // behind the figures (world transform set): the paper flash and the ring across the ground
   ground(g, s, dt, r) {
+    if (this.dash && !this.drawArc(g, this.dash, dt)) this.dash = null; // the dash streak sits behind both men
     if (this.flash > 0) { this.flash--; g.save(); g.setTransform(1, 0, 0, 1, 0, 0); g.globalAlpha = 0.94; g.fillStyle = CHAPTERS[r.ch].paper; g.fillRect(0, 0, r.v.W, r.v.H); g.restore(); }
     const R = this.ring;
     if (R.t < 0.36) {
@@ -84,18 +87,31 @@ export class Tell {
   }
   // the standoff cut is a pass: one long brush arc along his path through the opponent, with a paper-white edge
   passCut(s, r) {
-    const so = s.so; if (!so) return; const ch = r.ch, x0 = Math.min(s.p.x, so.x - 150) - 10, x1 = so.oppX + 150, sc = 2, pad = 30;
-    const yA = -groundH(ch, x0) - 62, yB = -groundH(ch, x1) - 70, top = Math.min(yA, yB) - pad - 24, h = Math.abs(yA - yB) + pad * 2 + 40;
+    const so = s.so; if (!so) return;
+    this.pass = this.paintArc(r.ch, Math.min(s.p.x, so.x - 150) - 10, so.oppX + 150, 62, 70, 1, 22, 0.08, 0.7);
+  }
+  // one long brush arc along a path, dark ink with a thin paper-white top edge (weight 1: the standoff pass; 0.7: a dash)
+  paintArc(ch, xa, xb, hA, hB, wgt, bow, wipe, life, soft) {
+    const x0 = Math.min(xa, xb), x1 = Math.max(xa, xb), rev = xb < xa, sc = 2, pad = 30;
+    const yA = -groundH(ch, xa) - hA, yB = -groundH(ch, xb) - hB, top = Math.min(yA, yB) - pad - bow, h = Math.abs(yA - yB) + pad * 2 + bow + 16;
     const c = makeCanvas((x1 - x0 + pad * 2) * sc, h * sc), g = c.getContext('2d'); g.setTransform(sc, 0, 0, sc, (pad - x0) * sc, -top * sc);
-    const P = []; for (let i = 0; i <= 16; i++) { const u = i / 16, x = x0 + (x1 - x0) * u; P.push([x, yA + (yB - yA) * u - Math.sin(u * Math.PI) * 22, u < 0.15 ? 0.4 + u * 4 : 1 - 0.85 * Math.pow((u - 0.15) / 0.85, 1.4)]); }
-    stroke(g, P, { w: 9, alpha: 0.95, dry: 0.35, seed: 77, edge: 0.6, taper: [0.08, 0.6], tip: 0.05, color: INKW });
-    stroke(g, P.map((q) => [q[0], q[1] - 3.2, q[2] * 0.9]), { w: 2.2, alpha: 0.95, dry: 0.2, seed: 78, edge: 0, taper: [0.1, 0.7], tip: 0.05, color: CHAPTERS[ch].paper });
-    this.pass = { c, x: x0 - pad, y: top, w: (x1 - x0 + pad * 2), h, t: 0 };
+    const P = []; for (let i = 0; i <= 16; i++) { const u = i / 16, x = xa + (xb - xa) * u; P.push([x, yA + (yB - yA) * u - Math.sin(u * Math.PI) * bow, soft ? 0.25 + 0.75 * Math.sin(u * Math.PI) : u < 0.15 ? 0.4 + u * 4 : 1 - 0.85 * Math.pow((u - 0.15) / 0.85, 1.4)]); }
+    if (soft) { // the dash: a soft, wide, dry streak tapering at both ends, a lighter wash under it, the paper-white top edge
+      stroke(g, P, { w: 13, alpha: 0.85, dry: 0.42, bristles: 14, seed: 91, edge: 0.35, taper: [0.35, 0.4], tip: 0.05, color: INKW, bleed: 3 });
+      stroke(g, P.map((q) => [q[0], q[1] - 5, q[2] * 0.8]), { w: 2.4, alpha: 0.8, dry: 0.45, seed: 92, edge: 0, taper: [0.3, 0.4], tip: 0.05, color: CHAPTERS[ch].paper });
+    } else {
+    stroke(g, P, { w: 9 * wgt, alpha: 0.95, dry: 0.35, seed: 77, edge: 0.6, taper: [0.08, 0.6], tip: 0.05, color: INKW });
+    stroke(g, P.map((q) => [q[0], q[1] - 3.2 * wgt, q[2] * 0.9]), { w: 2.2 * Math.max(0.8, wgt), alpha: 0.95, dry: 0.2, seed: 78, edge: 0, taper: [0.1, 0.7], tip: 0.05, color: CHAPTERS[ch].paper }); }
+    return { c, x: x0 - pad, y: top, w: (x1 - x0 + pad * 2), h, t: 0, rev, wipe, life };
+  }
+  drawArc(g, A, dt) {
+    A.t += dt; if (A.t > A.life) return false;
+    const e = Math.min(1, A.t / A.wipe), hold = A.life * 0.35, a = A.t < hold ? 1 : 1 - (A.t - hold) / (A.life - hold), cw = A.c.width * e, dw = A.w * e;
+    g.globalAlpha = a; if (A.rev) g.drawImage(A.c, A.c.width - cw, 0, cw, A.c.height, A.x + A.w - dw, A.y, dw, A.h); else g.drawImage(A.c, 0, 0, cw, A.c.height, A.x, A.y, dw, A.h); g.globalAlpha = 1;
+    return true;
   }
   airPass(g, dt) {
-    const A = this.pass; if (!A) return; A.t += dt; if (A.t > 0.7) { this.pass = null; return; }
-    const e = Math.min(1, A.t / 0.08), a = A.t < 0.25 ? 1 : 1 - (A.t - 0.25) / 0.45;
-    g.globalAlpha = a; g.drawImage(A.c, 0, 0, A.c.width * e, A.c.height, A.x, A.y, A.w * e, A.h); g.globalAlpha = 1;
+    if (this.pass && !this.drawArc(g, this.pass, dt)) this.pass = null;
   }
   // the frame: drain, tendrils along the ground, the heartbeat and the flood
   screen(g, s, dt, r, wash) {

@@ -10,7 +10,7 @@ import { Audio } from './audio.js';
 import { groundH } from './data.js';
 import { CHAPTERS, NARRATION, ENDING, HAIKU, DIFF, CHARMS, PROLOGUE, OPENINGS } from './data.js';
 
-const ACTION_LABEL = { left: 'Move left', right: 'Move right', up: 'Jump', down: 'Crouch', run: 'Run', dodge: 'Dodge roll', slash: 'Quick cut', heavy: 'Heavy cut', parry: 'Parry / guard', focus: 'Focus (standoff)', interact: 'Bow, sit, take', wind: 'Call the wind', heal: 'Heal (uses resolve)' };
+const ACTION_LABEL = { left: 'Move left', right: 'Move right', up: 'Jump', down: 'Crouch', run: 'Walk (hold)', dodge: 'Dodge roll', slash: 'Quick cut', heavy: 'Heavy cut', parry: 'Parry / guard', focus: 'Focus (standoff)', interact: 'Bow, sit, take', wind: 'Call the wind', heal: 'Heal (uses resolve)' };
 
 class Engine {
   constructor(cv, onUi, onExit) {

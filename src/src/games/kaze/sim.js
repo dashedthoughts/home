@@ -2,7 +2,7 @@
 // State is a plain object. step(s, input) advances one tick and pushes render/audio cues into s.cues.
 import { DIFF, ATK, FOES, BOSSES, CHAPTERS, groundH, HAIKU, COMBAT } from './data.js';
 export const DT = 1 / 60;
-const KEYS = ['left', 'right', 'up', 'down', 'run', 'dodge', 'slash', 'heavy', 'parry', 'focus', 'interact', 'wind', 'heal', 'confirm', 'cancel'];
+const KEYS = ['left', 'right', 'up', 'down', 'run', 'walk', 'dodge', 'slash', 'heavy', 'parry', 'focus', 'interact', 'wind', 'heal', 'confirm', 'cancel'];
 export const blankInput = () => { const o = { choose: 0 }; for (const k of KEYS) o[k] = false; return o; };
 
 function rnd(s) { let a = (s.r = (s.r + 0x6D2B79F5) | 0); let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }
@@ -14,7 +14,7 @@ export const P = {
   walk: 150, run: 255, guardWalk: 45, jumpV: 430, grav: 1500, dodgeV: 520, dodgeT: 0.42, dodgeIfr: 0.3,
   slash: [{ wind: 0.07, act: 0.08, rec: 0.24, reach: 104 }, { wind: 0.07, act: 0.08, rec: 0.26, reach: 104 }, { wind: 0.12, act: 0.1, rec: 0.42, reach: 112 }],
   heavy: { wind: 0.36, act: 0.1, rec: 0.46, reach: 122 }, counter: { wind: 0.08, act: 0.12, rec: 0.34, reach: 150 },
-  hitT: 0.36, ifrHit: 1.0, healT: 0.75, bowT: 1.25, buffer: 0.18,
+  runRamp: 0.25, hitT: 0.36, ifrHit: 1.0, healT: 0.75, bowT: 1.25, buffer: 0.18,
 };
 
 export function createSim(o = {}) {
@@ -218,8 +218,12 @@ function updatePlayer(s, I) {
   if (p.st === 'guard' && p.buf === 'heavy' && p.res >= 1) { p.res -= 1; p.buf = null; p.cid++; setP(p, 'counter'); p.ifr = 0.5; cue(s, 'counter', { x: p.x }); }
   switch (p.st) {
     case 'idle': case 'move': case 'air': {
-      const sp = I.run ? P.run : P.walk;
-      const tv = dir * sp; p.vx += (tv - p.vx) * Math.min(1, DT * (p.y > 0 ? 5 : 14));
+      // on the road the ronin runs by default (walk to stroll); in a fight or a standoff he walks unless told to run
+      const fightPace = !!s.arena || s.phase === 'standoff';
+      const sp = fightPace ? (I.run ? P.run : P.walk) : (I.walk ? P.walk : P.run);
+      const tv = dir * sp;
+      if (!fightPace && p.y <= 0 && tv * p.vx >= 0 && Math.abs(tv) > Math.abs(p.vx)) p.vx += Math.sign(tv) * Math.min(Math.abs(tv) - Math.abs(p.vx), P.run / P.runRamp * DT); // ramps up: walk blends into run
+      else p.vx += (tv - p.vx) * Math.min(1, DT * (p.y > 0 ? 5 : 14));
       if (dir) p.face = dir;
       if (p.y <= 0) p.st = Math.abs(p.vx) > 8 ? 'move' : 'idle';
       if (p.buf === 'dodge') { p.buf = null; startDodge(s, dir || p.face); break; }
@@ -241,9 +245,11 @@ function updatePlayer(s, I) {
     }
     case 'dodge': {
       const V = p.vault;
-      if (V) { // the forward flip over a foe: an eased arc from take-off to landing, high enough to clear him
-        const u = Math.min(1, p.stt / P.dodgeT), e = u * u * (3 - 2 * u), nx = V.from + (V.to - V.from) * e;
-        p.vx = (nx - p.x) / DT; p.x = nx; p.y = COMBAT.vaultH * Math.sin(Math.PI * u); p.vy = 0;
+      if (V) { // the dash through a foe
+        const u = Math.min(1, p.stt / P.dodgeT), k = Math.min(1, p.stt / COMBAT.dashT); V.u = u;
+        // a low, fast dash through him (the standoff pass idiom): ease-out across in dashT, then skid and recover in place
+        const nx = V.from + (V.to - V.from) * (1 - Math.pow(1 - k, 3)), yk = 0;
+        p.vx = (nx - p.x) / DT; p.y = 0; p.vy = 0; // the physics step below moves him by exactly vx*DT
         if (p.stt >= P.dodgeT) { p.y = 0; p.vx = 0; p.face = -p.dodgeDir; p.vault = null; setP(p, 'idle'); cue(s, 'land', { x: p.x }); }
         break;
       }
@@ -296,8 +302,8 @@ function updatePlayer(s, I) {
   if ((p.st === 'move') && Math.abs(p.vx) > 40) { p.stepAcc = (p.stepAcc || 0) + Math.abs(p.vx) * DT; if (p.stepAcc > 58) { p.stepAcc = 0; cue(s, 'step', { x: p.x, run: Math.abs(p.vx) > 200 }); } }
   if (p.st === 'idle' && !s.arena) s.idle += DT; else s.idle = 0;
 }
-// A dodge whose path would cross a live foe becomes a forward flip over him, landing past him facing back (cue 'vault';
-// the figure engineer plays the somersault). It keeps the dodge's invulnerability. With no room to land, it stops short.
+// A dodge whose path would cross a live foe becomes a low, fast dash through him (p.vault.kind 'dash', cue 'vault'), landing
+// past him facing back, invulnerable throughout. With no room to land, it stops short of him.
 function startDodge(s, dir) {
   const p = s.p; setP(p, 'dodge'); p.dodgeDir = dir; p.ifr = Math.max(p.ifr, P.dodgeIfr); p.vault = null; p.dodgeStop = null;
   const lo = s.arena ? s.arena.x0 : 30, hi = s.arena ? s.arena.x1 : s.len - 20;
@@ -306,7 +312,8 @@ function startDodge(s, dir) {
   if (over) {
     const to = over.x + dir * COMBAT.vaultPast;
     if (to >= lo && to <= hi && !s.foes.some((g) => g !== over && g.st !== 'dead' && g.st !== 'enter' && Math.abs(g.x - to) < COMBAT.bodyMin)) {
-      p.vault = { from: p.x, to, over: over.id }; cue(s, 'vault', { x: p.x, to, id: over.id, dir }); return;
+      p.ifr = Math.max(p.ifr, P.dodgeT); // invulnerable for the whole dash
+      p.vault = { kind: 'dash', from: p.x, to, over: over.id, u: 0 }; cue(s, 'vault', { kind: 'dash', from: p.x, to, x: over.x, id: over.id, dir }); return;
     }
     p.dodgeStop = over.x - dir * COMBAT.bodyMin;
   }
@@ -445,6 +452,8 @@ function recoverGuard(s, f) { if (foeGuardMax(f) > 0 && (s.p.x - f.x) * f.face >
 function updateFoe(s, f) {
   const p = s.p, d = D(s), F = foeDef(f), A = f.atk ? ATK[f.atk] : null;
   f.stt += DT; f.gmT += DT;
+  // recovering, flinching or blocking with the ronin behind him (he rolled or flipped past), he turns within turnT too
+  if (f.st === 'rec' || f.st === 'stun' || f.st === 'block') { const toP = p.x >= f.x ? 1 : -1; if (toP !== f.face) { f.turnT += DT; if (f.turnT >= COMBAT.turnT) { f.face = toP; f.turnT = 0; } } else f.turnT = 0; }
   if (f.gmT > COMBAT.postureRest && f.gm > 0) f.gm = Math.max(0, f.gm - DT * COMBAT.postureEbb); // the guard meter ebbs once he is left alone
   const dx = p.x - f.x, dist = Math.abs(dx);
   const lo = s.arena ? s.arena.x0 - 60 : -1e9, hi = s.arena ? s.arena.x1 + 60 : 1e9;
@@ -459,7 +468,7 @@ function updateFoe(s, f) {
     case 'ready': case 'approach': {
       // he turns to face the ronin, but not instantly: a foe the ronin rolled past is turned away for a moment
       const toP = dx >= 0 ? 1 : -1;
-      if (toP !== f.face) { f.turnT += DT; if (f.turnT >= 0.2 || dist > 160) { f.face = toP; f.turnT = 0; f.guard = 0; } } else f.turnT = 0;
+      if (toP !== f.face) { f.turnT += DT; if (f.turnT >= COMBAT.turnT || dist > 160) { f.face = toP; f.turnT = 0; f.guard = 0; } } else f.turnT = 0;
       const keep = F.keep, hold = Math.max(COMBAT.space, F.range * 0.7);
       let want = 0;
       if (keep) { if (dist < keep[0]) want = -1; else if (dist > keep[1]) want = 1; }

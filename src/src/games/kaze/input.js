@@ -32,7 +32,7 @@ export class Input {
     const pads = typeof navigator !== 'undefined' && navigator.getGamepads ? navigator.getGamepads() : []; const p = pads && [...pads].find((x) => x && x.connected);
     const o = this.pad; for (const k in o) o[k] = false; if (!p) return;
     const b = (i) => !!(p.buttons[i] && p.buttons[i].pressed), ax = p.axes[0] || 0, ay = p.axes[1] || 0;
-    o.left = ax < -0.35 || b(14); o.right = ax > 0.35 || b(15); o.down = ay > 0.6 || b(13); o.run = Math.abs(ax) > 0.85 || b(10);
+    o.left = ax < -0.35 || b(14); o.right = ax > 0.35 || b(15); o.down = ay > 0.6 || b(13); o.run = Math.abs(ax) > 0.85 || b(10); o.walk = Math.abs(ax) > 0.35 && Math.abs(ax) <= 0.85; // [combat] a light push walks (running is the default)
     o.up = b(0) || b(12); o.dodge = b(1); o.slash = b(2); o.heavy = b(3); o.parry = b(5) || b(7); o.focus = b(6); o.wind = b(4); o.interact = b(0) || b(12); o.heal = b(13) && !(ay > 0.6); o.confirm = b(0);
     o.start = b(9);
     if (p.buttons.some((x) => x && x.pressed) || Math.abs(ax) > 0.4) this.mode = 'pad';
@@ -41,6 +41,8 @@ export class Input {
   snapshot(out) {
     this.pollPad();
     for (const a of ACTIONS) { let v = false; for (const c of this.map[a]) if (this.keys[c]) { v = true; break; } out[a] = v || !!this.pad[a] || !!this.touch[a] || !!this.script[a] || (a === 'parry' && !!this.mouseParry) || !!this.latch[a]; this.latch[a] = false; }
+    // [combat] running is the default; the run key (Shift) or a light stick push walks outside a fight
+    out.walk = !!(out.run && !this.pad.run) || !!this.pad.walk || !!this.script.walk;
     out.confirm = !!(this.keys.Enter || this.pad.confirm || this.touch.confirm || this.script.confirm);
     out.cancel = !!this.script.cancel;
     out.choose = this.choose || this.script.choose || 0;

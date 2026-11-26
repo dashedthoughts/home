@@ -5,7 +5,7 @@ import { INK, rng, clamp, lerp, makeCanvas, rgba, mix, makePaper, makeGrain, rib
 import { buildScene, paintSky, bamboo, torii, pine, rock, TW, REDP, paintRedSky } from './scenery.js';
 import { CHAPTERS, groundH, ATK, BOSSES, HAIKU, BOSS_LINES, DIFF, OPENINGS, DEATH_LINES, SHRINE_LINE } from './data.js';
 import { makePlates, plateStep, HINT } from './plates.js';
-import { poseFor, drawFigure, newFig, stepScarf, LOOKS, POSE, lerpPose, BOSSLOOK, drawFoxFig, walkLegs, brushLine } from './figures.js';
+import { poseFor, drawFigure, newFig, stepScarf, LOOKS, POSE, lerpPose, BOSSLOOK, drawFoxFig, walkLegs, gaitCycle, gaitK, brushLine } from './figures.js';
 import { P as PT, standoffPose, standoffPass } from './sim.js';
 import { makeRag, stepRag, ragPose } from './ragdoll.js';
 import { InkFx } from './inkfx.js'; import { floraFor, floraProps, drawGrass } from './flora.js'; import { Life } from './life.js'; // [inkfx] ink effects + ambient life (owned by the ink-effects engineer)
@@ -20,6 +20,11 @@ const DEFLECT_K = Object.assign({}, POSE.guard, { grip: [20, -66], sw: -1.55, le
 const VIC_BREATH = Object.assign({}, POSE.guard, { grip: [16, -50], sw: 0.7, lean: -0.04, head: -0.12, hy: -50, ff: [10, 0], fb: [-14, 0] }); // a still breath, the blade lowered
 // the standoff extreme: past him, back to him, front knee deep, the blade out to the side and a little up
 const ZAN_X = Object.assign({}, POSE.iai, { grip: [58, -64], sw: -0.18, lean: 0.3, head: -0.1, ff: [40, 0], fb: [-38, -2], hy: -30, sheath: 0 });
+const E3 = (u) => u * u * (3 - 2 * u);
+const DASH_P = Object.assign({}, POSE.iai, { sheath: 1, ff: [42, 0], fb: [-40, -2], hy: -30, lean: 0.32, head: -0.15 }); // the standoff pass's dash body, sword sheathed
+const FL_CROUCH = Object.assign({}, POSE.stand, { hy: -38, lean: 0.3, head: -0.1, ff: [12, 0], fb: [-10, 0], hand: [12, -26], handK: 1 });
+const FL_LAUNCH = Object.assign({}, POSE.stand, { hy: -54, lean: 0.1, head: -0.15, ff: [4, -4], fb: [-12, -10], hand: [10, -78], handK: 1 });
+const FL_BALL = Object.assign({}, POSE.stand, { hy: -40, lean: 1.05, head: 0.33, ff: [12, -24], fb: [6, -22], hand: [6, -2], handK: 1 });
 const TUCK = Object.assign({}, POSE.guard, { grip: [16, -40], sw: 0.4, lean: 0.85, head: 0.3, ff: [6, -24], fb: [-2, -26], hy: -38 }); // a tight ball: knees to the chest, chin down // tucked for rolls and somersaults
 const KNEEL_X = Object.assign({}, POSE.knee, { grip: [46, -30], sw: 0.18, lean: 0.22, head: 0.2 });
 const SLIDE_X = Object.assign({}, POSE.dSlide, { grip: [44, -26], sw: 0.12, lean: 0.3, head: 0.25 });
@@ -315,9 +320,11 @@ export class Renderer {
         const u = clamp((p.stt - 0.06) / 0.32, 0, 1), P2 = keepSheath(lerpPose(pose, TUCK, Math.min(1, Math.sin(Math.PI * u) * 2.2), {}));
         return { pose: P2, rot: p.face * Math.PI * 2 * E2(u), lift: 38 * Math.sin(Math.PI * u), cy: 44 };
       }
-      case 'overflip': { // a forward somersault clean over the foe, tucked, landing facing on
-        const u = clamp(p.stt / 0.4, 0, 1), P2 = keepSheath(lerpPose(pose, TUCK, Math.min(1, Math.sin(Math.PI * u) * 2.2), {}));
-        return { pose: P2, rot: (p.dodgeDir || p.face) * Math.PI * 2 * E2(u), lift: p.vault ? 0 : 64 * Math.sin(Math.PI * u), cy: 44 }; // the sim carries the height of a vault
+      case 'overflip': { // a dodge into a foe: a low iai-style dash through him, the sword sheathed, ending in a skid back into guard
+        const u = p.vault && p.vault.u != null ? p.vault.u : clamp(p.stt / PT.dodgeT, 0, 1), K = (a, b) => clamp((u - a) / (b - a), 0, 1);
+        let P2; if (u < 0.08) P2 = lerpPose(pose, DASH_P, E2(K(0, 0.08)), {}); else if (u < 0.45) P2 = lerpPose(DASH_P, DASH_P, 0, {}); else if (u < 0.75) P2 = lerpPose(DASH_P, POSE.dSkid, E2(K(0.45, 0.75)), {}); else P2 = lerpPose(POSE.dSkid, POSE.guard, E2(K(0.75, 1)), {});
+        if (u < 0.75) { P2.sheath = 1; P2.grip = POSE.stand.grip.slice(); P2.sw = POSE.stand.sw; P2.hand = [7, -8]; P2.handK = 1; }
+        return { pose: P2, dash: u < 0.5 };
       }
       case 'aircut': case 'divecut': case 'airspin': { // in the air: a rising cut tucked, a diving cut pitched forward, or a full spin with the blade flat
         const W = A.wind + A.act, u = clamp(tt / (W + 0.08), 0, 1), P2 = lerpPose(pose, pose, 0, {}); P2.ff = [P2.ff[0] * 0.5 + 6, -12]; P2.fb = [P2.fb[0] * 0.5 - 6, -16];
@@ -433,8 +440,10 @@ export class Renderer {
     if (o.fx && (o.fx.lift || o.fx.rot)) { const F = o.fx; o = Object.assign({}, o, { fx: null }); g.save();
       if (F.lift) g.translate(0, -F.lift);
       if (F.rot) { const cy = y - (F.cy || 46); g.translate(x, cy); g.rotate(F.rot); g.translate(-x, -cy); }
-      const r = this.fig3(g, x, y, look, pose, fig, o); g.restore(); return r; }
-    return this.fig3(g, x, y, look, pose, fig, o);
+      const r = this.fig3(g, x, y, look, pose, fig, o); g.restore();
+      if (fig.sil) { const c = Math.cos(F.rot || 0), sn = Math.sin(F.rot || 0), py0 = y - (F.cy || 46); let lo = -1e9; for (const q of fig.sil) { const dx = q[0] - x, dy = q[1] - py0; lo = Math.max(lo, py0 + dx * sn + dy * c - (F.lift || 0)); } fig.lowY = lo; }
+      return r; }
+    const r = this.fig3(g, x, y, look, pose, fig, o); if (fig.sil) { let lo = -1e9; for (const q of fig.sil) lo = Math.max(lo, q[1]); fig.lowY = lo; } return r;
   }
   // a turn passes through a drawn in-between: feet drawn together, the body square, the arms in; it flips at the middle
   fig3(g, x, y, look, pose, fig, o) {
@@ -602,6 +611,8 @@ export class Renderer {
             else { const u = (f.stt - up) / 0.42, R0 = fig.ragRest || pose, gP = lerpPose(pose, pose, 0, {});
               pose = u < 0.4 ? lerpPose(R0, POSE.knee, (u / 0.4) * (u / 0.4) * (3 - 2 * u / 0.4), {}) : u < 0.75 ? lerpPose(POSE.knee, POSE.rise, (u - 0.4) / 0.35, {}) : lerpPose(POSE.rise, gP, (u - 0.75) / 0.25, {}); } }
           else if (f.st !== 'stagger') { fig.rag = null; fig.ragRest = null; } }
+        // the ronin dashes through him: a flinch
+        if (s.p.vault && Math.abs(s.p.x - f.x) < 50 && f.st !== 'dead') { pose = lerpPose(pose, pose, 0, {}); pose.lean -= 0.08; pose.head = (pose.head || 0) - 0.18; pose.hy += 1.5; } // a flinch, the head turning after him
         if (look === 'archer' && Math.abs(f.vx) > 5 && pose.kneel) { pose.kneel = 0; pose.hy = -49; pose.ff = [12, 0]; pose.fb = [-14, 0]; } // he stands to move
         const u = walkLegs(pose, fig.walk || 0, Math.abs(f.vx), f.st, look); fig.gaitU = u;
         // Shizu twirls the naginata once round her back through the wind-up
@@ -651,10 +662,14 @@ export class Renderer {
       fig.wasStill = !fromRest && Math.abs(p.vx) < 8;
       const starting = fig.startT >= 0 && fig.startT < 0.4; if (fig.startT >= 0) fig.startT += dt;
       if (moving) fig.walk = (fig.walk || 0) + (mode === 'title' ? 0 : starting ? Math.max(Math.abs(p.vx), 330) : Math.abs(p.vx)) * dt;
-      fig.gaitU = mode !== 'title' ? walkLegs(pose, fig.walk || 0, moving ? (starting ? Math.max(Math.abs(p.vx), 210) : Math.abs(p.vx)) : 0, p.st, 'ronin', fig.acc) : -1;
+      // one continuous gait: the phase advances by distance over the current cycle length (so the cycle can change
+      // with speed without a jump), the stride blends walk to sprint by speed, and eases in at a start and out at a stop
+      { const sp = Math.abs(p.vx), on = moving && mode !== 'title' && sp > 8 && (p.st === 'move' || p.st === 'idle'); fig.gK = (fig.gK ?? 0) + (gaitK('ronin', sp) - (fig.gK ?? 0)) * Math.min(1, dt / 0.22); // the body eases into the sprint's lean and stride over about a quarter second
+        fig.gAmp = clamp((fig.gAmp || 0) + (on ? 1 : -1) * dt / 0.2, 0, 1); if (on) fig.gPh = (fig.gPh || 0) + sp * dt / gaitCycle('ronin', sp);
+        fig.gaitU = fig.gAmp > 0 && mode !== 'title' && (p.st === 'move' || p.st === 'idle') ? walkLegs(pose, 0, Math.max(sp, 9), 'move', 'ronin', fig.acc * fig.gAmp, { phase: fig.gPh || 0, amp: E3(fig.gAmp), k: fig.gK }) : -1; }
       // a sprint: a puff of dust (or the chapter's petals or snow) at every footfall
       if (fig.gaitU >= 0 && Math.abs(p.vx) > 200 && p.st === 'move') { const ph = Math.floor(fig.gaitU * 2); if (fig.lastStep != null && ph !== fig.lastStep && !this.reduced) { const k = CHAPTERS[this.ch].key, fx2 = px + p.face * 8, gy2 = -groundH(this.ch, fx2) - 2; for (let j = 0; j < 4; j++) this.spawn(MOTE, fx2 + (Math.random() - 0.5) * 10, gy2, -p.face * (30 + Math.random() * 50), -10 - Math.random() * 16, 0.5, 2.5 + Math.random() * 2, INK); if (k === 'castle') this.spawn(PETAL, fx2, gy2 - 4, -p.face * 60, -30, 1.2, 4, CHAPTERS[this.ch].accent); if (k === 'snow') this.spawn(SNOW, fx2, gy2, -p.face * 50, -40, 1, 1.6, '#f4f1ea'); } fig.lastStep = ph; } else fig.lastStep = null;
-      if (starting && fig.gaitU >= 0) { const k = 1 - fig.startT / 0.4, e = 0.55 + 0.45 * (1 - k); pose.ff = [pose.ff[0] * e, pose.ff[1]]; pose.fb = [pose.fb[0] * e, pose.fb[1]]; pose.lean += 0.16 * k; pose.hy += 4 * k; }
+      if (false && starting && fig.gaitU >= 0) { const k = 1 - fig.startT / 0.4, e = 0.55 + 0.45 * (1 - k); pose.ff = [pose.ff[0] * e, pose.ff[1]]; pose.fb = [pose.fb[0] * e, pose.fb[1]]; pose.lean += 0.16 * k; pose.hy += 4 * k; }
       if (p.st === 'move' && fig.acc < -600 && Math.abs(p.vx) > 30) { const k = clamp(-fig.acc / 1800, 0, 1); pose.ff = [lerp(pose.ff[0], 30, k), lerp(pose.ff[1], 0, k)]; pose.fb = [lerp(pose.fb[0], -18, k), lerp(pose.fb[1], -3, k)]; pose.hy += 5 * k; pose.lean -= 0.12 * k; fig.skid = true; if (Math.random() < 0.6) this.spawn(MOTE, px + p.face * 26, -groundH(this.ch, px) - 2, p.face * 40, -10, 0.6, 3, INK); }
       else if (fig.skid && Math.abs(p.vx) < 20) { fig.skid = false; fig.sqv = (fig.sqv || 0) + 3; }
     }
@@ -678,12 +693,20 @@ export class Renderer {
     shadow(px, 22);
     const scarfCol = '#d6cbb0'; // the long pale cloth down his back
     const ex = this.expr; ex.t -= dt; let expr = ex.t > 0 ? ex.k : 'calm'; if (p.st === 'hit' || p.st === 'dead') expr = 'hurt'; if (s.phase === 'ending' || p.st === 'iai') expr = 'win';
-    const o = { groundY: -groundH(this.ch, px), face: p.face, alpha: 1, wind: wind + this.gustAt(px) * 1.4, vx: p.vx, roll, scarf: scarfCol, dt, boilN: this.boilN, reduced: this.reduced, expr, walkPh: fig.gaitU >= 0 ? fig.gaitU * 6.283 : null, running: Math.abs(p.vx) > 200 && p.st === 'move', noHat: !!this.hat };
+    const o = { groundY: -groundH(this.ch, px), face: p.face, alpha: 1, wind: wind + this.gustAt(px) * 1.4, vx: p.vx, roll, scarf: scarfCol, dt, boilN: this.boilN, reduced: this.reduced, expr, walkPh: fig.gaitU >= 0 ? fig.gaitU * 6.283 : null, running: Math.abs(p.vx) > 200 && p.st === 'move', runK: (fig.gK || 0) * (fig.gAmp || 0), gAmp: fig.gAmp || 0, noHat: !!this.hat };
     // scarf anchor follows the neck of the previous pose (close enough at 60 fps)
-    if (fx) { o.fx = fx; if (fx.whirl) o.wind += fx.whirl; if (fx.rot || fx.lift) o.tuck = 1; }
-    if (p.y > 4) o.tuck = 1; // in the air the hakama wraps each leg
+    if (fx) { o.fx = fx; if (fx.whirl) o.wind += fx.whirl; if (fx.rot || fx.lift) o.tuck = 1; if (fx.dash) o.wind -= p.face * 6; }
+    if (p.y > 4) o.tuck = 1; // in the air the hakama wraps each leg (a tucked ball keeps one wrapped garment)
+    // the flip's motion arc: one thin, fading brush stroke along the path of the hips
+    { const A2 = fig.flArc || (fig.flArc = []); if (fx && fx.arc) { A2.push([px, py - (-pose.hy * 1.18)]); if (A2.length > 26) A2.shift(); fig.flArcT = 0; } else fig.flArcT = (fig.flArcT || 0) + dt;
+      if (A2.length > 3 && fig.flArcT < 0.3) { const fl = []; for (const q of A2) fl.push(q[0], q[1]); ribbon(g, fl, (u) => 2.6 * Math.sin(Math.PI * u) * u, INK, 0.28 * (1 - fig.flArcT / 0.3), 0); } else if (fig.flArcT >= 0.3) A2.length = 0; }
     // at full sprint, a few broken dry-brush streaks in the air behind him (ink, never cartoon lines)
     if (Math.abs(p.vx) > 230 && p.st === 'move' && !this.reduced) { const k = clamp((Math.abs(p.vx) - 230) / 30, 0, 1); for (let j = 0; j < 3; j++) { const yy = py - 34 - j * 22 + Math.sin(this.time * 7 + j * 2) * 3, x0 = px - p.face * (26 + j * 9), L2 = 46 + j * 14, pts = []; for (let q = 0; q <= 6; q++) pts.push([x0 - p.face * L2 * q / 6, yy + Math.sin(q + j) * 1.2]); this.windStroke(g, pts, 2.2, 0.16 * k, j * 1.7 + this.time); } }
+    // the dash through a foe: while he overlaps the foe, a little translucent, with two faint copies trailing along the path
+    { const T2 = fig.dashT || (fig.dashT = []); if (fx && fx.dash) { T2.push(px); if (T2.length > 6) T2.shift(); } else T2.length = 0;
+      const over = fx && fx.dash && s.foes.some((q) => q.st !== 'dead' && Math.abs(q.x - px) < 34);
+      if (over && T2.length > 4 && !this.reduced) { for (const [j, al] of [[0, 0.12], [2, 0.22]]) this.fig(g, T2[j], -groundH(this.ch, T2[j]), 'ronin', pose, fig, Object.assign({}, o, { alpha: al, dt: 0 })); }
+      if (over) o.alpha = 0.7; }
     const geo = this.fig(g, px + (fig.rag ? 0 : fig.kick || 0), py, 'ronin', pose, fig, o); fig.lastHd = geo.Hd; fig.lastGeoP = geo;
     if (fig.pfx && fig.pfx.t < 0.12) { fig.parryX = geo.G[0] + geo.dx * 34 * geo.sc; fig.parryY = geo.G[1] + geo.dy * 34 * geo.sc; fig.crossPt = [fig.parryX, fig.parryY]; } else { fig.parryX = fig.parryY = null; fig.crossPt = null; } // where the blades cross: for the ink burst
     stepScarf(fig, geo.N[0] - p.face * 2, geo.N[1] + 2, p.face, wind + this.gustAt(px) * 1.4, p.vx, dt, !fig.scarf.inited);
@@ -701,7 +724,7 @@ export class Renderer {
     if (live && tip) {
       if (!fig.trailLive) { T.length = 0; fig.trailFade = 0; fig.trailKill = false; }
       const last = T[T.length - 1]; const sp = last ? Math.hypot(tip[0] - last[0], tip[1] - last[1]) : 0;
-      T.push([tip[0], tip[1], sp]); if (T.length > 30) T.shift();
+      T.push([tip[0], tip[1], sp]); if (T.length > (fo ? 7 : 30)) T.shift(); // [inkfx] a foe's stroke is only the last ~0.1 s of the swing
       fig.trailLive = true; fig.trailFade = 0;
     } else {
       if (fig.trailLive) { fig.trailLive = false; // the end of the arc: droplets flung off the tip
@@ -722,7 +745,9 @@ export class Renderer {
     if (fo) { // [inkfx] a foe's cut ends where it meets the ronin's body, thick at the start and dry and thin at the end
       const side = Math.sign(pts[0] - fo.stopX) || 1; for (let i = 2; i < pts.length; i += 2) if ((pts[i] - fo.stopX) * side < 14) { pts.length = i; break; }
       if (pts.length < 6) return;
-      const kf = fig.trailFade / dry, Wf = w * 1.5; ribbon(g, pts, (u) => Wf * (1 - 0.88 * Math.pow(u, 0.8)), '#221c17', 0.82 * Math.pow(1 - kf, 1.2), 0.5);
+      const kf = fig.trailFade / dry, Wf = 4.6, prof = (u) => Wf * Math.pow(Math.sin(Math.PI * Math.min(1, u * 0.9 + 0.08)), 0.7); // [inkfx] a thin grey stroke, never a black crescent
+      ribbon(g, pts, prof, '#5d554c', 0.62 * Math.pow(1 - kf, 1.2), 0.3);
+      { const top = []; for (let i = 0; i < pts.length; i += 2) top.push(pts[i], pts[i + 1] - 1.6); ribbon(g, top, (u) => 0.9 * Math.sin(Math.PI * u), '#eee4cf', 0.7 * Math.pow(1 - kf, 1.2), 0); } // the paper-white edge
       g.globalAlpha = 1; return; }
     const kill = fig.trailKill, W = Math.min(w * 1.55, 16) * (kill ? 1.2 : 1), ink = '#221c17';
     // one loaded sweep: a firm entry a third of the belly's width, swelling to the belly mid-arc, thinning to a dry split tail

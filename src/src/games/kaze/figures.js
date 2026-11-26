@@ -228,7 +228,8 @@ export function poseFor(fig, e, kind, t, isPlayer, extra) {
 // ---------------- drawing ----------------
 // colour routing: FLATC paints a figure as one flat colour (rim light, the ink flash frame); SHADE darkens it toward
 // a black silhouette when the duel sky turns red.
-let FLATC = null, SHADE = 0; const SHC = new Map();
+let FLATC = null, SHADE = 0, SILP = null; // SILP: when set, every painted mass adds its outline points (the silhouette)
+const SHC = new Map();
 function cc(c) {
   if (FLATC) return FLATC;
   if (SHADE < 0.03 || typeof c !== 'string' || c[0] !== '#') return c;
@@ -306,7 +307,7 @@ export function brushLine(g, S, w, col, a, seed, o = {}) {
 }
 // One painted mass: flat wash, dry-brush grain, pooled darker edge, and one swelling outline in two or three strokes.
 function mass(g, P, o) {
-  const S = o.raw ? P : closedCurve(boil(P, o.seed, o.n, o.amp), 3), A = o.a ?? 1; const shS = SHADE; if (o.shadeK != null) SHADE *= o.shadeK;
+  const S = o.raw ? P : closedCurve(boil(P, o.seed, o.n, o.amp), 3), A = o.a ?? 1; if (SILP) for (const q of S) SILP.push(q); const shS = SHADE; if (o.shadeK != null) SHADE *= o.shadeK;
   g.beginPath(); for (let i = 0; i < S.length; i++) i ? g.lineTo(S[i][0], S[i][1]) : g.moveTo(S[i][0], S[i][1]); g.closePath();
   g.globalAlpha = A; g.fillStyle = cc(o.col); g.fill();
   if (o.tex !== 0 && !FLATC) {
@@ -351,7 +352,7 @@ function sweep(g, P, w, col, a, seed, k = 4) { brushLine(g, openCurve(P, k), w, 
 // fig: render-side record { pose, target, scarf, t, seed, cloth, sq... }. o: { face, alpha, wind, vx, dt, boilN, sash, shield, draw, expr }
 export function drawFigure(g, x, y, look, pose, fig, o) {
   const L = LOOKS[look] || LOOKS.bandit, f = o.face, A = o.alpha ?? 1, bulk = L.bulk, dt = Math.min(o.dt ?? 0.016, 0.05);
-  FLATC = o.flat || null; SHADE = o.shade || 0;
+  FLATC = o.flat || null; SHADE = o.shade || 0; SILP = [];
   const sc = L.sc, wind = o.wind || 0, t = fig.t || 0, vx = o.vx || 0, seed = fig.seed || 1, bn = o.boilN || 0, amp = o.reduced ? 0 : 0.55 * sc;
   // overlapping action: cloth lags the body on a spring and overshoots when it stops
   const tgt = clamp(-vx * 0.04 + wind * 5, -11, 11) + Math.sin(t * 5.3 + seed) * (0.6 + Math.abs(wind) * 1.6);
@@ -369,7 +370,7 @@ export function drawFigure(g, x, y, look, pose, fig, o) {
   const lift = pose.kneel || pose.hy > -30 || rg > 0.5 ? 0 : 6 * clamp((-pose.hy - 30) / 18, 0, 1) + 3.5;
   const upright = !pose.kneel && rg < 0.5 && (pose.hy <= -38 || pose.gait) && Math.abs(lean) < (pose.gait ? 0.98 : 0.75);
   // the head turns at most about 19 degrees on the neck: the shoulders and hips take a recoil
-  const hdT = clamp(pose.head || 0, -0.33, 0.33) - (L.hunch ? 0.22 : 0), na = lean + hdT * 0.5, ha = lean + hdT;
+  const hl0 = pose.tuckHead ? 0.52 : 0.33, hdT = clamp(pose.head || 0, -0.33, hl0) - (L.hunch ? 0.22 : 0), na = lean + hdT * 0.5, ha = lean + hdT;
   let hyU = pose.hy - lift; if (upright) hyU = Math.min(hyU, -0.47 * STAND_H, -(0.945 * STAND_H - TORSO * Math.cos(lean) - NECK * Math.cos(na) - 9.6 * Math.cos(ha)));
   const rise = hyU - (pose.hy - lift); // how much the hips were lifted to keep the stance tall (units, <= 0)
   const H = [x + f * pose.hx * sc, lerp(y + hyU * sc + breath * 0.4, y + pose.hy * sc, rg)];
@@ -402,7 +403,7 @@ export function drawFigure(g, x, y, look, pose, fig, o) {
   else if (L.weapon === 'bow') hand2 = [lerp(G[0] - f * 4 * sc, H[0] - f * 2 * sc, o.draw || 0), lerp(G[1], G[1] - 6 * sc, o.draw || 0)];
   else if (L.weapon === 'club') hand2 = null;
   else hand2 = [G[0] - dx * 12 * sc, G[1] - dy * 12 * sc];
-  if (pose.sheath && (L.weapon === 'katana' || L.weapon === 'odachi')) { const swing = o.walkPh != null && !o.running ? Math.sin(o.walkPh) * 6 * sc : 0; hand2 = o.running ? [H[0] + f * 10.5 * sc, H[1] - 4.5 * sc] : o.walkPh != null ? [H[0] + f * 7 * sc, H[1] - 6.5 * sc] : [H[0] - nfx * (4 * sc) + f * swing, H[1] + 12 * sc]; }
+  if (pose.sheath && (L.weapon === 'katana' || L.weapon === 'odachi')) { const rk = o.runK ?? (o.running ? 1 : 0), swing = o.walkPh != null ? Math.sin(o.walkPh) * 6 * sc * (1 - rk) : 0; hand2 = rk > 0.01 && o.walkPh != null ? [lerp(H[0] + f * 7 * sc, H[0] + f * 10.5 * sc, rk), lerp(H[1] - 6.5 * sc, H[1] - 4.5 * sc, rk)] : o.walkPh != null ? [H[0] + f * 7 * sc, H[1] - 6.5 * sc] : [H[0] - nfx * (4 * sc) + f * swing, H[1] + 12 * sc]; }
   if (pose.open) hand2 = [N[0] - f * 28 * sc, N[1] + 6 * sc];
   // the archer's shot (kyudo): the bow raised overhead (uchiokoshi), then lowered while drawing until the string
   // hand is behind the ear at full draw; after the loose the bow turns in the hand
@@ -475,11 +476,11 @@ export function drawFigure(g, x, y, look, pose, fig, o) {
     mo([[hxp - 3.6 * sc, hyp - 2.6 * sc], [hxp + 3.2 * sc, hyp - 3.2 * sc], [hxp + 4 * sc, hyp + 2 * sc], [hxp - 1 * sc, hyp + 3.6 * sc], [hxp - 4 * sc, hyp + 1 * sc]], L.skin, { k: 50 + k, tex: 0.15, lw: 1.3 * sc, strokes: 2 });
   };
   if ((L.weapon === 'katana' || L.weapon === 'odachi') && !o.noWeapon) {
-    const sa = 0.45 + cloth * 0.01, s0 = [H[0] + f * 6 * sc, H[1] - 6 * sc], s1 = [s0[0] - f * Math.cos(sa) * 56 * sc, s0[1] + Math.sin(sa) * 56 * sc];
+    const sa = 0.45 + cloth * 0.01, s0 = [H[0] + f * 6 * sc, H[1] - 6 * sc], s1 = o.tuck && o.fx === null ? [s0[0] + ax * 44 * sc - nfx * 4 * sc, s0[1] + ay * 44 * sc - nfy * 4 * sc] : [s0[0] - f * Math.cos(sa) * 56 * sc, s0[1] + Math.sin(sa) * 56 * sc]; // in a flip the scabbard lies along the back
     rib(g, [s0[0], s0[1], lerp(s0[0], s1[0], 0.5), lerp(s0[1], s1[1], 0.5) + 1 * sc, s1[0], s1[1]], (u) => (3.8 - u * 1.4) * sc, '#15120f', A, 0.6);
   }
   if ((L.weapon === 'katana' || L.weapon === 'odachi') && !o.noWeapon && (L === LOOKS.ronin || L === LOOKS.gonroku || L.kind === 'duelist' || L.kind === 'master')) {
-    const s0 = [H[0] + f * 3 * sc, H[1] - 9 * sc], s1 = [s0[0] - f * 26 * sc, s0[1] + 13 * sc];
+    const s0 = [H[0] + f * 3 * sc, H[1] - 9 * sc], s1 = o.tuck && o.fx === null ? [s0[0] + ax * 24 * sc, s0[1] + ay * 24 * sc] : [s0[0] - f * 26 * sc, s0[1] + 13 * sc];
     rib(g, [s0[0], s0[1], s1[0], s1[1]], (u) => (3.2 - u * 1) * sc, '#1c1714', A, 0.6);
     sweep(g, [s0, [s0[0] + f * 9 * sc, s0[1] - 5 * sc]], 3 * sc, INK, A, seed + 152, 2);
   }
@@ -487,7 +488,7 @@ export function drawFigure(g, x, y, look, pose, fig, o) {
   // ---- hakama: ONE garment. Per leg a convex envelope around the leg (waist, a ring round the knee, a hem chain that
   // hangs from the knee and trails the motion), a gusset that fills between the thighs above the split, shins (bare
   // legs only) behind it, tabi and sandals below it. ----
-  const HG = hakamaTargets({ H, legs, f, nf: [nfx, nfy], dn: [-ax, -ay], sc, bulk, hl, groundY, kneel: !!pose.kneel, fk: !!pose.fk, full: !L.shins, rag: (pose.rag || 0) > 0.5, prevSplit: fig.hemSplit, dt: o.dt ?? 0.016, reduced: o.reduced, stride: o.running || o.tuck || (pose.rag || 0) > 0.5 || (L === LOOKS.ronin && !pose.sheath && !pose.kneel && pose.hy <= -40) ? 1 : clamp((Math.abs(vx) - 120) / 110, 0, 1) * (o.walkPh != null ? 1 : 0) });
+  const HG = hakamaTargets({ H, legs, f, nf: [nfx, nfy], dn: [-ax, -ay], sc, bulk, hl, groundY, kneel: !!pose.kneel, fk: !!pose.fk, full: !L.shins, rag: (pose.rag || 0) > 0.5, prevSplit: fig.hemSplit, dt: o.dt ?? 0.016, reduced: o.reduced, stride: o.running || o.tuck || (pose.rag || 0) > 0.5 || (L === LOOKS.ronin && !pose.sheath && !pose.kneel && pose.hy <= -40) ? 1 : (o.walkPh != null ? (L === LOOKS.ronin ? clamp(o.gAmp ?? 1, 0, 1) : clamp((Math.abs(vx) - 120) / 110, 0, 1)) : 0) }) // walking, the ronin's legs are always two shapes;
   fig.hemSplit = HG.split;
   if (!fig.hem) fig.hem = { f, c: [{}, {}] };
   if (fig.hem.f !== f) { for (const c of fig.hem.c) if (c.p) { c.p.reverse(); c.v.reverse(); } fig.hem.f = f; }
@@ -596,71 +597,180 @@ export function drawFigure(g, x, y, look, pose, fig, o) {
     mo(P, L.mino, { k: 98, lw: 1.8 * sc, strokes: 5, inside: (q) => { for (let i = 0; i < 9; i++) { const u = i / 8; const top = [lerp(P[1][0], P[7][0], u), lerp(P[1][1], P[7][1], u)]; sweep(q, [top, [top[0] - f * 2 * sc + cloth * 0.6, top[1] + 30 * sc]], 1.2 * sc, i % 2 ? INK : PAPER, A * 0.35, seed + 99 + i); } tierRows(q); } });
   }
   // ---- neck, head, hair, face ----
+  // Sumi-e economy: a skin wash with planes (front lit, side and socket in soft shade), then a few decisive strokes of
+  // varied weight: the profile from brow to nose tip, the lips and chin, the jaw back to the ear, one lid stroke with a
+  // dark iris under it, the brow. The skull, the jaw and the neck read in silhouette. Under a hat the eye glints from
+  // the brim's shadow and the nose tip, mouth and jaw carry the read. Head units: u forward, v down.
   const hc = Math.cos(ha), hs = Math.sin(ha) * f, hk = 1.0 * sc * (L.head || 1), HP = (u, v) => [Hd[0] + (u * hc - v * hs) * hk * f, Hd[1] + (u * hs * f + v * hc) * hk];
-  // head: skull, jaw toward the front; face is a pale mass
-  const headP = HEADUV.map(([u, v]) => HP(u, v));
-  if (fig.garment) { let w0 = 1e9, w1 = -1e9, v0 = 1e9, v1 = -1e9; for (const [u, v] of HEADUV) { w0 = Math.min(w0, u); w1 = Math.max(w1, u); v0 = Math.min(v0, v); v1 = Math.max(v1, v); } fig.garment.head = { aspect: (v1 - v0) / (w1 - w0), brim: HATBRIM[L.hat] ?? null, top: v0, chin: v1 }; }
-  const sh0 = SHADE; SHADE *= 0.35; mo(headP, mix(PAPER, L.skin, 0.85), { k: 102, tex: 0.05, ink: null }); SHADE = sh0;
-  // one tapering stroke for the back of the skull and the cheek on the shadow side; bald heads show the crown too
-  sweep(g, [HP(-6.6, -2.5), HP(-7, 1.5), HP(-5.6, 5), HP(-2.4, 7.6)], 1.3 * sc, INK, A * 0.9, seed + 103);
-  if (L.hat === 'bald') { sweep(g, [HP(-7, -1), HP(-6, -7), HP(-1, -9.6), HP(3.5, -8.6)], 1.0 * sc, INK, A * 0.75, seed + 104);
-    g.save(); g.beginPath(); closedCurve(headP, 2).forEach((q, i) => (i ? g.lineTo(q[0], q[1]) : g.moveTo(q[0], q[1]))); g.closePath(); g.clip(); g.globalAlpha = A * 0.16; g.fillStyle = cc(INK);
-    for (let i = 0; i < 70; i++) { const q = HP(-7 + hash(i, 11) * 13, -9.5 + hash(i, 13) * 10); g.fillRect(q[0], q[1], 0.45 * sc, 0.45 * sc); } g.restore(); }
-  if (L.hat !== 'bald' && L.hat !== 'kasa' && L.hat !== 'jingasa' && L.hat !== 'hood') {
-    // hair as a solid black mass over the back and top of the skull, plus sweeping strands
-    const hcol = L.hat === 'white' ? '#e4ddcf' : '#141210';
-    mo([HP(-7.2, 3.5), HP(-7, -4), HP(-2, -9.4), HP(4.5, -7.6), HP(3, -4.5), HP(-1, -4), HP(-2.5, 1), HP(-4, 4.5)], hcol, { k: 104, tex: 0.4, lw: 1.5 * sc });
-    if (L.hat === 'chonmage') { mo([HP(-7.2, 3.5), HP(-7.4, -2.5), HP(-4.5, -4), HP(-3, 1), HP(-4, 4.5)], '#141210', { k: 105, tex: 0.3, lw: 1.3 * sc, strokes: 2 }); sweep(g, [HP(-4, -8.6), HP(-0.5, -9.6), HP(3, -9.2)], 2.6 * sc, '#141210', A, seed + 106); }
-    const knot = HP(-2.6, -9.2); // on the crown
-    if (L.hat === 'tail') sweep(g, [knot, HP(-9, -8), [knot[0] - f * 14 * sc + cloth * 1.4, knot[1] + 10 * sc], [knot[0] - f * 22 * sc + cloth * 2.2, knot[1] + 22 * sc]], 4.2 * sc, '#141210', A, seed + 105);
-    else if (L.hat === 'band') { sweep(g, [knot, HP(-4.5, -13.2), HP(-7.5, -14.6)], 3.6 * sc, '#141210', A, seed + 106); sweep(g, [knot, HP(-6.5, -12.4), HP(-9.5, -12.8)], 2.4 * sc, '#141210', A, seed + 107); }
-    else sweep(g, [knot, HP(-3.5, -13), HP(-6.5, -13.6)], 3.2 * sc, hcol, A, seed + 108);
-  }
-  if (L.hat === 'band' || L.hat === 'bald' && L.acc && L.shield && !L.lantern) {
-    if (L.hat === 'band') { const b0 = HP(-6.8, -3), b1 = HP(6.4, -3.6); rib(g, [b0[0], b0[1], b1[0], b1[1]], () => 3.2 * sc, L.acc, A, 0); sweep(g, [b0, [b0[0] - f * 8 * sc + cloth * 1.2, b0[1] + 2 * sc], [b0[0] - f * 15 * sc + cloth * 2, b0[1] + 5 * sc]], 2.2 * sc, L.acc, A, seed + 109); }
-  }
-  if (L.band) { const b0 = HP(-6.8, -3.4), b1 = HP(6.4, -4); rib(g, [b0[0], b0[1], b1[0], b1[1]], () => 2.4 * sc, L.band, A, 0); sweep(g, [b0, [b0[0] - f * 7 * sc + cloth, b0[1] + 4 * sc]], 1.6 * sc, L.band, A, seed + 171); const nape = HP(-6, 5); rib(g, [nape[0] - 2 * sc, nape[1], nape[0] + 2 * sc, nape[1] + 1 * sc], () => 2.6 * sc, L.band, A, 0); }
-  if (L.beard) { const c0 = HP(5, 4), c1 = HP(1, 8.5); sweep(g, [c0, c1, [c1[0] - f * 2 * sc + cloth * 0.5, c1[1] + (L.beard === 'white' ? 9 : 4) * sc]], (L.beard === 'white' ? 2.6 : 3.4) * sc, L.beard === 'white' ? '#e9e2d3' : '#151311', A, seed + 110); }
-  if (L.hat === 'kasa') { const n2 = [HP(-5.5, 8.5)[0] + cloth * 0.5, HP(-5.5, 8.5)[1]]; mo([HP(-7.4, -2.5), HP(-1.5, -3), HP(-2.6, 2.4), HP(-3.6, 5.4), n2, HP(-8, 5.5)], '#1a1613', { k: 109, tex: 0.3, lw: 1.3 * sc, strokes: 2 });
-    sweep(g, [HP(-7.2, 3.5), [HP(-10.5, 9.5)[0] + cloth * 0.8, HP(-10.5, 9.5)[1]]], 1.8 * sc, '#1a1613', A, seed + 119); sweep(g, [HP(1.2, -2.6), HP(0.6, 1.2)], 0.9 * sc, '#1a1613', A * 0.9, seed + 120, 2); sweep(g, [HP(-4.5, 5.5), HP(-4.2, 9.6)], 0.8 * sc, '#1a1613', A * 0.8, seed + 121, 2); }
-  if (!(L.hat === 'kasa' || L.hat === 'jingasa' || L.hat === 'hood')) {
-  }
-  // face: in shadow under a hat; one decisive line for the eye
-  const shaded = L.hat === 'kasa' || L.hat === 'jingasa' || L.hat === 'hood';
-  { g.save(); g.beginPath(); const S = closedCurve(headP, 2); S.forEach((q, i) => (i ? g.lineTo(q[0], q[1]) : g.moveTo(q[0], q[1]))); g.closePath(); g.clip();
-    // the far side of the face in shade
-    const c0 = HP(-8, -9), c1 = HP(-0.5, -9), c2 = HP(-1.5, 9), c3 = HP(-8, 9); g.globalAlpha = A * 0.2; g.fillStyle = cc(INK); g.beginPath(); g.moveTo(c0[0], c0[1]); g.lineTo(c1[0], c1[1]); g.lineTo(c2[0], c2[1]); g.lineTo(c3[0], c3[1]); g.closePath(); g.fill();
-    if (shaded) { const b0 = HP(-9, -12), b1 = HP(9, -12), b2 = HP(9, 1.2), b3 = HP(-9, 3.4); g.globalAlpha = A * 0.55; g.fillStyle = cc('#2e2621'); g.beginPath(); g.moveTo(b0[0], b0[1]); g.lineTo(b1[0], b1[1]); g.lineTo(b2[0], b2[1]); g.lineTo(b3[0], b3[1]); g.closePath(); g.fill(); }
+  const dv = L.hat === 'kasa' ? 1.3 : L.hat === 'jingasa' || L.hat === 'hood' ? 0.6 : 0, HQ = dv ? (u, v) => HP(u, v + dv) : HP; // under a brim the face sits lower in the hat, so the eye shows below it
+  const FT = L === LOOKS.master ? 'old' : L === LOOKS.shizu ? 'fem' : L.hat === 'bald' ? 'brute' : L === LOOKS.ono ? 'gaunt' : L === LOOKS.duelist ? 'fine' : (L === LOOKS.bandit || L === LOOKS.gonroku) ? 'rough' : 'man';
+  const old = FT === 'old', fem = FT === 'fem', brute = FT === 'brute', rough = FT === 'rough';
+  const ex = o.expr || 'calm', fierce = ex === 'fight' || (ex === 'calm' && !pose.sheath), hurt = ex === 'hurt', wide = ex === 'wide', win = ex === 'win';
+  // who this is: each look its own face (jaw, brow, eye, cheek, stubble, mouth), drawn with the same few strokes
+  const LKN = Object.keys(LOOKS).find((k) => LOOKS[k] === L) || 'bandit';
+  const FX = Object.assign({ jaw: 0, brow: 0, browW: 1, flat: 0, narrow: 0, lid: 1, cheek: 0, hollow: 0, stub: 0, nose: 0, mouth: 0, crow: 0 }, ({
+    ronin: { stub: 1, cheek: 0.25, mouth: 0.3 },
+    bandit: { jaw: 1, brow: 0.5, browW: 1.25, stub: 1.3, mouth: 0.5, lid: 1.1, cheek: 0.3 },
+    spear: { cheek: 0.9, crow: 0.8, brow: 0.2, jaw: 0.3, mouth: 0.45 },
+    archer: { mouth: 1, jaw: 0.5, brow: 0.2, browW: 1.15, cheek: 0.35, narrow: 0.2, flat: 0.4 },
+    brute: { brow: 0.75, browW: 1.3, narrow: 0.25 },
+    hyoe: { jaw: 1.2, nose: 1, brow: 0.1, mouth: 0.5, cheek: 0.3 },
+    duelist: { hollow: 0.12, narrow: 0.45, brow: 0.25, flat: 1, mouth: 0.4 },
+    gonroku: { narrow: 0.55, lid: 1.35, brow: 0.45, flat: 0.6 },
+    ono: { cheek: 1, crow: 1, stub: 0.8, brow: 0.2, mouth: 0.4 },
+    shizu: { cheek: 0.4, hollow: 0.04, narrow: 0.4, flat: 0.8 },
+  })[LKN] || {});
+  // the attack: the body committed to the cut (the blade far out, a heavy lean, the bow drawn) or an explicit 'fight';
+  // the brow comes down about a pixel and the eye tightens, so a strike reads apart from the ready stance
+  const gx = pose.grip ? pose.grip[0] : 0, atk = !fierce ? 0 : ex === 'fight' ? 1 : Math.max(clamp((gx - 28) / 12, 0, 1), clamp((pose.lean - 0.3) / 0.08, 0, 1), pose.kneel && pose.fk ? clamp((-pose.lean - 0.02) / 0.06, 0, 1) : 0);
+  const shaded = L.hat === 'kasa' || L.hat === 'jingasa' || L.hat === 'hood', det = !FLATC;
+  const UV = (P) => P.map((q) => HQ(q[0], q[1]));
+  const pth = (Q) => { g.beginPath(); Q.forEach((q, i) => (i ? g.lineTo(q[0], q[1]) : g.moveTo(q[0], q[1]))); g.closePath(); };
+  const fillUV = (P, col, al, smooth = true) => { pth(smooth ? closedCurve(UV(P), 3) : UV(P)); g.globalAlpha = A * al; g.fillStyle = cc(col); g.fill(); };
+  const stk = (P, w, al, sd, col = INK, k = 3) => sweep(g, UV(P), w * hk, col, A * al, seed + sd, k);
+  // a brush stroke whose weight is set per control point (W), so the brush presses at the brow, the nose tip, the chin
+  const lineW = (P, W, w, al, col = INK) => { if (P.length < 2) return; const S = openCurve(UV(P), 4), fl = []; for (const q of S) fl.push(q[0], q[1]); const n = P.length - 1;
+    rib(g, fl, (u) => { const x = u * n, i = Math.min(n - 1, Math.floor(x)), r = x - i; return w * hk * lerp(W[i], W[i + 1], r); }, col, A * al, 0); };
+  const soft = (a, b, col, a0) => { const p = HQ(a[0], a[1]), q = HQ(b[0], b[1]), gr = g.createLinearGradient(p[0], p[1], q[0], q[1]), c = cc(col); if (gr && gr.addColorStop && c[0] === '#') { gr.addColorStop(0, rgba(c, a0)); gr.addColorStop(1, rgba(c, 0)); } return gr; };
+  const rad = (c, r, col, a0) => { const p = HQ(c[0], c[1]), gr = g.createRadialGradient(p[0], p[1], 0, p[0], p[1], r * hk), q = cc(col); if (gr && gr.addColorStop && q[0] === '#') { gr.addColorStop(0, rgba(q, a0)); gr.addColorStop(0.55, rgba(q, a0 * 0.6)); gr.addColorStop(1, rgba(q, 0)); } g.globalAlpha = A; g.fillStyle = gr; g.beginPath(); g.arc(p[0], p[1], r * hk, 0, 6.2832); g.fill(); };
+  // the face outline: skull, brow, nose, lips, chin, jaw; the skull alone (no nose or lips) gives the head's measures
+  const hook = rough, NT = FX.nose ? [8.75, 2.0] : brute ? [8.7, 1.9] : fem ? [8.5, 1.2] : old ? [9.0, 1.9] : hook ? [9.2, 1.7] : [9.0, 1.5];
+  // a heavier jaw: the angle drops and squares, the chin deepens
+  const jw = FX.jaw, jaw = (brute ? [[2.9, 7.1], [-0.4, 5.4], [-3.6, 3.2]] : fem ? [[2.4, 6.5], [-0.4, 4.4], [-3.4, 2.6]] : [[2.6, 6.8], [-0.4, 4.9], [-3.4, 2.9]]).map(([u, v], i) => [u + jw * [0.3, 0.25, -0.1][i], v + jw * [0.35, 0.55, 0.35][i]]);
+  // a hard mouth: the lower lip pulled in, so the chin leads and the mouth reads as a set line, not a pout
+  const lm = FX.mouth * 0.22, lips = hurt ? [[7.75, 3.35], [7.05, 3.9], [7.35, 4.85], [6.95, 5.5]] : wide ? [[7.75, 3.35], [7.2, 3.95], [7.4, 4.65], [7.0, 5.35]] : fem ? [[7.7, 3.3], [7.3, 3.9], [7.5, 4.45], [6.95, 5.25]] : [[7.75 - lm * 0.6, 3.35], [7.35 - lm * 0.3, 3.95], [7.55 - lm * 1.2, 4.5], [7.05 - lm * 0.5, 5.3]];
+  // the nose: a broken one has a bump high on the bridge and a dip under it
+  const SKF = [[-7.0, -3.2], [-6.4, -7.6], [-3.6, -10.4], [0.4, -11.0], [4.0, -10.0], [6.2, -7.4], [brute ? 7.35 : 7.15, -4.3], [6.85, -2.8],
+    FX.nose ? [8.2, -0.65] : hook ? [8.0, -0.8] : [7.6, -1.2], FX.nose ? [7.95, 0.7] : [NT[0] - 0.55, NT[1] - 1.05], NT, [NT[0] - 0.35, NT[1] + 0.75], [7.6, 2.7], ...lips,
+    [(fem ? 7.0 : 7.3) + jw * 0.12, 6.1 + jw * 0.2], [6.75 + jw * 0.05, 6.75 + jw * 0.28], [5.6, 7.2 + jw * 0.3], ...jaw, [-6.0, 1.0]];
+  const SK = SKF.filter((_, i) => i < 8 || i > 16);
+  const headP = UV(SK), faceO = closedCurve(UV(SKF), 3);
+  if (fig.garment) { let w0 = 1e9, w1 = -1e9, v0 = 1e9, v1 = -1e9; for (const [u, v] of SK) { w0 = Math.min(w0, u); w1 = Math.max(w1, u); v0 = Math.min(v0, v); v1 = Math.max(v1, v); } fig.garment.head = { aspect: (v1 - v0) / (w1 - w0), brim: HATBRIM[L.hat] ?? null, top: v0 + dv, chin: v1 + dv }; }
+  const skin = mix(PAPER, L.skin, fem ? 0.62 : 0.74), skinN = mix(L.skin, '#000000', 0.13);
+  // the neck: a column from the collar up under the skull, the nape and the throat drawn; a soft shadow under the jaw
+  { const nb = tp(0.98, tw * 0.04), nt = [Hd[0] - f * 0.8 * sc, Hd[1] + 5.5 * sc], nw = 4.6 * sc * (brute ? 1.3 : 1);
+    const B0 = [lerp(nb[0], nt[0], 0.6), lerp(nb[1], nt[1], 0.6)], Bf = [B0[0] + nfx * nw, B0[1] + nfy * nw], Bb = [B0[0] - nfx * nw * 1.04, B0[1] - nfy * nw * 1.04];
+    const thr = HQ(fem ? 3.2 : 3.6, 6.7), nap = HQ(-5.7, 0.8), apple = fem ? 0 : (brute ? 0.2 : 0.7) * sc;
+    const tm = [lerp(Bf[0], thr[0], 0.5) + nfx * apple, lerp(Bf[1], thr[1], 0.5) + nfy * apple], nm = [lerp(Bb[0], nap[0], 0.5) + nfx * 0.7 * sc, lerp(Bb[1], nap[1], 0.5) + nfy * 0.7 * sc];
+    const NK = [Bb, Bf, tm, thr, HQ(1.0, 3.0), HQ(-4.6, -1.0), nap, nm];
+    mo(closedCurve(NK, 3), skinN, { k: 100, tex: 0.1, ink: null, raw: true, shadeK: 0.4 });
+    if (det) { g.save(); pth(closedCurve(NK, 3)); g.clip();
+      fillUV([[-2.4, 2.6], [2.4, 6.4], [5.6, 7.0], [4.4, 10.2], [-0.6, 9.6], [-4.4, 5.2]], INK, 0.26);
+      fillUV([[-3.6, 2.4], [2.4, 6.4], [6.4, 7.0], [5.0, 12.4], [-1.4, 12.0], [-6.4, 6.0]], INK, 0.1);
+      g.restore(); }
+    sweep(g, [HQ(fem ? 3.4 : 3.9, 7.0), tm, Bf], (brute ? 1.6 : 1.15) * sc, INK, A * 0.8, seed + 101, 3);
+    sweep(g, [HQ(-6.0, 0.2), nm, Bb], (brute ? 1.8 : 1.4) * sc, INK, A * 0.85, seed + 99, 3); }
+  // the skin: a warm wash, lit on the front plane; it keeps its light in the red duel
+  { const sh0 = SHADE; SHADE *= 0.35; mo(faceO, skin, { k: 102, tex: 0.06, ink: null, raw: true }); SHADE = sh0; }
+  if (det) { g.save(); pth(faceO); g.clip();
+    // planes: the side of the head turns into shade behind the cheekbone, the cheek hollows under it, the socket sits under the brow
+    pth(UV([[1.6, -12], [-9, -12], [-9, 9], [1.6, 9]])); g.globalAlpha = A; g.fillStyle = soft([-6.5, 0], [1.6, 0], INK, brute ? 0.26 : 0.2); g.fill();
+    rad([3.0, 2.4], 3.6, INK, ((old || FT === 'gaunt') ? 0.2 : FT === 'fine' ? 0.14 : 0.08) + FX.hollow + FX.cheek * 0.07);
+    rad([5.0, -2.3 + FX.brow * 0.3], brute ? 3.2 : 2.7, INK, (brute ? 0.3 : old ? 0.22 : 0.15) + FX.brow * 0.08);
+    if (FX.jaw > 0.4) rad([1.6, 6.2], 3.0, INK, 0.08 * FX.jaw); // the mass of a heavy jaw turning under
+    rad([7.4, 1.6], 1.6, INK, 0.1); // the shade side of the nose
+    if (L.hat === 'bald') { // a shaved scalp: a cool wash over the crown, a highlight where the light finds the skull
+      pth(UV([[-9, -12], [9, -12], [9, -5], [-9, -4]])); g.globalAlpha = A; g.fillStyle = soft([0, -11.5], [0, -5], '#4a4a52', 0.22); g.fill();
+      stk([[-5.0, -7.8], [-2.6, -9.8], [0.6, -10.4]], 1.6, 0.3, 107, PAPER, 2); }
+    if (L.hat === 'chonmage') { pth(UV([[-2.8, -12], [9, -12], [9, -7.6], [1.4, -6.8]])); g.globalAlpha = A; g.fillStyle = soft([2, -11.5], [2, -6.5], '#4a4a52', 0.24); g.fill(); }
+    // the beard shadow of a man who has not shaved for days: a faint grey wash, then a few dry strokes of the brush
+    // laid along the jaw in the direction the jaw runs (never an even scatter, which reads as dirt)
+    if (FX.stub && !L.beard) { const s = FX.stub, sP = [[-0.8, 2.6], [3.0, 2.9], [8.0, 2.8], [8.0, 7.6 + jw * 0.3], [5.0, 7.7 + jw * 0.3], [2.2, 7.2 + jw * 0.4], [-1.2, 5.4 + jw * 0.4]];
+      fillUV(sP, FT === 'gaunt' ? '#5a5650' : '#34343a', 0.08 * s);
+      const sc0 = FT === 'gaunt' ? '#4a4640' : '#2e2c2c', SB = [[[-0.9, 3.5 + jw * 0.3], [0.6, 4.9 + jw * 0.45], [2.0, 5.9 + jw * 0.4]], [[2.6, 5.7 + jw * 0.3], [4.2, 6.4 + jw * 0.3], [5.4, 6.6 + jw * 0.25]], [[6.9, 5.35 + jw * 0.1], [6.5, 6.15 + jw * 0.2], [5.8, 6.6 + jw * 0.25]], [[0.9, 3.4], [2.2, 4.4], [3.4, 5.0]], [[7.15, 2.95], [6.5, 3.15]]];
+      for (let i = 0; i < (s > 1 ? 5 : 4); i++) stk(SB[i], [0.75, 0.7, 0.62, 0.5, 0.45][i], [0.42, 0.38, 0.36, 0.26, 0.3][i] * Math.min(1.2, s), 130 + i, sc0, 3); }
+    // a hat's brim throws the upper face into shadow, soft at its lower edge; light enough that the eye still separates
+    if (shaded) { pth(UV([[-10, -14], [11, -14], [11, 4], [-10, 4]])); g.globalAlpha = A; g.fillStyle = soft([0, -1.6], [0.6, 1.8], '#2a221d', L.hat === 'kasa' ? 0.4 : 0.45); g.fill(); }
     g.restore(); }
-  // under a hat the brim hides the eyes, so the face is read from what is below it: the tip of the nose, the mouth,
-  // the line of the jaw; bare-headed figures also get the bridge of the nose
-  { g.save(); g.beginPath(); const S = closedCurve(headP, 2); S.forEach((q, i) => (i ? g.lineTo(q[0], q[1]) : g.moveTo(q[0], q[1]))); g.closePath(); g.clip();
-    // a soft shadow under the jaw line, the nose's shadow, and stubble on the ronin
-    const j0 = HP(-3, 3.5), j1 = HP(1, 8.8), j2 = HP(5, 9.2), j3 = HP(4.5, 7.2), j4 = HP(0.6, 6.4); g.globalAlpha = A * 0.22; g.fillStyle = cc(INK); g.beginPath(); g.moveTo(j0[0], j0[1]); g.lineTo(j1[0], j1[1]); g.lineTo(j2[0], j2[1]); g.lineTo(j3[0], j3[1]); g.lineTo(j4[0], j4[1]); g.closePath(); g.fill();
-    if (L === LOOKS.ronin) { g.globalAlpha = A * 0.32; for (let i = 0; i < 16; i++) { const q = HP(-0.5 + (i % 4) * 1.6 + hash(i, 3) * 0.6, 4.6 + Math.floor(i / 4) * 1.0 + hash(i, 5) * 0.5); g.fillRect(q[0], q[1], 0.5 * sc, 0.5 * sc); } }
-    const ns = HP(5.6, 1.6), ns2 = HP(7.4, 3.4), ns3 = HP(5.8, 3.6); g.globalAlpha = A * 0.25; g.beginPath(); g.moveTo(ns[0], ns[1]); g.lineTo(ns2[0], ns2[1]); g.lineTo(ns3[0], ns3[1]); g.closePath(); g.fill();
-    g.restore(); }
-  sweep(g, [HP(2.3, -2.0), HP(4.8, -2.7), HP(6.9, -3.1)], (L.hat === 'bald' ? 2.0 : 1.2) * sc, INK, A * 0.95, seed + 174, 2); // the brow, one angled stroke
-  sweep(g, [HP(6.4, -2.2), HP(7.0, -0.4), HP(8.3, 2.6), HP(6.5, 3.5)], 1.45 * sc, INK, A * 0.92, seed + 116, 2); // the nose: bridge and tip
-  sweep(g, [HP(3.9, 5.7), HP(6.1, o.expr === 'hurt' ? 5.9 : 5.4)], (o.expr === 'hurt' ? 1.5 : 1.25) * sc, INK, A * 0.85, seed + 118, 2); // the mouth: one short stroke
-  sweep(g, [HP(-3.4, 3.2), HP(-0.6, 7.4), HP(3.6, 8.4), HP(5.6, 7.4)], 1.6 * sc, INK, A * 0.85, seed + 117, 2); // the jaw and chin
-  sweep(g, [HP(-1.6, -0.6), HP(-0.4, 0.4), HP(-0.8, 2.4), HP(-2, 2.8)], 1.0 * sc, INK, A * 0.7, seed + 122, 2); // the ear
-  // the eyes: an almond suggested by an upper lid heavier at the outer corner, a dark iris dab touching the lid and
-  // looking forward, a faint lower lid on the near eye; the far eye in 3/4 view a shorter stroke. Narrowed in a fight,
-  // wide with white showing when struck, closed lines at peace.
-  const ex = o.expr || 'calm', fierce = ex === 'calm' && !pose.sheath, wide = ex === 'wide' || ex === 'hurt';
-  const lid = (u0, u1, v, arc, w0, w1, al, sd) => { const a2 = HP(u0, v), m = HP((u0 + u1) / 2, v - arc), b2 = HP(u1, v + arc * 0.3); rib(g, [a2[0], a2[1], m[0], m[1], b2[0], b2[1]], (u) => (w0 + (w1 - w0) * u) * sc * Math.min(1, (1 - u) * 6 + 0.35), INK, A * al, 0); };
-  if (ex === 'win') { lid(5.9, 2.9, -0.4, -0.5, 0.35, 1.1, 0.9, 115); lid(7.9, 6.6, -0.6, -0.3, 0.3, 0.7, 0.7, 119); }
-  else {
-    const arc = wide ? 1.3 : fierce ? 0.25 : 0.7, v = fierce ? -0.4 : -0.7;
-    if (wide) { const w0 = HP(5.9, v), w1 = HP(4.4, v - arc), w2 = HP(2.9, v), w3 = HP(4.4, v + 1.2); g.globalAlpha = A; g.fillStyle = cc(PAPER); g.beginPath(); g.moveTo(w0[0], w0[1]); g.quadraticCurveTo(w1[0], w1[1], w2[0], w2[1]); g.quadraticCurveTo(w3[0], w3[1], w0[0], w0[1]); g.fill(); }
-    lid(5.9, 2.9, v, arc, 0.4, fierce ? 1.35 : 1.15, 0.95, 111);
-    // the iris: a dark dab under the lid, toward the front, touching it (smaller and free of the lid when wide)
-    const ir = HP(wide ? 4.7 : 5.0, v + (wide ? 0.2 : fierce ? 0.15 : 0.05)), r = (wide ? 0.85 : 1.05) * sc; dr(g, ir[0], ir[1], r, INK, A);
-    if (!fierce) { const l0 = HP(3.3, v + (wide ? 1.3 : 0.9)), l1 = HP(5.5, v + (wide ? 1.2 : 0.8)); rib(g, [l0[0], l0[1], l1[0], l1[1]], (u) => 0.45 * sc * Math.sin(Math.PI * u), INK, A * 0.4, 0); }
-    // the far eye, foreshortened behind the bridge of the nose
-    lid(7.6, 6.5, v - 0.2, arc * 0.6, 0.3, 0.8, 0.8, 113);
+  // the cheek: a line under the cheekbone, deep on a weathered face, a faint plane change on a lean one; crow's feet
+  if (FX.cheek >= 0.5) { for (const [u, v, r] of [[3.3, 0.9, 1.5], [3.8, 2.5, 1.4], [4.4, 3.9, 1.2]]) rad([u, v], r, INK, 0.13 * FX.cheek); // the hollow under the cheekbone, soft
+    lineW([[3.9, 2.6], [4.4, 3.8], [4.9, 4.9]], [0.1, 1, 0.1], 0.38, 0.2 * FX.cheek); // and the fold's crisp lower end
+    if (FX.crow) lineW([[7.1, 2.0], [6.2, 3.3], [6.0, 4.6]], [0.2, 1, 0.2], 0.6, 0.3 * FX.crow); }
+  if (FX.crow) { lineW([[3.1, -2.05], [2.1, -2.6]], [0.8, 0.1], 0.55, 0.45 * FX.crow); lineW([[3.1, -1.6], [2.0, -1.25]], [0.8, 0.1], 0.55, 0.4 * FX.crow); }
+  // brow: one stroke, pressed at the inner end; it drops in a fight and lifts in pain
+  // each look sets the brow lower or flatter (stern); the attack brings it down about a pixel more, never into the lid
+  const browP = (fierce ? [[6.7, -3.3], [4.9, -3.95], [2.9, -3.85]] : hurt ? [[6.5, -4.6], [4.9, -3.95], [2.9, -3.35]] : wide ? [[6.6, -4.5], [4.8, -4.7], [2.9, -3.85]] : [[6.7, -3.95], [4.8, -4.15], [2.9, -3.55]])
+    .map(([u, v], i) => [u, Math.min(v + (hurt || wide ? 0 : FX.brow) + atk * [0.45, 0.6, 0.45][i] + FX.flat * [-0.15, 0.1, 0.25][i], [-3.0, -3.15, -2.95][i] + atk * 0.25)]);
+  if (old) { lineW(browP.map(([u, v], i) => [u, v + i * 0.35]), [1, 1.2, 0.5], 1.9, 0.95, '#ece6da'); lineW(browP.map(([u, v], i) => [u, v + 0.75 + i * 0.35]), [0.6, 0.8, 0.2], 0.7, 0.5); }
+  else lineW(browP, fem ? [1, 0.9, 0.25] : brute ? [0.6, 1.0, 0.35] : [1.15, 0.95, 0.3], (brute ? 1.4 : fem ? 0.75 : 1.3) * FX.browW * (1 + atk * 0.12), 0.9);
+  // the eye: an upper lid heavier toward the outer corner, a dark iris under it looking forward, a sliver of white
+  // in front of the iris that catches the light (in a hat's shadow it is what glints), a faint lower lid
+  { const O = fem ? [3.1, -2.2] : [3.4, -1.95];
+    if (win) lineW([O, [4.8, -1.55], [6.2, -2.05]], [0.4, 1, 0.3], 1.0, 0.9);
+    else if (hurt) { lineW([[3.2, -1.75], [4.7, -1.95], [6.2, -2.3]], [0.6, 1.2, 0.4], 1.25, 0.95); // squeezed shut, creased at the corner
+      lineW([[3.2, -1.95], [2.3, -2.6]], [0.9, 0.2], 0.7, 0.6); lineW([[3.2, -1.6], [2.3, -1.15]], [0.9, 0.2], 0.7, 0.55); lineW([[4.0, -1.05], [5.4, -0.9]], [0.2, 0.8], 0.6, 0.45); }
+    else { const nn = wide ? 0 : Math.min(1, FX.narrow + atk * 0.55), M = wide ? [4.7, -3.05] : fierce ? [4.8, -2.45 + nn * 0.35] : [4.8, -2.7 + nn * 0.35], I = [6.3, (fierce ? -2.1 : -2.25) + nn * 0.1], ir = wide ? [5.0, -2.15] : [5.15, fierce ? -1.95 : -2.0];
+      const lo = [5.0, (wide ? -1.1 : fierce ? -1.45 : -1.2) - nn * 0.18];
+      fillUV([O, M, I, lo], mix(PAPER, L.skin, shaded ? 0.1 : 0.3), wide ? 0.95 : shaded ? 0.92 : 0.8);
+      // a small dark iris under the lid: no catchlight
+      if (det) { g.save(); pth(closedCurve(UV([O, M, I, lo]), 3)); g.clip(); const c = HQ(ir[0], ir[1]); g.globalAlpha = A; g.fillStyle = cc(INK); g.beginPath(); g.ellipse(c[0], c[1], (wide ? 0.7 : 0.74) * hk, 0.92 * hk, 0, 0, 6.2832); g.fill(); g.restore(); }
+      else { const c = HQ(ir[0], ir[1]); dr(g, c[0], c[1], 0.9 * hk, INK, A); }
+      // the upper lid: the eye's one firm stroke, pressed toward the outer corner; heavier as the eye tightens
+      lineW(fem ? [[2.7, -2.6], O, M, I] : [O, M, I], fem ? [0.2, 0.9, 1.1, 0.35] : [0.55, 1.2, 0.4], (fierce ? 1.3 : 1.15) * FX.lid * (1 + atk * 0.12), 0.95);
+      lineW([[3.9, (wide ? -1.25 : fierce ? -1.5 : -1.4) - nn * 0.15], [5.0, (wide ? -1.15 : fierce ? -1.45 : -1.3) - nn * 0.18], [5.9, -1.6 - nn * 0.1]], [0.2, 1, 0.3], (fierce ? 0.75 : 0.5) * (FX.lid > 1.2 ? 1.25 : 1), (fierce ? 0.6 : 0.4) + nn * 0.15);
+      // the lid crease above: under a brim it is a pale stroke of lit skin that lifts the eye off the hat's shadow
+      if (shaded && !fem) { const sh0 = SHADE; SHADE *= 0.35; lineW([[3.9, M[1] - 0.55], [5.0, M[1] - 0.6], [6.0, I[1] - 0.45]], [0.2, 1, 0.25], 0.6, 0.42, mix(PAPER, L.skin, 0.35)); SHADE = sh0; }
+      else if (!fem && !old) lineW([[4.1, M[1] - 0.5], [5.4, M[1] - 0.48]], [0.15, 1], 0.45, 0.22);
+      if (old) { lineW([[4.0, -3.05], [5.5, -3.15]], [0.2, 1], 0.55, 0.45); lineW([[4.0, -0.8], [5.3, -0.55], [6.1, -0.9]], [0.2, 1, 0.2], 0.6, 0.35); } }
+    if (old) { lineW([[3.1, -2.1], [2.2, -2.7]], [0.8, 0.1], 0.55, 0.5); lineW([[3.1, -1.6], [2.1, -1.3]], [0.8, 0.1], 0.55, 0.45); } }
+  // the profile: brow ridge, the socket, the bridge, the nose tip (the brush presses), then the lips and chin, then the jaw
+  // back toward the ear, thinning as it turns into the light
+  lineW(SKF.slice(5, 13), [0.3, brute ? 0.7 : 0.95, 0.7, 0.85, 1.0, 1.35, 1.0, 0.4], 1.2, 0.92);
+  lineW(SKF.slice(12, 20), [0.3, 0.9, 0.7, 0.9, 0.8, 1.1, 1.0, 0.8], 1.1, 0.88);
+  lineW([...SKF.slice(19, 22), [-1.0 + jw * 0.1, 3.6 + jw * 0.4]], [0.9, 1.0, 0.55, 0.1], (brute ? 1.6 : fem ? 0.9 : 1.2) * (1 + jw * 0.22), 0.65 + jw * 0.08);
+  if (FX.nose) lineW([[8.05, -1.0], [7.6, -0.35], [7.75, 0.4]], [0.2, 1, 0.2], 0.6, 0.45); // the old break, a knot on the bridge
+  lineW([[7.3, 1.2], [7.05, 2.0], [7.5, 2.6]], [0.2, 1, 0.3], 0.75, 0.6); // the wing of the nose
+  { const p = HQ(NT[0] - 1.05, NT[1] + 0.6); dr(g, p[0], p[1], 0.36 * hk, INK, A * 0.8); }
+  // the mouth: set and turned down in a fight, open in pain
+  const mj = SKF[14];
+  if (hurt || wide) { fillUV([[mj[0] + 0.4, mj[1] - 0.15], [6.2, 3.9], [5.5, 4.25], [6.3, mj[1] + (hurt ? 1.0 : 0.6)], [mj[0] + 0.25, mj[1] + (hurt ? 0.95 : 0.6)]], INK, 0.9);
+    if (hurt) lineW([[mj[0] + 0.3, mj[1] + 0.05], [6.0, 4.05]], [0.6, 0.3], 0.55, 0.75, PAPER); }
+  else { const m = win ? 0 : FX.mouth; lineW(fierce ? [mj, [6.4, 4.1], [5.6, 4.4 + m * 0.1]] : win ? [mj, [6.4, 3.95], [5.6, 3.8]] : [mj, [6.4, 4.05], [5.6, 4.15 + m * 0.15]], [1, 0.75 + m * 0.1, 0.2 + m * 0.35], (fierce ? 1.1 : fem ? 0.85 : 1.0) * (1 + m * 0.06), 0.88);
+    if (m > 0.35 && det) lineW([[5.45, 4.35], [5.5, 4.95]], [1, 0.1], 0.36, 0.26 * m); } // a hard mouth: the corner pressed in and creased
+  if (fem && det) fillUV([[7.4, 4.1], [6.6, 4.15], [7.2, 4.6]], '#6a3b32', 0.35);
+  if (old) lineW([[7.3, 1.8], [6.1, 3.3], [5.9, 4.9]], [0.2, 1, 0.3], 0.7, 0.45); // the line from nose to mouth
+  // the back of the skull, and the whole crown on a bald head
+  lineW(L.hat === 'bald' ? [[4.6, -9.8], [0.4, -11.0], [-3.6, -10.4], [-6.4, -7.6], [-7.0, -3.2], [-6.6, -0.2], [-6.0, 0.6]] : [[-6.4, -7.6], [-7.0, -3.2], [-6.6, -0.2], [-6.0, 0.6]], L.hat === 'bald' ? [0.2, 0.5, 0.7, 1, 1.2, 1, 0.5] : [0.4, 1.1, 1, 0.5], 1.35, 0.9);
+  // hair
+  if (L.hat === 'kasa') { // loose hair under the straw hat, a strand that swings late
+    const n2 = HQ(-5.6, 5.2); n2[0] += cloth * 0.5; mo([HQ(-7.7, -3.8), HQ(-1.9, -4.0), HQ(-2.5, -1.2), HQ(-2.6, 1.6), HQ(-3.8, 3.8), n2, HQ(-7.7, 2.2)], '#1a1613', { k: 109, tex: 0.3, lw: 1.3 * sc, strokes: 2 });
+    sweep(g, [HQ(-7.2, 1.6), [HQ(-10.5, 7.5)[0] + cloth * 0.8, HQ(-10.5, 7.5)[1]]], 1.6 * sc, '#1a1613', A, seed + 119); stk([[0.9, -4.0], [0.5, -1.2]], 0.9, 0.85, 120, '#1a1613', 2); }
+  else if (L.hat === 'jingasa' || L.hat === 'hood') { // tied-back hair under the helmet: a ragged mass, combed, a lit edge in front, loose ends at the nape
+    mo([HQ(-7.7, -3.8), HQ(-2.2, -4.0), HQ(-2.7, -1.6), HQ(-2.4, -0.2), HQ(-3.3, 0.6), HQ(-3.4, 2.0), HQ(-4.6, 1.5), HQ(-5.4, 2.6), HQ(-6.6, 1.6)], '#1a1613', { k: 109, tex: 0.3, lw: 1.0 * sc, strokes: 2 });
+    if (det) { stk([[-2.5, -3.7], [-2.9, -1.6], [-2.8, 0.0]], 0.5, 0.42, 131, mix(PAPER, '#8a8174', 0.45), 2); // the lit edge, where the hair turns to the light
+      stk([[-4.0, -3.6], [-4.6, -1.2], [-4.4, 1.2]], 0.42, 0.26, 132, PAPER, 2); stk([[-5.8, -3.4], [-6.3, -1.0], [-5.8, 1.6]], 0.4, 0.2, 133, PAPER, 2); }
+    stk([[-3.4, 1.4], [-3.0, 2.9]], 0.6, 0.85, 134, '#1a1613', 2); stk([[-5.6, 2.0], [-6.0, 3.6]], 0.7, 0.85, 135, '#1a1613', 2); }
+  else if (L.hat !== 'bald') {
+    const white = L.hat === 'white', hcol = white ? '#e2dbcd' : '#141210', knot = HQ(-2.6, -11.0);
+    const hairP = L.hat === 'chonmage' ? [[-7.6, -2.4], [-7.2, -7.8], [-5.0, -10.4], [-2.6, -10.8], [-0.6, -8.6], [1.4, -6.6], [0.6, -4.0], [0.4, -1.2], [-1.2, -0.4], [-2.8, 1.8], [-4.4, 2.6], [-6.6, 1.4]]
+      : white ? [[-7.6, -2.4], [-7.2, -7.8], [-4.2, -11.2], [0.4, -11.7], [4.2, -10.6], [5.6, -8.8], [3.6, -8.4], [1.6, -7.6], [0.6, -5.4], [0.4, -2.6], [-1.0, -0.6], [-2.8, 1.8], [-4.4, 2.6], [-6.6, 1.4]]
+      : [[-7.6, -2.4], [-7.2, -7.8], [-4.0, -11.3], [0.6, -11.9], [4.8, -10.8], [6.8, -7.9], [5.4, -7.2], [3.2, -7.3], [1.2, -6.4], [0.6, -4.0], [0.5, -1.4], [-1.0, -0.6], [-2.8, 1.8], [-4.4, 2.6], [-6.6, 1.4]];
+    mo(UV(hairP), hcol, { k: 104, tex: white ? 0.15 : 0.4, lw: 1.5 * sc, ink: white ? '#77716a' : undefined });
+    if (det) { const sc2 = white ? INK : PAPER, al = white ? 0.3 : 0.2; // combed strands toward the knot: hair, not a helmet
+      stk([[4.4, -10.0], [1.0, -11.0], [-2.4, -11.0]], 0.55, al, 123, sc2, 2); stk([[2.6, -7.8], [-0.8, -9.4], [-3.0, -10.6]], 0.55, al, 124, sc2, 2); stk([[0.2, -5.0], [-3.4, -6.4], [-5.2, -9.4]], 0.55, al, 125, sc2, 2); stk([[-1.6, 0.4], [-4.6, -1.6], [-6.4, -5.6]], 0.5, al * 0.8, 126, sc2, 2); }
+    if (L.hat === 'chonmage') { stk([[-4.4, -10.4], [-2.0, -12.1], [1.4, -12.4], [3.4, -11.7]], 2.6, 1, 106, '#141210', 3); stk([[-2.6, -12.4], [-2.2, -10.9]], 0.8, 0.8, 128, PAPER, 2); }
+    else if (L.hat === 'tail') sweep(g, [knot, HQ(-9, -9.4), [knot[0] - f * 14 * sc + cloth * 1.4, knot[1] + 10 * sc], [knot[0] - f * 22 * sc + cloth * 2.2, knot[1] + 22 * sc]], 4.2 * sc, '#141210', A, seed + 105);
+    else if (L.hat === 'band') { sweep(g, [knot, HQ(-4.5, -14.6), HQ(-7.5, -16.0)], 3.6 * sc, '#141210', A, seed + 106); sweep(g, [knot, HQ(-6.5, -13.8), HQ(-9.5, -14.2)], 2.4 * sc, '#141210', A, seed + 107); }
+    else sweep(g, [knot, HQ(-3.5, -14.4), HQ(-6.5, -15.0)], 3.2 * sc, white ? '#d9d2c4' : hcol, A, seed + 108);
+    if (white) stk([[-2.2, -11.2], [-3.4, -14.2], [-6.3, -14.9]], 0.6, 0.45, 127, INK, 2);
   }
+  // the ear, in front of the hair: one C stroke and the fold inside it
+  if (L.hat !== 'hood') { fillUV([[-0.4, -2.6], [-1.4, -2.95], [-2.25, -1.8], [-2.0, 0.2], [-1.2, 1.2], [-0.4, 0.8]], mix(L.skin, '#5a3a2a', 0.18), 1);
+    lineW([[-0.5, -2.75], [-1.6, -2.9], [-2.25, -1.4], [-1.85, 0.4], [-0.8, 1.15]], [0.3, 0.9, 1.1, 0.9, 0.3], 0.95, 0.85); lineW([[-0.8, -1.9], [-1.35, -0.9], [-0.95, 0.1]], [0.3, 1, 0.3], 0.7, 0.55); }
+  if (L.hat === 'band') { const b0 = HQ(-7.4, -5.4), b1 = HQ(6.8, -6.5); rib(g, [b0[0], b0[1], b1[0], b1[1]], () => 3.0 * sc, L.acc, A, 0); sweep(g, [b0, [b0[0] - f * 8 * sc + cloth * 1.2, b0[1] + 2 * sc], [b0[0] - f * 15 * sc + cloth * 2, b0[1] + 5 * sc]], 2.2 * sc, L.acc, A, seed + 109); }
+  if (L.band) { const b0 = HQ(-7.3, -5.8), b1 = HQ(6.6, -6.8); rib(g, [b0[0], b0[1], b1[0], b1[1]], () => 2.3 * sc, L.band, A, 0); sweep(g, [b0, [b0[0] - f * 7 * sc + cloth, b0[1] + 4 * sc]], 1.6 * sc, L.band, A, seed + 171); const n0 = HQ(-6.0, 1.6), n1 = HQ(-7.6, 2.4); rib(g, [n0[0], n0[1], n1[0], n1[1]], () => 1.5 * sc, L.band, A, 0); }
+  // beards: the bandit chief's a dark ragged mass along the jaw; the old master's long and white, drawn in grey strands
+  if (L.beard === 'dark') { const BP = [[0.6, -1.4], [1.6, 1.4], [4.4, 2.7], [6.8, 2.9], [8.1, 3.5], [7.9, 4.6], [8.1, 6.2], [8.0, 7.8], [7.0, 9.4], [5.4, 10.0], [3.2, 9.0], [1.0, 7.2], [-0.8, 4.6], [-1.0, 1.4]];
+    mo(UV(BP), '#151311', { k: 110, tex: 0.4, lw: 1.2 * sc, strokes: 2 });
+    for (let i = 0; i < 5; i++) { const u = 1.2 + i * 1.5; stk([[u, 8.0 + i * 0.3], [u - 0.4 + cloth * 0.02, 9.8 + i * 0.35 + (i % 2) * 0.8]], 0.9, 0.9, 111 + i, '#151311', 2); }
+    if (det) lineW([[7.6, 4.0], [6.8, 4.1], [6.1, 4.0]], [0.4, 1, 0.3], 0.5, 0.55, skin); }
+  else if (L.beard === 'white') { const BP = [[0.4, 0.2], [2.4, 2.6], [4.8, 3.3], [7.0, 3.1], [7.9, 3.6], [7.6, 4.8], [7.5, 6.4], [7.0, 8.8], [6.0, 11.4], [5.0, 13.4], [4.0, 11.2], [2.4, 8.6], [0.4, 6.0], [-0.6, 3.2]];
+    mo(UV(BP), '#e7e0d2', { k: 110, tex: 0.15, lw: 1.1 * sc, strokes: 2, ink: '#7d776d' });
+    if (det) for (let i = 0; i < 5; i++) { const u = 1.6 + i * 1.2; stk([[u, 4.0 + i * 0.2], [u + 0.6, 7.6 + i * 0.6], [u + 0.3 + cloth * 0.02, 10.0 + i * 0.7]], 0.45, 0.35, 112 + i, INK, 2); }
+    lineW([[7.6, 3.2], [7.0, 4.2], [6.4, 5.4]], [0.3, 0.8, 0.2], 0.5, 0.5);
+    // one bright stroke down the beard, kept out of the red shade so the white still reads in the duel
+    lineW([[7.7, 3.05], [7.2, 3.9], [6.5, 5.3]], [0.6, 1, 0.2], 1.1, 0.8, '#ece6da');
+    { const sh0 = SHADE; SHADE *= 0.2; lineW([[4.6, 3.9], [5.3, 6.2], [5.3, 8.8], [4.8, 11.2]], [0.1, 1, 0.8, 0.05], 1.0, 0.92, '#f2ede2'); SHADE = sh0; } }
   if (!o.noHat) drawHat(g, L, HP, Hd, f, sc, A, cloth, t, seed, bn, amp, mo, o);
   // ---- front: shield, weapon, front arm ----
   if (L.shield) {
@@ -680,13 +790,13 @@ export function drawFigure(g, x, y, look, pose, fig, o) {
   }
   const pump = o.walkPh != null ? -Math.sin(o.walkPh) : 0;
   if (!(L.shield)) { const rest = pose.sheath && L.weapon !== 'spear' && L.weapon !== 'bow'; let hx = rest ? H[0] + f * (10 + pump * 6) * sc : G[0], hy = rest ? H[1] - 4 * sc : G[1];
-    if (rest && o.running) { const k = (pump + 1) / 2, fwd = [lerp(H[0], N[0], 0.5) + nfx * 15 * sc, lerp(H[1], N[1], 0.5) + nfy * 15 * sc], bk = [H[0] - nfx * 13 * sc, H[1] - nfy * 13 * sc + 7 * sc]; hx = lerp(bk[0], fwd[0], k); hy = lerp(bk[1], fwd[1], k); } // running: the fist drives to the sternum in front of the body, then back past the hip
+    const rk2 = o.runK ?? (o.running ? 1 : 0); if (rest && rk2 > 0.01 && o.walkPh != null) { const k = (pump + 1) / 2, hx0 = hx, hy0 = hy, fwd = [lerp(H[0], N[0], 0.5) + nfx * 15 * sc, lerp(H[1], N[1], 0.5) + nfy * 15 * sc], bk = [H[0] - nfx * 13 * sc, H[1] - nfy * 13 * sc + 7 * sc]; hx = lerp(hx0, lerp(bk[0], fwd[0], k), rk2); hy = lerp(hy0, lerp(bk[1], fwd[1], k), rk2); } // running: the fist drives to the sternum in front of the body, then back past the hip
     if (rest && pose.handK > 0.01 && !o.running) { const k = clamp(pose.handK, 0, 1); hx = lerp(hx, H[0] + f * pose.hand[0] * sc, k); hy = lerp(hy, H[1] + pose.hand[1] * sc, k); } // the hand on the hilt, or at the hat
     arm(Sf, hx, hy, 0, 2); }
   else if (L.weapon === 'club') arm(Sb, G[0], G[1], 0, 4);
   g.restore(); g.globalAlpha = 1;
   let top = 1e9, bot = -1e9; for (const q of headP) { top = Math.min(top, q[1]); bot = Math.max(bot, q[1]); }
-  FLATC = null; SHADE = 0;
+  FLATC = null; SHADE = 0; fig.sil = SILP; SILP = null;
   return { G, dx, dy, N, H, Hd, hand2, headTop: top, chin: bot, sc, ha, legs: legs.map((l) => [l.kx, l.ky, l.fx, l.fy]) };
 }
 const T4 = [0, 0, 0, 0], T4b = [0, 0, 0, 0];
@@ -700,7 +810,7 @@ function drawHat(g, L, HP, Hd, f, sc, A, cloth, t, seed, bn, amp, mo, o) {
   if (L.hat === 'kasa') {
     // a wide straw hat: one mass, dark underside, straw strokes from the crown, and a cord that swings late
     // seated on the skull: the crown comes down to the brow, the brim about 2.2 head-widths, shallow, drooping at the edges
-    const k = L.hatW || 1, lf = o.running ? 3.2 : 0, P = [HP(-16.5 * k, -0.4 + lf * 0.4), HP(-12 * k, -3.6), HP(-6.5, -9.6), HP(-2, -12), HP(3, -12), HP(7.5, -9.4), HP(13 * k, -4.2 - lf * 0.5), HP(17.5 * k, -0.8 - lf), HP(9, -3.3), HP(-9, -3.1)];
+    const k = L.hatW || 1, lf = 3.2 * (o.runK ?? (o.running ? 1 : 0)), P = [HP(-16.5 * k, -0.4 + lf * 0.4), HP(-12 * k, -3.6), HP(-6.5, -9.6), HP(-2, -12), HP(3, -12), HP(7.5, -9.4), HP(13 * k, -4.2 - lf * 0.5), HP(17.5 * k, -0.8 - lf), HP(9, -3.3), HP(-9, -3.1)];
     mo(P, o.hatCol || L.hatCol, { k: 130, lw: 2.3 * sc, strokes: 3, inside: (q) => {
       for (let i = -4; i <= 4; i++) sweep(q, [HP(i * 1.1 + 0.5, -11.5), HP(i * 3.8 * k + 0.5, -1.2)], 0.9 * sc, i % 2 ? PAPER : INK, A * 0.32, seed + 131 + i, 2);
       rib(q, [HP(-15 * k, -0.6)[0], HP(-15 * k, -0.6)[1], HP(0, -1.2)[0], HP(0, -1.2)[1], HP(16 * k, -1)[0], HP(16 * k, -1)[1]], () => 2.4 * sc, INK, A * 0.5, 0);
@@ -825,22 +935,31 @@ GAITS.ono = { ws: 46, rs: 52, wd: 0.6, rd: 0.45, wl: 9, rl: 11, wb: 0.8, rb: 1.2
 GAITS.shizu = { ws: 26, rs: 36, wd: 0.7, rd: 0.5, wl: 2.5, rl: 6, wb: 0.3, rb: 0.8, wn: 0.02, rn: 0.1, hy: 1 }; // a gliding step
 GAITS.hyoe = { ws: 22, rs: 30, wd: 0.68, rd: 0.5, wl: 4, rl: 8, wb: 2.6, rb: 4, wn: 0.16, rn: 0.2, hy: 3, stomp: 1 }; // a hunched trudge
 GAITS.master = { ws: 30, rs: 40, wd: 0.66, rd: 0.4, wl: 3.5, rl: 8, wb: 0.5, rb: 1.5, wn: 0.02, rn: 0.1, hy: 1 }; // a calm slow walk
-export function walkLegs(pose, dist, speed, st, look = 'ronin', acc = 0) {
-  if (speed < 8 || !(st === 'move' || st === 'enter' || st === 'ready' || st === 'approach' || st === 'idle' || st === 'wind')) return -1;
-  const G = GAITS[look] || GAITS.ronin, L = LOOKS[look] || LOOKS.ronin, sc = L.sc, run = speed > 200;
-  const step = run ? G.rs : G.ws, C = step * 2, u = ((dist / C) % 1 + 1) % 1, d = run ? G.rd : G.wd, lift = run ? G.rl : G.wl, bob = run ? G.rb : G.wb;
+// the gait blends continuously from the walk to the sprint by speed (150..255): no switch, no pop. o.phase: a cycle
+// phase accumulated by the caller (so the cycle length can change without a jump); o.amp: 0..1 eases the stride in at a
+// start and out to the standing feet at a stop.
+export function gaitK(look, speed) { const G = GAITS[look] || GAITS.ronin; return G.kick ? clamp((speed - 150) / 105, 0, 1) : speed > 200 ? 1 : 0; }
+export function gaitCycle(look, speed) { const G = GAITS[look] || GAITS.ronin, k = gaitK(look, speed); return 2 * lerp(G.ws, G.rs, k); }
+export function walkLegs(pose, dist, speed, st, look = 'ronin', acc = 0, o = {}) {
+  if (speed < 8 && !(o.amp > 0)) return -1;
+  if (!(st === 'move' || st === 'enter' || st === 'ready' || st === 'approach' || st === 'idle' || st === 'wind')) return -1;
+  const G = GAITS[look] || GAITS.ronin, L = LOOKS[look] || LOOKS.ronin, sc = L.sc, k = o.k ?? gaitK(look, speed), amp = o.amp ?? 1;
+  const step = lerp(G.ws, G.rs, k), C = step * 2, u = o.phase != null ? ((o.phase % 1) + 1) % 1 : ((dist / C) % 1 + 1) % 1;
+  const d = lerp(G.wd, G.rd, k), lift = lerp(G.wl, G.rl, k), bob = lerp(G.wb, G.rb, k);
   // a sprint: after toe-off the heel kicks high behind, then the leg reaches long in front before it lands
-  const kick = run ? G.kick || 0 : 0, reach = run ? G.reach || 0 : 0;
+  const kick = (G.kick || 0) * k, reach = (G.reach || 0) * k;
   const foot = (q) => { q = ((q % 1) + 1) % 1; if (q < d) return [(d * C / 2 - q * C) / sc, 0];
-    const k = (q - d) / (1 - d), e = k * k * (3 - 2 * k), sk = Math.sin(Math.PI * k);
-    return [(lerp(-d * C / 2, d * C / 2, e) - kick * sk * (1 - k) * 2 + reach * sk * k * 2) / sc, -lift * sk / sc * (k < 0.5 ? 1.25 : 0.7)]; };
-  pose.ff = foot(u); pose.fb = foot(u + 0.5); pose.gait = 1; // a walking or running body stays tall
+    const kk = (q - d) / (1 - d), e = kk * kk * (3 - 2 * kk), sk = Math.sin(Math.PI * kk);
+    return [(lerp(-d * C / 2, d * C / 2, e) - kick * sk * (1 - kk) * 2 + reach * sk * kk * 2) / sc, -lift * sk / sc * (kk < 0.5 ? 1.25 : 0.7)]; };
+  const ff0 = pose.ff.slice(), fb0 = pose.fb.slice(), a = foot(u), b = foot(u + 0.5);
   // a sprint has a flight phase: between one foot's push-off and the other's landing both feet leave the ground and the body rises
-  if (run && G.fly) { const h = u % 0.5; if (h >= d) { const up = G.fly * Math.sin(Math.PI * (h - d) / (0.5 - d)) / sc; pose.ff[1] -= up; pose.fb[1] -= up; pose.hy -= up * sc; } }
-  if (run && G.kick) { const back = 9; pose.ff[0] -= back; pose.fb[0] -= back; pose.hx = (pose.hx || 0) + 2; } // the sprint leans from the ankles: the feet drive from behind the hips
+  let up = 0; if (G.fly) { const h = u % 0.5; if (h >= d) up = G.fly * k * Math.sin(Math.PI * (h - d) / (0.5 - d)) / sc; }
+  const back = G.kick ? 9 * k : 0; // the sprint leans from the ankles: the feet drive from behind the hips
+  pose.ff = [lerp(ff0[0], a[0] - back, amp), lerp(ff0[1], a[1] - up, amp)]; pose.fb = [lerp(fb0[0], b[0] - back, amp), lerp(fb0[1], b[1] - up, amp)]; pose.gait = amp > 0.3 ? 1 : 0;
+  pose.hx = (pose.hx || 0) + (G.kick ? 2 * k : 0) * amp;
   // the hips drop just after each contact and rise in the passing and flight poses
-  pose.hy += G.hy + bob * Math.cos(2 * Math.PI * (2 * u - 0.16)) - (run ? 3 : 0) + (run ? G.low || 0 : 0); // a swordsman runs low
-  pose.lean += (run ? G.rn : G.wn) + clamp(acc / 2600, -0.22, 0.16);
-  pose.head = (pose.head || 0) + (run ? -0.12 : 0); // the head stays up, eyes ahead, under the tipped brim
+  pose.hy += amp * (G.hy + bob * Math.cos(2 * Math.PI * (2 * u - 0.16)) - 3 * k + (G.low || 0) * k - up * sc);
+  pose.lean += amp * (lerp(G.wn, G.rn, k) + clamp(acc / 2600, -0.22, 0.16));
+  pose.head = (pose.head || 0) - 0.12 * k * amp; // the head stays up, eyes ahead, under the tipped brim
   return u;
 }

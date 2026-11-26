@@ -400,12 +400,20 @@ console.log('11. combat honesty');
   for (const [type, dist] of [['bandit', 120], ['spear', 100], ['brute', 130], ['duelist', 90]]) {
     const s = createSim({ seed: 4, difficulty: 'blade', chapter: 0 }); const e = s.ev.find((q) => q.t === 'fight'); for (const q of s.ev) if (q !== e) q.done = true; e.foes = [type];
     s.p.x = s.p.ox = e.x - 80; step(s, blankInput()); s.cues.length = 0; const f = s.foes[0]; f.st = 'ready'; f.x = s.p.x + dist; f.face = -1; f.readyT = 99; s.tokenCD = 99; const fx = f.x, ifr0 = [];
-    let vault = null, shared = 0; const I = blankInput(); I.right = true; I.dodge = true;
-    for (let i = 0; i < 40; i++) { step(s, i < 2 ? I : blankInput()); for (const c of s.cues) if (c.k === 'vault') vault = c; s.cues.length = 0; f.readyT = 99; if (i < 12) ifr0.push(s.p.ifr > 0); if (s.p.y < 20 && Math.abs(s.p.x - f.x) < COMBAT.bodyMin - 1) shared++; }
+    let vault = null, landT = null, turnedT = null, uSeen = false, yMax = 0, crossT = null, invul = true, endInside = 0; const I = blankInput(); I.right = true; I.dodge = true;
+    for (let i = 0; i < 60; i++) { step(s, i < 2 ? I : blankInput()); for (const c of s.cues) { if (c.k === 'vault') vault = c; if (c.k === 'land' && vault && landT == null) landT = s.t; } s.cues.length = 0; f.readyT = 99;
+      if (s.p.vault) { uSeen = uSeen || s.p.vault.u > 0; if (s.p.ifr <= 0) invul = false; if (crossT == null && Math.abs(s.p.x - s.p.vault.to) < 2) crossT = s.p.stt; }
+      yMax = Math.max(yMax, s.p.y);
+      if (landT != null && Math.abs(s.p.x - f.x) < COMBAT.bodyMin - 1) endInside++;
+      if (landT != null && turnedT == null && f.face === (s.p.x > f.x ? 1 : -1)) turnedT = s.t - landT; }
     const past = (s.p.x - f.x);
-    ok(!!vault && past >= 100 && s.p.face === -1 && s.p.y === 0, `dodge at a ${type} ${dist}px away flips over him: vault ${!!vault}, lands ${past.toFixed(0)}px past, facing ${s.p.face}`);
-    ok(shared === 0, `the flip never shares ground with the ${type} (${shared} frames)`); ok(ifr0.slice(1, 12).every(Boolean), 'the flip keeps the dodge invulnerability');
-    lines.push(`${type} ${dist}px -> ${past.toFixed(0)}px past`);
+    ok(!!vault && vault.kind === 'dash' && vault.from != null && vault.to != null && uSeen, `dodge at a ${type} ${dist}px away becomes the dash (cue ${vault && vault.kind}, p.vault.u exposed ${uSeen})`);
+    ok(yMax === 0, `the dash stays on the ground (max y ${yMax})`);
+    ok(crossT != null && crossT <= COMBAT.dashT + 0.05, `the dash crosses in ${crossT && crossT.toFixed(2)}s`);
+    ok(invul, 'invulnerable for the whole dash');
+    ok(past >= 100 && s.p.face === -1 && endInside === 0, `lands ${past.toFixed(0)}px past the ${type}, facing ${s.p.face}, clear of him`);
+    ok(turnedT != null && turnedT <= 0.15 + 1e-9, `the ${type} turns to face him ${turnedT == null ? 'never' : turnedT.toFixed(2) + 's'} after the landing`);
+    lines.push(`${type} ${dist}px -> ${past.toFixed(0)}px past in ${crossT && crossT.toFixed(2)}s, turns in ${turnedT && turnedT.toFixed(2)}s`);
   }
   // back to the wall: no room to land, the roll stops short of his hip
   { const s = createSim({ seed: 4, difficulty: 'blade', chapter: 0 }); const e = s.ev.find((q) => q.t === 'fight'); for (const q of s.ev) if (q !== e) q.done = true; e.foes = ['bandit'];
@@ -423,6 +431,16 @@ console.log('11. combat honesty');
     lines.push(`pass ${beyond.toFixed(0)}px/${hold}f`);
   }
   console.log('  ' + lines.join('; '));
+}
+
+// ---- 11d. running: the default on the road (walk with the run key / a light push), eased in; walking in a fight ----
+{
+  const speed = (o) => { const s = createSim({ seed: 1, difficulty: 'blade', chapter: 0 }); s.p.x = s.p.ox = 400; const I = blankInput(); I.right = true; Object.assign(I, o.I || {}); if (o.arena) s.arena = { x0: 0, x1: 99999, ev: 0, boss: false, clearT: 0 };
+    let t90 = null; const v = []; for (let i = 0; i < 40; i++) { step(s, I); s.cues.length = 0; v.push(Math.abs(s.p.vx)); if (t90 == null && Math.abs(s.p.vx) >= 0.9 * 255) t90 = s.t; } return { top: Math.max(...v), t90 }; };
+  const road = speed({}), walk = speed({ I: { walk: true } }), fight = speed({ arena: true });
+  ok(Math.abs(road.top - 255) < 1 && road.t90 >= 0.18 && road.t90 <= 0.3, `on the road holding a direction runs (${road.top.toFixed(0)}px/s, 90% after ${road.t90 && road.t90.toFixed(2)}s)`);
+  ok(Math.abs(walk.top - 150) < 1, `walk key walks (${walk.top.toFixed(0)})`); ok(Math.abs(fight.top - 150) < 1, `in a fight he walks (${fight.top.toFixed(0)})`);
+  console.log(`  road run ${road.top.toFixed(0)}px/s (90% at ${road.t90.toFixed(2)}s), walk ${walk.top.toFixed(0)}, fight ${fight.top.toFixed(0)}`);
 }
 
 // ---- 12. parry: the window opens at the press, a little early counts, a tap holds, a held guard never swallows a press,
